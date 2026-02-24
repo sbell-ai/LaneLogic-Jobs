@@ -65,11 +65,25 @@ shared/
 - Employer: employer@trucking.com / password123  
 - Job Seeker: seeker@example.com / password123
 
-## Stripe Integration
-- Checkout sessions created at POST /api/payments/create-checkout-session
-- Webhook handler at POST /api/payments/webhook
-- Requires STRIPE_SECRET_KEY env var (set via Stripe integration)
-- Optional STRIPE_WEBHOOK_SECRET for webhook verification
+## Stripe Integration (stripe-replit-sync)
+- Uses `stripe-replit-sync` package for automatic webhook management and DB sync
+- Stripe schema auto-created in PostgreSQL on startup via `runMigrations()`
+- Webhook endpoint: POST /api/stripe/webhook (managed automatically)
+- Checkout: POST /api/payments/create-checkout-session
+- Customer portal: POST /api/payments/portal
+- Publishable key: GET /api/payments/config
+- Products seeded via `npx tsx server/seed-products.ts`
+
+### Stripe Products Created (Sandbox)
+- TranspoJobs Basic - Job Seeker: $19/mo
+- TranspoJobs Premium - Job Seeker: $49/mo
+- TranspoJobs Basic - Employer: $79/mo
+- TranspoJobs Premium - Employer: $199/mo
+
+### Files
+- server/stripeClient.ts - Stripe client factory (reads credentials from Replit connectors API)
+- server/webhookHandlers.ts - Webhook processor
+- server/seed-products.ts - Script to create Stripe products
 
 ## Key Features
 - Job listings with external/internal apply flows

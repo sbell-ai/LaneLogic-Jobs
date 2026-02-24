@@ -225,7 +225,18 @@ export async function registerRoutes(
     res.json({ message: "CSV uploaded successfully", count: 10 });
   });
 
-  // Payments / Stripe
+  // Stripe public key (for frontend)
+  app.get("/api/payments/config", async (req, res) => {
+    try {
+      const { getStripePublishableKey } = await import("./stripeClient");
+      const publishableKey = await getStripePublishableKey();
+      res.json({ publishableKey });
+    } catch {
+      res.status(503).json({ message: "Payment system not configured." });
+    }
+  });
+
+  // Create Stripe checkout session using real price IDs from stripe.prices table
   app.post("/api/payments/create-checkout-session", async (req, res) => {
     if (!req.isAuthenticated()) {
       return res.status(401).json({ message: "Not authenticated" });
@@ -235,37 +246,62 @@ export async function registerRoutes(
       return res.status(400).json({ message: "Invalid tier" });
     }
 
-    const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
-    if (!stripeSecretKey) {
-      return res.status(503).json({ message: "Payment system not configured. Please connect Stripe." });
-    }
-
     try {
-      const Stripe = (await import("stripe")).default;
-      const stripe = new Stripe(stripeSecretKey, { apiVersion: "2025-01-27.acacia" });
-
+      const { getUncachableStripeClient } = await import("./stripeClient");
+      const stripe = await getUncachableStripeClient();
       const user = req.user as any;
+
+      // Look up the matching price from stripe.prices (synced by stripe-replit-sync)
+      // Products/prices are created by the seed-products script
+      const tierLabel = tier.charAt(0).toUpperCase() + tier.slice(1);
+      const roleLabel = user.role === "employer" ? "Employer" : "Job Seeker";
+      const productName = `TranspoJobs ${tierLabel} - ${roleLabel}`;
+
+      // Search for the product in Stripe
+      const products = await stripe.products.search({ query: `name:'${productName}' AND active:'true'` });
+
+      let priceId: string | null = null;
+
+      if (products.data.length > 0) {
+        const prices = await stripe.prices.list({ product: products.data[0].id, active: true, limit: 1 });
+        if (prices.data.length > 0) priceId = prices.data[0].id;
+      }
+
+      // Fallback: use price_data inline if no pre-created products found
       const priceMap: Record<string, Record<string, number>> = {
         job_seeker: { basic: 1900, premium: 4900 },
         employer: { basic: 7900, premium: 19900 },
       };
       const unitAmount = priceMap[user.role]?.[tier] || 1900;
 
-      const session = await stripe.checkout.sessions.create({
-        payment_method_types: ["card"],
-        mode: "subscription",
-        customer_email: user.email,
-        line_items: [
-          {
+      const lineItems = priceId
+        ? [{ price: priceId, quantity: 1 }]
+        : [{
             price_data: {
               currency: "usd",
-              product_data: { name: `TranspoJobs ${tier.charAt(0).toUpperCase() + tier.slice(1)} Plan` },
+              product_data: { name: productName },
               unit_amount: unitAmount,
-              recurring: { interval: "month" },
+              recurring: { interval: "month" as const },
             },
             quantity: 1,
-          },
-        ],
+          }];
+
+      // Create or retrieve Stripe customer
+      let customerId = user.stripeCustomerId;
+      if (!customerId) {
+        const customer = await stripe.customers.create({
+          email: user.email,
+          metadata: { userId: String(user.id) },
+        });
+        customerId = customer.id;
+        await storage.updateUser(user.id, { stripeCustomerId: customerId } as any);
+      }
+
+      const session = await stripe.checkout.sessions.create({
+        customer: customerId,
+        payment_method_types: ["card"],
+        mode: "subscription",
+        line_items: lineItems,
         success_url: `${req.protocol}://${req.get("host")}/dashboard/membership?success=true`,
         cancel_url: `${req.protocol}://${req.get("host")}/pricing`,
         metadata: { userId: String(user.id), tier },
@@ -273,43 +309,27 @@ export async function registerRoutes(
 
       res.json({ url: session.url });
     } catch (err: any) {
-      console.error("Stripe error:", err);
+      console.error("Stripe checkout error:", err);
       res.status(500).json({ message: err.message || "Payment error" });
     }
   });
 
-  app.post("/api/payments/webhook", async (req, res) => {
-    const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
-    const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
-    if (!stripeSecretKey) return res.status(503).json({ message: "Not configured" });
+  // Customer portal (manage subscription)
+  app.post("/api/payments/portal", async (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).json({ message: "Not authenticated" });
+    const user = req.user as any;
+    if (!user.stripeCustomerId) return res.status(400).json({ message: "No active subscription" });
 
     try {
-      const Stripe = (await import("stripe")).default;
-      const stripe = new Stripe(stripeSecretKey, { apiVersion: "2025-01-27.acacia" });
-
-      let event: any;
-      if (webhookSecret) {
-        const sig = req.headers["stripe-signature"] as string;
-        event = stripe.webhooks.constructEvent(req.body, sig, webhookSecret);
-      } else {
-        event = req.body;
-      }
-
-      if (event.type === "checkout.session.completed") {
-        const session = event.data.object;
-        const { userId, tier } = session.metadata || {};
-        if (userId && tier) {
-          await storage.updateUser(Number(userId), {
-            membershipTier: tier,
-            stripeCustomerId: session.customer,
-            stripeSubscriptionId: session.subscription,
-          } as any);
-        }
-      }
-
-      res.json({ received: true });
+      const { getUncachableStripeClient } = await import("./stripeClient");
+      const stripe = await getUncachableStripeClient();
+      const session = await stripe.billingPortal.sessions.create({
+        customer: user.stripeCustomerId,
+        return_url: `${req.protocol}://${req.get("host")}/dashboard/membership`,
+      });
+      res.json({ url: session.url });
     } catch (err: any) {
-      res.status(400).json({ message: err.message });
+      res.status(500).json({ message: err.message });
     }
   });
 
