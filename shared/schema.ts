@@ -84,6 +84,33 @@ export type InsertBlogPost = z.infer<typeof insertBlogPostSchema>;
 export type Resume = typeof resumes.$inferSelect;
 export type InsertResume = z.infer<typeof insertResumeSchema>;
 
+// Site Settings
+export interface SiteSettingsData {
+  primaryColor: string;
+  secondaryColor: string;
+  headingFont: string;
+  bodyFont: string;
+  logoBase64: string | null;
+  siteName: string;
+}
+
+export const DEFAULT_SETTINGS: SiteSettingsData = {
+  primaryColor: "#3b82f6",
+  secondaryColor: "#f97316",
+  headingFont: "Plus Jakarta Sans",
+  bodyFont: "Inter",
+  logoBase64: null,
+  siteName: "TranspoJobs",
+};
+
+export const siteSettings = pgTable("site_settings", {
+  id: serial("id").primaryKey(),
+  settings: jsonb("settings").notNull().$type<SiteSettingsData>(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export type SiteSettingsRow = typeof siteSettings.$inferSelect;
+
 // Auth requests
 export const loginSchema = z.object({
   email: z.string().email(),

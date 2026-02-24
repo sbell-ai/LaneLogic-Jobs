@@ -362,6 +362,28 @@ export async function registerRoutes(
     }
   });
 
+  // Site Settings
+  app.get("/api/settings", async (_req, res) => {
+    try {
+      const settings = await storage.getSiteSettings();
+      res.json(settings);
+    } catch (err) {
+      res.status(500).json({ message: "Could not load settings" });
+    }
+  });
+
+  app.put("/api/settings", async (req, res) => {
+    if (!req.isAuthenticated() || (req.user as any).role !== "admin") {
+      return res.status(403).json({ message: "Forbidden" });
+    }
+    try {
+      const settings = await storage.updateSiteSettings(req.body);
+      res.json(settings);
+    } catch (err) {
+      res.status(500).json({ message: "Could not save settings" });
+    }
+  });
+
   // Seed database
   seedDatabase().catch(console.error);
 

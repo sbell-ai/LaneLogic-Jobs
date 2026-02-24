@@ -5,6 +5,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/not-found";
 import { useAuth } from "@/hooks/use-auth";
+import { useSettings } from "@/hooks/use-settings";
 
 import Home from "@/pages/Home";
 import Login from "@/pages/Login";
@@ -20,6 +21,12 @@ import Overview from "@/pages/dashboard/Overview";
 import JobSeekerDashboard from "@/pages/dashboard/JobSeekerDashboard";
 import EmployerDashboard from "@/pages/dashboard/EmployerDashboard";
 import AdminDashboard from "@/pages/dashboard/AdminDashboard";
+import DesignSettings from "@/pages/dashboard/DesignSettings";
+
+function ThemeInjector() {
+  useSettings();
+  return null;
+}
 
 function DashboardRouter() {
   const { user, isLoading } = useAuth();
@@ -41,6 +48,7 @@ function DashboardSectionRouter({ params }: { params: { section: string } }) {
 }
 
 function AdminSectionRouter({ params }: { params: { section: string } }) {
+  if (params.section === "design") return <DesignSettings />;
   return <AdminDashboard section={params.section} />;
 }
 
@@ -71,6 +79,7 @@ function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
+        <ThemeInjector />
         <Toaster />
         <Router />
       </TooltipProvider>

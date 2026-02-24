@@ -1,11 +1,12 @@
 import { db } from "./db";
 import {
-  users, jobs, applications, resources, blogPosts, resumes,
+  users, jobs, applications, resources, blogPosts, resumes, siteSettings,
   type User, type InsertUser, type Job, type InsertJob,
   type Application, type InsertApplication,
   type Resource, type InsertResource,
   type BlogPost, type InsertBlogPost,
-  type Resume, type InsertResume
+  type Resume, type InsertResume,
+  type SiteSettingsData, DEFAULT_SETTINGS
 } from "@shared/schema";
 import { eq } from "drizzle-orm";
 
@@ -41,6 +42,10 @@ export interface IStorage {
   // Resumes
   getResumes(jobSeekerId: number): Promise<Resume[]>;
   createResume(resume: InsertResume): Promise<Resume>;
+
+  // Site Settings
+  getSiteSettings(): Promise<SiteSettingsData>;
+  updateSiteSettings(settings: SiteSettingsData): Promise<SiteSettingsData>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -127,6 +132,26 @@ export class DatabaseStorage implements IStorage {
   async createResume(resume: InsertResume): Promise<Resume> {
     const [res] = await db.insert(resumes).values(resume).returning();
     return res;
+  }
+
+  // Site Settings
+  async getSiteSettings(): Promise<SiteSettingsData> {
+    const rows = await db.select().from(siteSettings).limit(1);
+    if (rows.length === 0) return { ...DEFAULT_SETTINGS };
+    return rows[0].settings;
+  }
+  async updateSiteSettings(settings: SiteSettingsData): Promise<SiteSettingsData> {
+    const rows = await db.select().from(siteSettings).limit(1);
+    if (rows.length === 0) {
+      const [row] = await db.insert(siteSettings).values({ settings }).returning();
+      return row.settings;
+    } else {
+      const [row] = await db.update(siteSettings)
+        .set({ settings, updatedAt: new Date() })
+        .where(eq(siteSettings.id, rows[0].id))
+        .returning();
+      return row.settings;
+    }
   }
 }
 

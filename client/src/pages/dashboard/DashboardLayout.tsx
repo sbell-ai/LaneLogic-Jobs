@@ -1,7 +1,7 @@
 import { SidebarProvider, SidebarTrigger, Sidebar, SidebarContent, SidebarGroup, SidebarGroupLabel, SidebarGroupContent, SidebarMenu, SidebarMenuItem, SidebarMenuButton } from "@/components/ui/sidebar";
 import { useAuth } from "@/hooks/use-auth";
 import { Link, useLocation } from "wouter";
-import { Briefcase, LayoutDashboard, FileText, LogOut, Users, BookOpen, Upload, CreditCard, UserPlus, PlusCircle } from "lucide-react";
+import { Briefcase, LayoutDashboard, FileText, LogOut, Users, BookOpen, Upload, CreditCard, UserPlus, PlusCircle, Palette } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 function AppSidebar({ role }: { role: string }) {
@@ -31,6 +31,7 @@ function AppSidebar({ role }: { role: string }) {
     { title: "Invite Employer", path: "/dashboard/admin/invite-employer", icon: UserPlus },
     { title: "Blog Posts", path: "/dashboard/admin/blog", icon: FileText },
     { title: "Resources", path: "/dashboard/admin/resources", icon: BookOpen },
+    { title: "Design Settings", path: "/dashboard/admin/design", icon: Palette },
   ];
 
   const links = role === "admin" ? adminLinks : role === "employer" ? employerLinks : seekerLinks;
