@@ -222,8 +222,95 @@ export async function registerRoutes(
   });
 
   app.post(api.uploads.csv.path, (req, res) => {
-    // Mock general CSV upload
     res.json({ message: "CSV uploaded successfully", count: 10 });
+  });
+
+  // Payments / Stripe
+  app.post("/api/payments/create-checkout-session", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.status(401).json({ message: "Not authenticated" });
+    }
+    const { tier } = req.body;
+    if (!tier || !["basic", "premium"].includes(tier)) {
+      return res.status(400).json({ message: "Invalid tier" });
+    }
+
+    const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
+    if (!stripeSecretKey) {
+      return res.status(503).json({ message: "Payment system not configured. Please connect Stripe." });
+    }
+
+    try {
+      const Stripe = (await import("stripe")).default;
+      const stripe = new Stripe(stripeSecretKey, { apiVersion: "2025-01-27.acacia" });
+
+      const user = req.user as any;
+      const priceMap: Record<string, Record<string, number>> = {
+        job_seeker: { basic: 1900, premium: 4900 },
+        employer: { basic: 7900, premium: 19900 },
+      };
+      const unitAmount = priceMap[user.role]?.[tier] || 1900;
+
+      const session = await stripe.checkout.sessions.create({
+        payment_method_types: ["card"],
+        mode: "subscription",
+        customer_email: user.email,
+        line_items: [
+          {
+            price_data: {
+              currency: "usd",
+              product_data: { name: `TranspoJobs ${tier.charAt(0).toUpperCase() + tier.slice(1)} Plan` },
+              unit_amount: unitAmount,
+              recurring: { interval: "month" },
+            },
+            quantity: 1,
+          },
+        ],
+        success_url: `${req.protocol}://${req.get("host")}/dashboard/membership?success=true`,
+        cancel_url: `${req.protocol}://${req.get("host")}/pricing`,
+        metadata: { userId: String(user.id), tier },
+      });
+
+      res.json({ url: session.url });
+    } catch (err: any) {
+      console.error("Stripe error:", err);
+      res.status(500).json({ message: err.message || "Payment error" });
+    }
+  });
+
+  app.post("/api/payments/webhook", async (req, res) => {
+    const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
+    const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
+    if (!stripeSecretKey) return res.status(503).json({ message: "Not configured" });
+
+    try {
+      const Stripe = (await import("stripe")).default;
+      const stripe = new Stripe(stripeSecretKey, { apiVersion: "2025-01-27.acacia" });
+
+      let event: any;
+      if (webhookSecret) {
+        const sig = req.headers["stripe-signature"] as string;
+        event = stripe.webhooks.constructEvent(req.body, sig, webhookSecret);
+      } else {
+        event = req.body;
+      }
+
+      if (event.type === "checkout.session.completed") {
+        const session = event.data.object;
+        const { userId, tier } = session.metadata || {};
+        if (userId && tier) {
+          await storage.updateUser(Number(userId), {
+            membershipTier: tier,
+            stripeCustomerId: session.customer,
+            stripeSubscriptionId: session.subscription,
+          } as any);
+        }
+      }
+
+      res.json({ received: true });
+    } catch (err: any) {
+      res.status(400).json({ message: err.message });
+    }
   });
 
   // Seed database
