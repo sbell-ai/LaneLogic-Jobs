@@ -87,6 +87,35 @@ export async function registerRoutes(
     res.json(users);
   });
 
+  // Admin: create a user directly (invite)
+  app.post("/api/admin/users", async (req, res) => {
+    if (!req.isAuthenticated() || (req.user as any).role !== "admin") {
+      return res.status(403).json({ message: "Forbidden" });
+    }
+    try {
+      const { email, password, role, firstName, lastName, companyName, membershipTier } = req.body;
+      if (!email || !password || !role) {
+        return res.status(400).json({ message: "email, password and role are required" });
+      }
+      const existing = await storage.getUserByEmail(email);
+      if (existing) {
+        return res.status(400).json({ message: "Email already in use" });
+      }
+      const user = await storage.createUser({
+        email,
+        password,
+        role,
+        firstName: firstName || null,
+        lastName: lastName || null,
+        companyName: companyName || null,
+        membershipTier: membershipTier || "free",
+      });
+      res.status(201).json(user);
+    } catch (err) {
+      res.status(500).json({ message: "Could not create user" });
+    }
+  });
+
   app.put(api.users.update.path, async (req, res) => {
     try {
       const input = api.users.update.input.parse(req.body);
