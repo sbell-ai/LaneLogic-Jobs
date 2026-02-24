@@ -8,7 +8,8 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { Palette, Type, ImageIcon, Eye, EyeOff, Save, RotateCcw, CheckCircle2 } from "lucide-react";
+import { Textarea } from "@/components/ui/textarea";
+import { Palette, Type, ImageIcon, Eye, EyeOff, Save, RotateCcw, CheckCircle2, Globe, Megaphone } from "lucide-react";
 import type { SiteSettingsData } from "@shared/schema";
 import { DEFAULT_SETTINGS } from "@shared/schema";
 import { applySettingsToDOM, hexToHsl } from "@/hooks/use-settings";
@@ -56,7 +57,7 @@ export default function DesignSettings() {
 
   useEffect(() => {
     if (saved) {
-      setDraft(saved);
+      setDraft({ ...DEFAULT_SETTINGS, ...saved });
       setLogoPreview(saved.logoBase64 || null);
     }
   }, [saved]);
@@ -309,6 +310,92 @@ export default function DesignSettings() {
                   </div>
                 </div>
               )}
+            </div>
+          </Section>
+
+          {/* Site Content */}
+          <Section icon={Globe} title="Site Content">
+            <div className="grid grid-cols-1 gap-5">
+              <div>
+                <Label className="text-sm font-semibold mb-1 block">Site Name</Label>
+                <p className="text-xs text-muted-foreground mb-2">Appears in the navbar logo, footer, and browser bookmarks.</p>
+                <Input
+                  value={draft.siteName}
+                  onChange={e => update("siteName", e.target.value)}
+                  placeholder="TranspoJobs"
+                  data-testid="input-site-name"
+                />
+              </div>
+
+              <div>
+                <Label className="text-sm font-semibold mb-1 block">Page / SEO Title</Label>
+                <p className="text-xs text-muted-foreground mb-2">Shown in the browser tab and search engine results.</p>
+                <Input
+                  value={draft.siteTitle}
+                  onChange={e => update("siteTitle", e.target.value)}
+                  placeholder="TranspoJobs – Transportation & Logistics Jobs"
+                  data-testid="input-site-title"
+                />
+                <p className="text-xs text-muted-foreground mt-1">{draft.siteTitle.length} / 70 characters recommended</p>
+              </div>
+
+              <div>
+                <Label className="text-sm font-semibold mb-1 block">Site Description</Label>
+                <p className="text-xs text-muted-foreground mb-2">Meta description used by search engines and social media previews.</p>
+                <Textarea
+                  value={draft.siteDescription}
+                  onChange={e => update("siteDescription", e.target.value)}
+                  placeholder="Find the best transportation and logistics jobs..."
+                  className="min-h-[80px] resize-none"
+                  data-testid="textarea-site-description"
+                />
+                <p className="text-xs text-muted-foreground mt-1">{draft.siteDescription.length} / 160 characters recommended</p>
+              </div>
+            </div>
+          </Section>
+
+          {/* Header & Footer */}
+          <Section icon={Megaphone} title="Header & Footer">
+            <div>
+              <Label className="text-sm font-semibold mb-1 block">Header Announcement Banner</Label>
+              <p className="text-xs text-muted-foreground mb-2">Optional text shown in a banner at the very top of every page. Leave empty to hide.</p>
+              <Input
+                value={draft.headerAnnouncement}
+                onChange={e => update("headerAnnouncement", e.target.value)}
+                placeholder="e.g. Now hiring nationwide — browse open roles →"
+                data-testid="input-header-announcement"
+              />
+              {draft.headerAnnouncement && (
+                <div className="mt-3 rounded-lg overflow-hidden border border-border">
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-3 pt-2 pb-1">Preview</p>
+                  <div className="px-4 py-2 text-sm font-medium text-center text-white" style={{ backgroundColor: draft.primaryColor }}>
+                    {draft.headerAnnouncement}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div>
+              <Label className="text-sm font-semibold mb-1 block">Footer Tagline</Label>
+              <p className="text-xs text-muted-foreground mb-2">The description paragraph shown in the footer's brand column.</p>
+              <Textarea
+                value={draft.footerTagline}
+                onChange={e => update("footerTagline", e.target.value)}
+                placeholder="The premier destination for transportation professionals..."
+                className="min-h-[80px] resize-none"
+                data-testid="textarea-footer-tagline"
+              />
+            </div>
+
+            <div>
+              <Label className="text-sm font-semibold mb-1 block">Footer Copyright</Label>
+              <p className="text-xs text-muted-foreground mb-2">Copyright notice shown at the very bottom of the footer.</p>
+              <Input
+                value={draft.footerCopyright}
+                onChange={e => update("footerCopyright", e.target.value)}
+                placeholder="© TranspoJobs. All rights reserved."
+                data-testid="input-footer-copyright"
+              />
             </div>
           </Section>
 

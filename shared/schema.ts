@@ -92,6 +92,11 @@ export interface SiteSettingsData {
   bodyFont: string;
   logoBase64: string | null;
   siteName: string;
+  siteTitle: string;
+  siteDescription: string;
+  headerAnnouncement: string;
+  footerTagline: string;
+  footerCopyright: string;
 }
 
 export const DEFAULT_SETTINGS: SiteSettingsData = {
@@ -101,6 +106,11 @@ export const DEFAULT_SETTINGS: SiteSettingsData = {
   bodyFont: "Inter",
   logoBase64: null,
   siteName: "TranspoJobs",
+  siteTitle: "TranspoJobs – Transportation & Logistics Jobs",
+  siteDescription: "Find the best transportation, trucking, and logistics jobs. Browse thousands of CDL and freight roles across the country.",
+  headerAnnouncement: "",
+  footerTagline: "The premier destination for transportation and logistics professionals to advance their careers.",
+  footerCopyright: "© TranspoJobs. All rights reserved.",
 };
 
 export const siteSettings = pgTable("site_settings", {

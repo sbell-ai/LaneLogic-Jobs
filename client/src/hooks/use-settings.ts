@@ -4,9 +4,10 @@ import type { SiteSettingsData } from "@shared/schema";
 import { DEFAULT_SETTINGS } from "@shared/schema";
 
 export function hexToHsl(hex: string): string {
-  const r = parseInt(hex.slice(1, 3), 16) / 255;
-  const g = parseInt(hex.slice(3, 5), 16) / 255;
-  const b = parseInt(hex.slice(5, 7), 16) / 255;
+  const safeHex = hex.startsWith("#") ? hex : "#3b82f6";
+  const r = parseInt(safeHex.slice(1, 3), 16) / 255;
+  const g = parseInt(safeHex.slice(3, 5), 16) / 255;
+  const b = parseInt(safeHex.slice(5, 7), 16) / 255;
   const max = Math.max(r, g, b), min = Math.min(r, g, b);
   let h = 0, s = 0;
   const l = (max + min) / 2;
@@ -22,12 +23,37 @@ export function hexToHsl(hex: string): string {
   return `${Math.round(h * 360)} ${Math.round(s * 100)}% ${Math.round(l * 100)}%`;
 }
 
+function injectGoogleFonts(fonts: string[]) {
+  const unique = [...new Set(fonts)];
+  const existing = document.getElementById("dynamic-google-fonts");
+  if (existing) existing.remove();
+  const families = unique.map(f => `family=${encodeURIComponent(f)}:wght@400;500;600;700;800`).join("&");
+  const link = document.createElement("link");
+  link.id = "dynamic-google-fonts";
+  link.rel = "stylesheet";
+  link.href = `https://fonts.googleapis.com/css2?${families}&display=swap`;
+  document.head.appendChild(link);
+}
+
+function updateMetaTags(settings: SiteSettingsData) {
+  if (settings.siteTitle) {
+    document.title = settings.siteTitle;
+  }
+  if (settings.siteDescription) {
+    let meta = document.querySelector<HTMLMetaElement>('meta[name="description"]');
+    if (!meta) {
+      meta = document.createElement("meta");
+      meta.name = "description";
+      document.head.appendChild(meta);
+    }
+    meta.content = settings.siteDescription;
+  }
+}
+
 export function applySettingsToDOM(settings: SiteSettingsData) {
   const root = document.documentElement;
-
   const primaryHsl = hexToHsl(settings.primaryColor);
   const secondaryHsl = hexToHsl(settings.secondaryColor);
-
   root.style.setProperty("--primary", primaryHsl);
   root.style.setProperty("--ring", primaryHsl);
   root.style.setProperty("--sidebar-primary", primaryHsl);
@@ -35,21 +61,8 @@ export function applySettingsToDOM(settings: SiteSettingsData) {
   root.style.setProperty("--accent", secondaryHsl);
   root.style.setProperty("--font-display", `'${settings.headingFont}', sans-serif`);
   root.style.setProperty("--font-sans", `'${settings.bodyFont}', sans-serif`);
-
   injectGoogleFonts([settings.headingFont, settings.bodyFont]);
-}
-
-function injectGoogleFonts(fonts: string[]) {
-  const unique = [...new Set(fonts)];
-  const existing = document.getElementById("dynamic-google-fonts");
-  if (existing) existing.remove();
-
-  const families = unique.map(f => `family=${encodeURIComponent(f)}:wght@400;500;600;700;800`).join("&");
-  const link = document.createElement("link");
-  link.id = "dynamic-google-fonts";
-  link.rel = "stylesheet";
-  link.href = `https://fonts.googleapis.com/css2?${families}&display=swap`;
-  document.head.appendChild(link);
+  updateMetaTags(settings);
 }
 
 export function useSettings() {
@@ -67,4 +80,12 @@ export function useSettings() {
   }, [query.data]);
 
   return { settings, isLoading: query.isLoading };
+}
+
+export function useSiteSettings(): SiteSettingsData {
+  const { data } = useQuery<SiteSettingsData>({
+    queryKey: ["/api/settings"],
+    staleTime: 1000 * 60 * 5,
+  });
+  return data ? { ...DEFAULT_SETTINGS, ...data } : DEFAULT_SETTINGS;
 }
