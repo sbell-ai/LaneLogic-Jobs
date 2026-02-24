@@ -34,7 +34,6 @@ function AppSidebar({ role }: { role: string }) {
   ];
 
   const links = role === "admin" ? adminLinks : role === "employer" ? employerLinks : seekerLinks;
-  const isAdmin = role === "admin";
 
   return (
     <Sidebar className="border-r border-border bg-card">
@@ -46,10 +45,10 @@ function AppSidebar({ role }: { role: string }) {
         </div>
         <SidebarGroup>
           <SidebarGroupLabel className="text-xs uppercase tracking-wider text-muted-foreground font-semibold mt-4 mb-2 px-2">
-            {isAdmin ? "Admin Panel" : "Dashboard Menu"}
+            {role === "admin" ? "Admin Panel" : "Dashboard Menu"}
           </SidebarGroupLabel>
           <SidebarGroupContent>
-            <SidebarMenu className={isAdmin ? "space-y-1 px-1" : ""}>
+            <SidebarMenu className="space-y-1 px-1">
               {links.map((item) => {
                 const active = location === item.path;
                 return (
@@ -57,15 +56,11 @@ function AppSidebar({ role }: { role: string }) {
                     <SidebarMenuButton asChild isActive={active}>
                       <Link
                         href={item.path}
-                        className={
-                          isAdmin
-                            ? `flex items-center gap-3 px-3 py-2 rounded-lg font-medium transition-colors text-sm ${
-                                active
-                                  ? "bg-primary text-primary-foreground border border-primary"
-                                  : "bg-white text-gray-700 border border-gray-400 hover:bg-gray-50 hover:border-gray-500"
-                              }`
-                            : "flex items-center gap-3 px-3 py-2 rounded-lg font-medium transition-colors"
-                        }
+                        className={`flex items-center gap-3 px-3 py-2 rounded-lg font-medium transition-colors text-sm ${
+                          active
+                            ? "bg-primary text-primary-foreground border border-primary"
+                            : "bg-white text-gray-700 border border-gray-400 hover:bg-gray-50 hover:border-gray-500"
+                        }`}
                       >
                         <item.icon size={18} />
                         <span>{item.title}</span>
