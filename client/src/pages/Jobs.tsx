@@ -6,18 +6,22 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Search, MapPin, Briefcase, DollarSign, ExternalLink, Clock } from "lucide-react";
+import { Search, MapPin, Briefcase, DollarSign, ExternalLink, Clock, Building2 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import type { Job } from "@shared/schema";
 import { formatDistanceToNow } from "date-fns";
 import { motion } from "framer-motion";
 
+function fmtLoc(job: Job) {
+  return [job.locationCity, job.locationState, job.locationCountry].filter(Boolean).join(", ");
+}
+
 export default function Jobs() {
   const searchString = useSearch();
   const params = new URLSearchParams(searchString);
   const [query, setQuery] = useState(params.get("q") || "");
-  const [location, setLocation] = useState(params.get("loc") || "");
-  const [jobType, setJobType] = useState("all");
+  const [locationFilter, setLocationFilter] = useState(params.get("loc") || "");
+  const [jobTypeFilter, setJobTypeFilter] = useState("all");
 
   const { data: jobs, isLoading } = useQuery<Job[]>({
     queryKey: ["/api/jobs"],
@@ -27,11 +31,12 @@ export default function Jobs() {
     const matchQuery =
       !query ||
       job.title.toLowerCase().includes(query.toLowerCase()) ||
-      job.description.toLowerCase().includes(query.toLowerCase());
-    const matchLoc =
-      !location ||
-      job.location.toLowerCase().includes(location.toLowerCase());
-    return matchQuery && matchLoc;
+      job.description.toLowerCase().includes(query.toLowerCase()) ||
+      (job.companyName || "").toLowerCase().includes(query.toLowerCase());
+    const loc = fmtLoc(job).toLowerCase();
+    const matchLoc = !locationFilter || loc.includes(locationFilter.toLowerCase());
+    const matchType = jobTypeFilter === "all" || (job.jobType || "").toLowerCase() === jobTypeFilter.toLowerCase();
+    return matchQuery && matchLoc && matchType;
   });
 
   return (
@@ -57,21 +62,25 @@ export default function Jobs() {
                 <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={18} />
                 <Input
                   data-testid="input-location-search"
-                  placeholder="City, state, or zip"
+                  placeholder="City, state, or country"
                   className="pl-10 h-11"
-                  value={location}
-                  onChange={(e) => setLocation(e.target.value)}
+                  value={locationFilter}
+                  onChange={(e) => setLocationFilter(e.target.value)}
                 />
               </div>
-              <Select value={jobType} onValueChange={setJobType}>
-                <SelectTrigger data-testid="select-job-type" className="h-11 w-full md:w-[180px]">
+              <Select value={jobTypeFilter} onValueChange={setJobTypeFilter}>
+                <SelectTrigger data-testid="select-job-type" className="h-11 w-full md:w-[200px]">
                   <SelectValue placeholder="Job type" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All Types</SelectItem>
-                  <SelectItem value="full-time">Full-time</SelectItem>
-                  <SelectItem value="part-time">Part-time</SelectItem>
-                  <SelectItem value="contract">Contract</SelectItem>
+                  <SelectItem value="Full-time">Full-time</SelectItem>
+                  <SelectItem value="Part-time">Part-time</SelectItem>
+                  <SelectItem value="Contract">Contract</SelectItem>
+                  <SelectItem value="Seasonal">Seasonal</SelectItem>
+                  <SelectItem value="Owner-Operator">Owner-Operator</SelectItem>
+                  <SelectItem value="Lease Purchase">Lease Purchase</SelectItem>
+                  <SelectItem value="Temporary">Temporary</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -120,10 +129,20 @@ export default function Jobs() {
                             <h2 className="text-lg font-bold font-display group-hover:text-primary transition-colors">
                               {job.title}
                             </h2>
-                            <div className="flex flex-wrap items-center gap-3 mt-1 text-sm text-muted-foreground">
-                              <span className="flex items-center gap-1">
-                                <MapPin size={14} /> {job.location}
-                              </span>
+                            {job.companyName && (
+                              <p className="text-sm font-medium text-foreground/70 flex items-center gap-1 mt-0.5">
+                                <Building2 size={13} /> {job.companyName}
+                              </p>
+                            )}
+                            <div className="flex flex-wrap items-center gap-3 mt-1.5 text-sm text-muted-foreground">
+                              {fmtLoc(job) && (
+                                <span className="flex items-center gap-1">
+                                  <MapPin size={14} /> {fmtLoc(job)}
+                                </span>
+                              )}
+                              {job.jobType && (
+                                <Badge variant="outline" className="text-xs font-normal">{job.jobType}</Badge>
+                              )}
                               {job.salary && (
                                 <span className="flex items-center gap-1">
                                   <DollarSign size={14} /> {job.salary}
@@ -131,9 +150,7 @@ export default function Jobs() {
                               )}
                               <span className="flex items-center gap-1">
                                 <Clock size={14} />
-                                {job.createdAt
-                                  ? formatDistanceToNow(new Date(job.createdAt), { addSuffix: true })
-                                  : "Recently"}
+                                {job.createdAt ? formatDistanceToNow(new Date(job.createdAt), { addSuffix: true }) : "Recently"}
                               </span>
                             </div>
                             <p className="mt-2 text-sm text-muted-foreground line-clamp-2">{job.description}</p>

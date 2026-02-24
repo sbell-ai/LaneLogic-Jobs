@@ -149,8 +149,9 @@ function AllJobsTab() {
     },
   });
 
+  const fmtLoc = (j: Job) => [j.locationCity, j.locationState, j.locationCountry].filter(Boolean).join(", ");
   const filtered = (jobs || []).filter(j =>
-    !search || `${j.title} ${j.location}`.toLowerCase().includes(search.toLowerCase())
+    !search || `${j.title} ${fmtLoc(j)} ${j.companyName || ""}`.toLowerCase().includes(search.toLowerCase())
   );
 
   if (isLoading) return <div className="animate-pulse h-40 bg-slate-100 dark:bg-slate-800 rounded-xl" />;
@@ -173,7 +174,7 @@ function AllJobsTab() {
             <div>
               <h3 className="font-semibold">{job.title}</h3>
               <p className="text-sm text-muted-foreground mt-0.5">
-                {job.location}{job.salary ? ` · ${job.salary}` : ""}
+                {fmtLoc(job)}{job.salary ? ` · ${job.salary}` : ""}
                 {job.isExternalApply && <span className="ml-2 text-xs text-primary">External</span>}
               </p>
               <p className="text-xs text-muted-foreground mt-1">
@@ -203,11 +204,12 @@ function AllJobsTab() {
 
 // ─── POST JOB TAB (Admin) ─────────────────────────────────────────────────────
 
+const ADMIN_JOB_TYPES = ["Full-time", "Part-time", "Contract", "Seasonal", "Owner-Operator", "Lease Purchase", "Temporary"];
+
 const jobFormSchema = insertJobSchema.omit({ employerId: true }).extend({
   title: z.string().min(3, "Title must be at least 3 characters"),
   description: z.string().min(20, "Description must be at least 20 characters"),
   requirements: z.string().min(10, "Requirements must be at least 10 characters"),
-  location: z.string().min(2, "Location required"),
 });
 
 function PostJobTab({ userId }: { userId: number }) {
@@ -217,8 +219,10 @@ function PostJobTab({ userId }: { userId: number }) {
   const form = useForm<z.infer<typeof jobFormSchema>>({
     resolver: zodResolver(jobFormSchema),
     defaultValues: {
-      title: "", description: "", requirements: "",
-      location: "", salary: "", applyUrl: "", isExternalApply: false,
+      title: "", companyName: "", jobType: "Full-time",
+      description: "", requirements: "", benefits: "",
+      locationCity: "", locationState: "", locationCountry: "USA",
+      salary: "", applyUrl: "", isExternalApply: false,
     },
   });
 
@@ -247,28 +251,61 @@ function PostJobTab({ userId }: { userId: number }) {
                 <FormMessage />
               </FormItem>
             )} />
+
             <div className="grid grid-cols-2 gap-4">
-              <FormField control={form.control} name="location" render={({ field }) => (
+              <FormField control={form.control} name="companyName" render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Location *</FormLabel>
-                  <FormControl><Input placeholder="Chicago, IL" data-testid="input-job-location" {...field} /></FormControl>
-                  <FormMessage />
+                  <FormLabel>Company Name</FormLabel>
+                  <FormControl><Input placeholder="Acme Trucking" data-testid="input-company-name" {...field} value={field.value ?? ""} /></FormControl>
                 </FormItem>
               )} />
-              <FormField control={form.control} name="salary" render={({ field }) => (
+              <FormField control={form.control} name="jobType" render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Salary (optional)</FormLabel>
-                  <FormControl><Input placeholder="$70,000 – $90,000" data-testid="input-job-salary" {...field} value={field.value ?? ""} /></FormControl>
+                  <FormLabel>Job Type</FormLabel>
+                  <Select onValueChange={field.onChange} defaultValue={field.value ?? "Full-time"}>
+                    <FormControl><SelectTrigger data-testid="select-job-type"><SelectValue /></SelectTrigger></FormControl>
+                    <SelectContent>{ADMIN_JOB_TYPES.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent>
+                  </Select>
                 </FormItem>
               )} />
             </div>
+
+            <div className="grid grid-cols-3 gap-3">
+              <FormField control={form.control} name="locationCity" render={({ field }) => (
+                <FormItem>
+                  <FormLabel>City</FormLabel>
+                  <FormControl><Input placeholder="Chicago" data-testid="input-location-city" {...field} value={field.value ?? ""} /></FormControl>
+                </FormItem>
+              )} />
+              <FormField control={form.control} name="locationState" render={({ field }) => (
+                <FormItem>
+                  <FormLabel>State</FormLabel>
+                  <FormControl><Input placeholder="IL" data-testid="input-location-state" {...field} value={field.value ?? ""} /></FormControl>
+                </FormItem>
+              )} />
+              <FormField control={form.control} name="locationCountry" render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Country</FormLabel>
+                  <FormControl><Input placeholder="USA" data-testid="input-location-country" {...field} value={field.value ?? ""} /></FormControl>
+                </FormItem>
+              )} />
+            </div>
+
+            <FormField control={form.control} name="salary" render={({ field }) => (
+              <FormItem>
+                <FormLabel>Salary (optional)</FormLabel>
+                <FormControl><Input placeholder="$70,000 – $90,000" data-testid="input-job-salary" {...field} value={field.value ?? ""} /></FormControl>
+              </FormItem>
+            )} />
+
             <FormField control={form.control} name="description" render={({ field }) => (
               <FormItem>
                 <FormLabel>Job Description *</FormLabel>
-                <FormControl><Textarea placeholder="Role overview, responsibilities, and benefits..." className="min-h-[130px]" data-testid="textarea-job-description" {...field} /></FormControl>
+                <FormControl><Textarea placeholder="Role overview, responsibilities, and company culture..." className="min-h-[130px]" data-testid="textarea-job-description" {...field} /></FormControl>
                 <FormMessage />
               </FormItem>
             )} />
+
             <FormField control={form.control} name="requirements" render={({ field }) => (
               <FormItem>
                 <FormLabel>Requirements *</FormLabel>
@@ -276,6 +313,14 @@ function PostJobTab({ userId }: { userId: number }) {
                 <FormMessage />
               </FormItem>
             )} />
+
+            <FormField control={form.control} name="benefits" render={({ field }) => (
+              <FormItem>
+                <FormLabel>Benefits (optional)</FormLabel>
+                <FormControl><Textarea placeholder="Health insurance, 401k, sign-on bonus..." className="min-h-[80px]" data-testid="textarea-job-benefits" {...field} value={field.value ?? ""} /></FormControl>
+              </FormItem>
+            )} />
+
             <FormField control={form.control} name="isExternalApply" render={({ field }) => (
               <FormItem className="flex items-center gap-3 space-y-0">
                 <FormControl>
@@ -306,9 +351,14 @@ function PostJobTab({ userId }: { userId: number }) {
 
 interface ParsedJob {
   title: string;
-  location: string;
+  companyName?: string;
+  jobType?: string;
+  locationCity?: string;
+  locationState?: string;
+  locationCountry?: string;
   description: string;
   requirements: string;
+  benefits?: string;
   salary?: string;
   applyUrl?: string;
 }
@@ -344,18 +394,23 @@ function UploadJobsTab({ userId }: { userId: number }) {
           const vals = lines[i].split(",").map(v => v.trim().replace(/"/g, ""));
           const row: any = {};
           headers.forEach((h, idx) => { row[h] = vals[idx] || ""; });
-          if (!row.title || !row.location) continue;
+          if (!row.title) continue;
           rows.push({
             title: row.title,
-            location: row.location,
+            companyName: row.companyname || row.company_name || row.company || undefined,
+            jobType: row.jobtype || row.job_type || row.type || undefined,
+            locationCity: row.locationcity || row.location_city || row.city || undefined,
+            locationState: row.locationstate || row.location_state || row.state || undefined,
+            locationCountry: row.locationcountry || row.location_country || row.country || undefined,
             description: row.description || "Please contact us for full job details.",
             requirements: row.requirements || "Please contact us for requirements.",
+            benefits: row.benefits || undefined,
             salary: row.salary || undefined,
             applyUrl: row.applyurl || row.apply_url || undefined,
           });
         }
         if (rows.length === 0) {
-          setError("No valid rows found. Ensure columns: title, location, description, requirements");
+          setError("No valid rows found. Ensure the CSV has a 'title' column.");
           setUploading(false);
           return;
         }
@@ -389,9 +444,9 @@ function UploadJobsTab({ userId }: { userId: number }) {
     toast({ title: `Imported ${success} of ${parsed.length} jobs!` });
   };
 
-  const sampleCsv = `title,location,description,requirements,salary,applyUrl
-CDL Class A Driver,Chicago IL,"Looking for an experienced long haul driver","CDL Class A required; 3+ years experience",$80000,
-Fleet Dispatcher,Atlanta GA,"Manage driver schedules and routes","2+ years dispatching experience","$55,000–$65,000",https://example.com/apply`;
+  const sampleCsv = `title,companyName,jobType,locationCity,locationState,locationCountry,description,requirements,benefits,salary,applyUrl
+CDL Class A Driver,Fast Trucking Co.,Full-time,Chicago,IL,USA,"Looking for an experienced long haul driver","CDL Class A required; 3+ years experience","Health insurance; 401k",$80000,
+Fleet Dispatcher,Metro Logistics,Contract,Atlanta,GA,USA,"Manage driver schedules and routes","2+ years dispatching experience","PTO; remote options","$55,000–$65,000",https://example.com/apply`;
 
   const downloadSample = () => {
     const blob = new Blob([sampleCsv], { type: "text/csv" });
@@ -415,9 +470,9 @@ Fleet Dispatcher,Atlanta GA,"Manage driver schedules and routes","2+ years dispa
       </div>
 
       <div className="bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 rounded-xl p-4 text-sm text-blue-800 dark:text-blue-300 mb-6">
-        <p className="font-semibold mb-1">Required columns:</p>
-        <code className="text-xs">title, location, description, requirements</code>
-        <p className="mt-1">Optional: <code className="text-xs">salary, applyUrl</code></p>
+        <p className="font-semibold mb-1">Required column:</p>
+        <code className="text-xs">title</code>
+        <p className="mt-1">Optional: <code className="text-xs">companyName, jobType, locationCity, locationState, locationCountry, description, requirements, benefits, salary, applyUrl</code></p>
       </div>
 
       <div className="bg-white dark:bg-slate-900 rounded-2xl border border-border p-8 mb-6">
@@ -452,8 +507,12 @@ Fleet Dispatcher,Atlanta GA,"Manage driver schedules and routes","2+ years dispa
           <div className="space-y-2 max-h-80 overflow-y-auto">
             {parsed.map((job, i) => (
               <div key={i} className="bg-white dark:bg-slate-900 rounded-lg border border-border p-4 text-sm">
-                <p className="font-semibold">{job.title}</p>
-                <p className="text-muted-foreground">{job.location}{job.salary ? ` · ${job.salary}` : ""}</p>
+                <p className="font-semibold">{job.title}{job.companyName ? ` · ${job.companyName}` : ""}</p>
+                <p className="text-muted-foreground">
+                  {[job.locationCity, job.locationState, job.locationCountry].filter(Boolean).join(", ")}
+                  {job.jobType ? ` · ${job.jobType}` : ""}
+                  {job.salary ? ` · ${job.salary}` : ""}
+                </p>
               </div>
             ))}
           </div>

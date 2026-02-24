@@ -3,13 +3,17 @@ import { Navbar } from "@/components/layout/Navbar";
 import { Footer } from "@/components/layout/Footer";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { MapPin, DollarSign, Clock, ArrowLeft, ExternalLink, CheckCircle2, Briefcase } from "lucide-react";
+import { MapPin, DollarSign, Clock, ArrowLeft, ExternalLink, CheckCircle2, Briefcase, Building2, Star } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import type { Job } from "@shared/schema";
 import { formatDistanceToNow } from "date-fns";
+
+function fmtLoc(job: Job) {
+  return [job.locationCity, job.locationState, job.locationCountry].filter(Boolean).join(", ");
+}
 
 export default function JobDetail() {
   const { id } = useParams<{ id: string }>();
@@ -44,10 +48,7 @@ export default function JobDetail() {
   });
 
   const handleApply = () => {
-    if (!user) {
-      setLocation("/login");
-      return;
-    }
+    if (!user) { setLocation("/login"); return; }
     if (job?.isExternalApply && job.applyUrl) {
       window.open(job.applyUrl, "_blank");
     } else {
@@ -81,6 +82,8 @@ export default function JobDetail() {
     );
   }
 
+  const locationStr = fmtLoc(job);
+
   return (
     <div className="min-h-screen flex flex-col font-sans">
       <Navbar />
@@ -104,11 +107,21 @@ export default function JobDetail() {
                     {job.title.charAt(0)}
                   </div>
                   <div>
-                    <h1 className="text-2xl md:text-3xl font-bold font-display mb-2">{job.title}</h1>
-                    <div className="flex flex-wrap gap-4 text-sm text-muted-foreground">
-                      <span className="flex items-center gap-1.5">
-                        <MapPin size={15} /> {job.location}
-                      </span>
+                    <h1 className="text-2xl md:text-3xl font-bold font-display mb-1">{job.title}</h1>
+                    {job.companyName && (
+                      <p className="text-base font-medium text-foreground/70 flex items-center gap-1.5 mb-2">
+                        <Building2 size={15} /> {job.companyName}
+                      </p>
+                    )}
+                    <div className="flex flex-wrap gap-3 text-sm text-muted-foreground">
+                      {locationStr && (
+                        <span className="flex items-center gap-1.5">
+                          <MapPin size={15} /> {locationStr}
+                        </span>
+                      )}
+                      {job.jobType && (
+                        <Badge variant="outline" className="font-normal">{job.jobType}</Badge>
+                      )}
                       {job.salary && (
                         <span className="flex items-center gap-1.5">
                           <DollarSign size={15} /> {job.salary}
@@ -116,9 +129,7 @@ export default function JobDetail() {
                       )}
                       <span className="flex items-center gap-1.5">
                         <Clock size={15} />
-                        {job.createdAt
-                          ? formatDistanceToNow(new Date(job.createdAt), { addSuffix: true })
-                          : "Recently posted"}
+                        {job.createdAt ? formatDistanceToNow(new Date(job.createdAt), { addSuffix: true }) : "Recently posted"}
                       </span>
                     </div>
                   </div>
@@ -165,6 +176,20 @@ export default function JobDetail() {
                   ))}
                 </div>
               </div>
+
+              {job.benefits && (
+                <div>
+                  <h2 className="text-lg font-bold font-display mb-3">Benefits</h2>
+                  <div className="space-y-2">
+                    {job.benefits.split("\n").map((b, i) => (
+                      <div key={i} className="flex items-start gap-2 text-muted-foreground">
+                        <Star size={16} className="text-accent mt-0.5 shrink-0" />
+                        <span>{b}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               <div className="bg-slate-50 dark:bg-slate-800/50 rounded-xl p-6 border border-border flex flex-col md:flex-row items-center justify-between gap-4">
                 <div>

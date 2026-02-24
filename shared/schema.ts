@@ -21,11 +21,16 @@ export const jobs = pgTable("jobs", {
   id: serial("id").primaryKey(),
   employerId: integer("employer_id").notNull(),
   title: text("title").notNull(),
+  companyName: text("company_name"),
+  jobType: text("job_type"), // Full-time, Part-time, Contract, etc.
   description: text("description").notNull(),
   requirements: text("requirements").notNull(),
-  location: text("location").notNull(),
+  benefits: text("benefits"),
+  locationCity: text("location_city"),
+  locationState: text("location_state"),
+  locationCountry: text("location_country"),
   salary: text("salary"),
-  applyUrl: text("apply_url"), // external link
+  applyUrl: text("apply_url"),
   isExternalApply: boolean("is_external_apply").default(false),
   createdAt: timestamp("created_at").defaultNow(),
 });

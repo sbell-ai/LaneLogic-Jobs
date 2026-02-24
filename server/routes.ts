@@ -422,9 +422,14 @@ async function seedDatabase() {
     await storage.createJob({
       employerId: employer.id,
       title: "Long Haul Truck Driver",
+      companyName: "Fast Trucking Co.",
+      jobType: "Full-time",
       description: "Looking for an experienced long haul driver. Routes across the midwest.",
       requirements: "CDL Class A, 5+ years experience",
-      location: "Chicago, IL",
+      benefits: "Health insurance, 401k, paid time off",
+      locationCity: "Chicago",
+      locationState: "IL",
+      locationCountry: "USA",
       salary: "$80,000 - $100,000"
     });
 

@@ -161,7 +161,8 @@ export default function Home() {
                       </div>
                       <h3 className="text-xl font-bold font-display mb-2 group-hover:text-primary transition-colors">{job.title}</h3>
                       <div className="flex items-center text-muted-foreground text-sm mb-4">
-                        <MapPin size={16} className="mr-1" /> {job.location}
+                        <MapPin size={16} className="mr-1" />
+                        {[job.locationCity, job.locationState, job.locationCountry].filter(Boolean).join(", ") || "Location TBD"}
                       </div>
                       <p className="text-muted-foreground text-sm line-clamp-3 mb-6 flex-grow">
                         {job.description}

@@ -85,10 +85,17 @@ shared/
 - server/webhookHandlers.ts - Webhook processor
 - server/seed-products.ts - Script to create Stripe products
 
+## Jobs Schema (key fields)
+- `title`, `companyName`, `jobType` (Full-time/Part-time/Contract/Seasonal/Owner-Operator/Lease Purchase/Temporary)
+- `locationCity`, `locationState`, `locationCountry` (split location fields, not a single string)
+- `description`, `requirements`, `benefits`, `salary`
+- `isExternalApply`, `applyUrl`
+
 ## Key Features
-- Job listings with external/internal apply flows
+- Job listings with external/internal apply flows, job type filter, company name display
 - Resume creation (text-based)
-- CSV bulk upload for jobs/candidates/employers
+- CSV bulk upload for jobs (new columns: companyName, jobType, locationCity, locationState, locationCountry, benefits)
 - Membership gating on resource library
 - Blog with admin publishing
 - Role-based dashboard routing
+- Design settings: brand colors, fonts, logo, announcements, footer copy (live CSS variable injection)

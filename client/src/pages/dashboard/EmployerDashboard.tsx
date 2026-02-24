@@ -14,17 +14,23 @@ import { useToast } from "@/hooks/use-toast";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
-import { Briefcase, Plus, Trash2, Users, Upload, CreditCard, CheckCircle2 } from "lucide-react";
+import { Briefcase, Plus, Trash2, Users, Upload, CreditCard, CheckCircle2, MapPin } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import type { Job, Application } from "@shared/schema";
 import { insertJobSchema } from "@shared/schema";
 import { z } from "zod";
 import { Link } from "wouter";
 
+const JOB_TYPES = ["Full-time", "Part-time", "Contract", "Seasonal", "Owner-Operator", "Lease Purchase", "Temporary"];
+
+function fmtLoc(job: Job) {
+  return [job.locationCity, job.locationState, job.locationCountry].filter(Boolean).join(", ");
+}
+
 const jobFormSchema = insertJobSchema.omit({ employerId: true }).extend({
   title: z.string().min(3, "Title must be at least 3 characters"),
   description: z.string().min(20, "Description must be at least 20 characters"),
   requirements: z.string().min(10, "Requirements must be at least 10 characters"),
-  location: z.string().min(2, "Location required"),
 });
 
 type JobFormValues = z.infer<typeof jobFormSchema>;
@@ -36,13 +42,10 @@ function PostJobTab({ userId }: { userId: number }) {
   const form = useForm<JobFormValues>({
     resolver: zodResolver(jobFormSchema),
     defaultValues: {
-      title: "",
-      description: "",
-      requirements: "",
-      location: "",
-      salary: "",
-      applyUrl: "",
-      isExternalApply: false,
+      title: "", companyName: "", jobType: "Full-time",
+      description: "", requirements: "", benefits: "",
+      locationCity: "", locationState: "", locationCountry: "USA",
+      salary: "", applyUrl: "", isExternalApply: false,
     },
   });
 
@@ -65,65 +68,87 @@ function PostJobTab({ userId }: { userId: number }) {
           <form onSubmit={form.handleSubmit((v) => createMutation.mutate(v))} className="space-y-5">
             <FormField control={form.control} name="title" render={({ field }) => (
               <FormItem>
-                <FormLabel>Job Title</FormLabel>
-                <FormControl>
-                  <Input placeholder="e.g. CDL Class A Driver" data-testid="input-job-title" {...field} />
-                </FormControl>
+                <FormLabel>Job Title *</FormLabel>
+                <FormControl><Input placeholder="e.g. CDL Class A Driver" data-testid="input-job-title" {...field} /></FormControl>
                 <FormMessage />
               </FormItem>
             )} />
 
             <div className="grid grid-cols-2 gap-4">
-              <FormField control={form.control} name="location" render={({ field }) => (
+              <FormField control={form.control} name="companyName" render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Location</FormLabel>
-                  <FormControl>
-                    <Input placeholder="Chicago, IL" data-testid="input-job-location" {...field} />
-                  </FormControl>
-                  <FormMessage />
+                  <FormLabel>Company Name</FormLabel>
+                  <FormControl><Input placeholder="Acme Trucking" data-testid="input-company-name" {...field} value={field.value ?? ""} /></FormControl>
                 </FormItem>
               )} />
-              <FormField control={form.control} name="salary" render={({ field }) => (
+              <FormField control={form.control} name="jobType" render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Salary (optional)</FormLabel>
-                  <FormControl>
-                    <Input placeholder="$70,000 - $90,000" data-testid="input-job-salary" {...field} value={field.value ?? ""} />
-                  </FormControl>
-                  <FormMessage />
+                  <FormLabel>Job Type</FormLabel>
+                  <Select onValueChange={field.onChange} defaultValue={field.value ?? "Full-time"}>
+                    <FormControl><SelectTrigger data-testid="select-job-type"><SelectValue /></SelectTrigger></FormControl>
+                    <SelectContent>{JOB_TYPES.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent>
+                  </Select>
                 </FormItem>
               )} />
             </div>
 
+            <div className="grid grid-cols-3 gap-3">
+              <FormField control={form.control} name="locationCity" render={({ field }) => (
+                <FormItem>
+                  <FormLabel>City</FormLabel>
+                  <FormControl><Input placeholder="Chicago" data-testid="input-location-city" {...field} value={field.value ?? ""} /></FormControl>
+                </FormItem>
+              )} />
+              <FormField control={form.control} name="locationState" render={({ field }) => (
+                <FormItem>
+                  <FormLabel>State</FormLabel>
+                  <FormControl><Input placeholder="IL" data-testid="input-location-state" {...field} value={field.value ?? ""} /></FormControl>
+                </FormItem>
+              )} />
+              <FormField control={form.control} name="locationCountry" render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Country</FormLabel>
+                  <FormControl><Input placeholder="USA" data-testid="input-location-country" {...field} value={field.value ?? ""} /></FormControl>
+                </FormItem>
+              )} />
+            </div>
+
+            <FormField control={form.control} name="salary" render={({ field }) => (
+              <FormItem>
+                <FormLabel>Salary (optional)</FormLabel>
+                <FormControl><Input placeholder="$70,000 – $90,000/yr" data-testid="input-job-salary" {...field} value={field.value ?? ""} /></FormControl>
+              </FormItem>
+            )} />
+
             <FormField control={form.control} name="description" render={({ field }) => (
               <FormItem>
-                <FormLabel>Job Description</FormLabel>
-                <FormControl>
-                  <Textarea placeholder="Describe the role, responsibilities, and benefits..." className="min-h-[120px]" data-testid="textarea-job-description" {...field} />
-                </FormControl>
+                <FormLabel>Job Description *</FormLabel>
+                <FormControl><Textarea placeholder="Describe the role, responsibilities, and company culture..." className="min-h-[120px]" data-testid="textarea-job-description" {...field} /></FormControl>
                 <FormMessage />
               </FormItem>
             )} />
 
             <FormField control={form.control} name="requirements" render={({ field }) => (
               <FormItem>
-                <FormLabel>Requirements</FormLabel>
-                <FormControl>
-                  <Textarea placeholder="CDL Class A required, 3+ years experience..." className="min-h-[100px]" data-testid="textarea-job-requirements" {...field} />
-                </FormControl>
+                <FormLabel>Requirements *</FormLabel>
+                <FormControl><Textarea placeholder="CDL Class A required, 3+ years experience..." className="min-h-[100px]" data-testid="textarea-job-requirements" {...field} /></FormControl>
                 <FormMessage />
+              </FormItem>
+            )} />
+
+            <FormField control={form.control} name="benefits" render={({ field }) => (
+              <FormItem>
+                <FormLabel>Benefits (optional)</FormLabel>
+                <FormControl><Textarea placeholder="Health insurance, 401k, paid time off, sign-on bonus..." className="min-h-[80px]" data-testid="textarea-job-benefits" {...field} value={field.value ?? ""} /></FormControl>
               </FormItem>
             )} />
 
             <FormField control={form.control} name="isExternalApply" render={({ field }) => (
               <FormItem className="flex items-center gap-3 space-y-0">
                 <FormControl>
-                  <Switch
-                    checked={field.value ?? false}
-                    onCheckedChange={field.onChange}
-                    data-testid="switch-external-apply"
-                  />
+                  <Switch checked={field.value ?? false} onCheckedChange={field.onChange} data-testid="switch-external-apply" />
                 </FormControl>
-                <FormLabel className="cursor-pointer">Use External Application URL</FormLabel>
+                <FormLabel className="cursor-pointer">Link to external application URL</FormLabel>
               </FormItem>
             )} />
 
@@ -131,10 +156,7 @@ function PostJobTab({ userId }: { userId: number }) {
               <FormField control={form.control} name="applyUrl" render={({ field }) => (
                 <FormItem>
                   <FormLabel>External Application URL</FormLabel>
-                  <FormControl>
-                    <Input placeholder="https://yourcompany.com/apply" data-testid="input-apply-url" {...field} value={field.value ?? ""} />
-                  </FormControl>
-                  <FormMessage />
+                  <FormControl><Input placeholder="https://yourcompany.com/apply" data-testid="input-apply-url" {...field} value={field.value ?? ""} /></FormControl>
                 </FormItem>
               )} />
             )}
@@ -187,7 +209,7 @@ function MyJobsTab({ userId }: { userId: number }) {
                 <div className="flex items-start justify-between gap-4">
                   <div>
                     <h3 className="font-bold font-display text-lg mb-1">{job.title}</h3>
-                    <p className="text-sm text-muted-foreground">{job.location}{job.salary ? ` · ${job.salary}` : ""}</p>
+                    <p className="text-sm text-muted-foreground">{fmtLoc(job)}{job.salary ? ` · ${job.salary}` : ""}</p>
                     <div className="flex items-center gap-2 mt-3">
                       <Badge variant="outline" className="text-xs">
                         <Users size={12} className="mr-1" /> {appCount} applicant{appCount !== 1 ? "s" : ""}
