@@ -4,17 +4,15 @@ import { Navbar } from "@/components/layout/Navbar";
 import { Footer } from "@/components/layout/Footer";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Search, Building2, Briefcase, MapPin } from "lucide-react";
+import { Search, Building2, Briefcase, MapPin, CheckCircle2 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { motion } from "framer-motion";
-import { formatDistanceToNow } from "date-fns";
 
 interface Employer {
-  id: number;
+  id: number | null;
   companyName: string;
   companyLogo: string | null;
-  firstName: string | null;
-  lastName: string | null;
+  claimed: boolean;
   jobCount: number;
   industries: string[];
   locations: string[];
@@ -81,26 +79,26 @@ export default function Employers() {
               <Building2 className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
               <h3 className="text-lg font-semibold mb-2">No employers found</h3>
               <p className="text-muted-foreground">
-                {query ? "Try adjusting your search terms" : "No employers have registered yet"}
+                {query ? "Try adjusting your search terms" : "No employers have been listed yet"}
               </p>
             </div>
           ) : (
             <>
               <p className="text-sm text-muted-foreground mb-6" data-testid="text-employer-count">
-                {filtered.length} employer{filtered.length !== 1 ? "s" : ""}
+                {filtered.length} compan{filtered.length !== 1 ? "ies" : "y"} hiring
               </p>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {filtered.map((emp, index) => (
                   <motion.div
-                    key={emp.id}
+                    key={emp.companyName}
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: index * 0.05 }}
+                    transition={{ delay: Math.min(index * 0.03, 0.5) }}
                   >
                     <Link href={`/jobs?q=${encodeURIComponent(emp.companyName)}`}>
                       <div
                         className="bg-white dark:bg-slate-900 rounded-xl border border-border p-6 hover:shadow-lg hover:border-primary/30 transition-all cursor-pointer h-full flex flex-col"
-                        data-testid={`card-employer-${emp.id}`}
+                        data-testid={`card-employer-${emp.companyName.replace(/\s+/g, '-').toLowerCase()}`}
                       >
                         <div className="flex items-center gap-4 mb-4">
                           {emp.companyLogo ? (
@@ -108,20 +106,24 @@ export default function Employers() {
                               src={emp.companyLogo}
                               alt={emp.companyName}
                               className="w-14 h-14 rounded-lg object-contain border border-border bg-white"
-                              data-testid={`img-employer-logo-${emp.id}`}
                             />
                           ) : (
-                            <div className="w-14 h-14 rounded-lg bg-primary/10 flex items-center justify-center">
+                            <div className="w-14 h-14 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
                               <Building2 className="h-7 w-7 text-primary" />
                             </div>
                           )}
                           <div className="min-w-0 flex-1">
-                            <h3 className="font-semibold text-lg truncate" data-testid={`text-employer-name-${emp.id}`}>
-                              {emp.companyName}
-                            </h3>
+                            <div className="flex items-center gap-2">
+                              <h3 className="font-semibold text-lg truncate" data-testid={`text-employer-name-${emp.companyName.replace(/\s+/g, '-').toLowerCase()}`}>
+                                {emp.companyName}
+                              </h3>
+                              {emp.claimed && (
+                                <CheckCircle2 className="h-4 w-4 text-primary shrink-0" title="Verified employer" />
+                              )}
+                            </div>
                             <div className="flex items-center gap-1 text-sm text-muted-foreground">
                               <Briefcase className="h-3.5 w-3.5" />
-                              <span data-testid={`text-employer-jobs-${emp.id}`}>
+                              <span>
                                 {emp.jobCount} active job{emp.jobCount !== 1 ? "s" : ""}
                               </span>
                             </div>
@@ -149,10 +151,6 @@ export default function Employers() {
                             )}
                           </div>
                         )}
-
-                        <div className="text-xs text-muted-foreground mt-3 pt-3 border-t border-border">
-                          Member since {emp.createdAt ? formatDistanceToNow(new Date(emp.createdAt), { addSuffix: true }) : "recently"}
-                        </div>
                       </div>
                     </Link>
                   </motion.div>

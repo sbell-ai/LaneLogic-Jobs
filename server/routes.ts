@@ -177,22 +177,73 @@ export async function registerRoutes(
     try {
       const allUsers = await storage.getUsers();
       const allJobs = await storage.getJobs();
-      const employers = allUsers
-        .filter((u) => u.role === "employer")
-        .map((u) => {
-          const employerJobs = allJobs.filter((j) => j.employerId === u.id);
-          return {
-            id: u.id,
-            companyName: u.companyName || "Unnamed Company",
-            companyLogo: u.companyLogo,
-            firstName: u.firstName,
-            lastName: u.lastName,
-            jobCount: employerJobs.length,
-            industries: [...new Set(employerJobs.map((j) => j.industry).filter(Boolean))],
-            locations: [...new Set(employerJobs.map((j) => [j.locationCity, j.locationState].filter(Boolean).join(", ")).filter(Boolean))],
-            createdAt: u.createdAt,
-          };
+
+      const employerMap = new Map<string, {
+        id: number | null;
+        companyName: string;
+        companyLogo: string | null;
+        claimed: boolean;
+        jobCount: number;
+        industries: Set<string>;
+        locations: Set<string>;
+        createdAt: Date | null;
+      }>();
+
+      const registeredEmployers = allUsers.filter((u) => u.role === "employer");
+      for (const u of registeredEmployers) {
+        const name = (u.companyName || "").trim();
+        if (!name) continue;
+        const key = name.toLowerCase();
+        employerMap.set(key, {
+          id: u.id,
+          companyName: name,
+          companyLogo: u.companyLogo,
+          claimed: true,
+          jobCount: 0,
+          industries: new Set(),
+          locations: new Set(),
+          createdAt: u.createdAt,
         });
+      }
+
+      for (const job of allJobs) {
+        const name = (job.companyName || "").trim();
+        if (!name) continue;
+        const key = name.toLowerCase();
+
+        if (!employerMap.has(key)) {
+          employerMap.set(key, {
+            id: null,
+            companyName: name,
+            companyLogo: null,
+            claimed: false,
+            jobCount: 0,
+            industries: new Set(),
+            locations: new Set(),
+            createdAt: job.createdAt,
+          });
+        }
+
+        const entry = employerMap.get(key)!;
+        entry.jobCount++;
+        if (job.industry) entry.industries.add(job.industry);
+        const loc = [job.locationCity, job.locationState].filter(Boolean).join(", ");
+        if (loc) entry.locations.add(loc);
+      }
+
+      const employers = [...employerMap.values()]
+        .map((e) => ({
+          id: e.id,
+          companyName: e.companyName,
+          companyLogo: e.companyLogo,
+          claimed: e.claimed,
+          jobCount: e.jobCount,
+          industries: [...e.industries],
+          locations: [...e.locations],
+          createdAt: e.createdAt,
+        }))
+        .sort((a, b) => b.jobCount - a.jobCount);
+
       res.json(employers);
     } catch (err) {
       res.status(500).json({ message: "Internal server error" });
