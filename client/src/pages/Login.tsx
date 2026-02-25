@@ -9,10 +9,12 @@ import { loginSchema } from "@shared/schema";
 import { z } from "zod";
 import { Truck, ArrowLeft } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { useSiteSettings } from "@/hooks/use-settings";
 
 export default function Login() {
   const { login, isLoggingIn } = useAuth();
   const { toast } = useToast();
+  const settings = useSiteSettings();
 
   const form = useForm<z.infer<typeof loginSchema>>({
     resolver: zodResolver(loginSchema),
@@ -50,8 +52,8 @@ export default function Login() {
                 Transpo<span className="text-primary">Jobs</span>
               </span>
             </Link>
-            <h2 className="text-3xl font-bold font-display text-foreground mb-2">Welcome back</h2>
-            <p className="text-muted-foreground text-lg">Log in to your account to continue.</p>
+            <h2 className="text-3xl font-bold font-display text-foreground mb-2" data-testid="text-login-heading">{settings.loginHeading}</h2>
+            <p className="text-muted-foreground text-lg" data-testid="text-login-subtitle">{settings.loginSubtitle}</p>
           </div>
 
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5">
@@ -108,15 +110,15 @@ export default function Login() {
       <div className="hidden lg:block relative flex-1">
         {/* landing page hero scenic mountain landscape */}
         <img 
-          src="https://images.unsplash.com/photo-1580674285054-bed31e145f59?w=1920&h=1080&fit=crop" 
+          src={settings.loginBackgroundImage} 
           alt="Semi truck on highway" 
           className="absolute inset-0 h-full w-full object-cover"
         />
         <div className="absolute inset-0 bg-gradient-to-t from-slate-900/90 via-slate-900/40 to-transparent flex flex-col justify-end p-12">
-          <blockquote className="text-white max-w-lg mb-6">
-            <p className="text-2xl font-medium font-display leading-tight mb-4">"TranspoJobs helped us hire 15 certified CDL drivers in less than a month. The platform is incredibly targeted and easy to use."</p>
-            <footer className="text-slate-300 font-medium">
-              Sarah Jenkins, Logistics Director at FastFreight
+          <blockquote className="text-white max-w-lg mb-6" data-testid="text-login-testimonial">
+            <p className="text-2xl font-medium font-display leading-tight mb-4">"{settings.loginTestimonial}"</p>
+            <footer className="text-slate-300 font-medium" data-testid="text-login-testimonial-author">
+              {settings.loginTestimonialAuthor}
             </footer>
           </blockquote>
         </div>

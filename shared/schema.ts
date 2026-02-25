@@ -22,7 +22,9 @@ export const jobs = pgTable("jobs", {
   employerId: integer("employer_id").notNull(),
   title: text("title").notNull(),
   companyName: text("company_name"),
-  jobType: text("job_type"), // Full-time, Part-time, Contract, etc.
+  jobType: text("job_type"),
+  category: text("category"),
+  industry: text("industry"),
   description: text("description").notNull(),
   requirements: text("requirements").notNull(),
   benefits: text("benefits"),
@@ -58,7 +60,28 @@ export const blogPosts = pgTable("blog_posts", {
   authorId: integer("author_id").notNull(),
   title: text("title").notNull(),
   content: text("content").notNull(),
+  category: text("category"),
   publishedAt: timestamp("published_at").defaultNow(),
+});
+
+export const categories = pgTable("categories", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  type: text("type").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const coupons = pgTable("coupons", {
+  id: serial("id").primaryKey(),
+  code: text("code").notNull().unique(),
+  discountType: text("discount_type").notNull(),
+  discountValue: integer("discount_value").notNull(),
+  maxUses: integer("max_uses"),
+  currentUses: integer("current_uses").notNull().default(0),
+  expiresAt: timestamp("expires_at"),
+  isActive: boolean("is_active").notNull().default(true),
+  appliesTo: text("applies_to").notNull().default("all"),
+  createdAt: timestamp("created_at").defaultNow(),
 });
 
 export const resumes = pgTable("resumes", {
@@ -73,8 +96,10 @@ export const insertUserSchema = createInsertSchema(users).omit({ id: true, creat
 export const insertJobSchema = createInsertSchema(jobs).omit({ id: true, createdAt: true });
 export const insertApplicationSchema = createInsertSchema(applications).omit({ id: true, createdAt: true });
 export const insertResourceSchema = createInsertSchema(resources).omit({ id: true, createdAt: true });
-export const insertBlogPostSchema = createInsertSchema(blogPosts).omit({ id: true, createdAt: true });
+export const insertBlogPostSchema = createInsertSchema(blogPosts).omit({ id: true });
 export const insertResumeSchema = createInsertSchema(resumes).omit({ id: true, createdAt: true });
+export const insertCategorySchema = createInsertSchema(categories).omit({ id: true, createdAt: true });
+export const insertCouponSchema = createInsertSchema(coupons).omit({ id: true, createdAt: true, currentUses: true });
 
 export type User = typeof users.$inferSelect;
 export type InsertUser = z.infer<typeof insertUserSchema>;
@@ -88,6 +113,10 @@ export type BlogPost = typeof blogPosts.$inferSelect;
 export type InsertBlogPost = z.infer<typeof insertBlogPostSchema>;
 export type Resume = typeof resumes.$inferSelect;
 export type InsertResume = z.infer<typeof insertResumeSchema>;
+export type Category = typeof categories.$inferSelect;
+export type InsertCategory = z.infer<typeof insertCategorySchema>;
+export type Coupon = typeof coupons.$inferSelect;
+export type InsertCoupon = z.infer<typeof insertCouponSchema>;
 
 // Site Settings
 export interface SiteSettingsData {
@@ -102,6 +131,14 @@ export interface SiteSettingsData {
   headerAnnouncement: string;
   footerTagline: string;
   footerCopyright: string;
+  loginHeading: string;
+  loginSubtitle: string;
+  loginTestimonial: string;
+  loginTestimonialAuthor: string;
+  loginBackgroundImage: string;
+  signupHeading: string;
+  signupSubtitle: string;
+  signupDescription: string;
 }
 
 export const DEFAULT_SETTINGS: SiteSettingsData = {
@@ -116,6 +153,14 @@ export const DEFAULT_SETTINGS: SiteSettingsData = {
   headerAnnouncement: "",
   footerTagline: "The premier destination for transportation and logistics professionals to advance their careers.",
   footerCopyright: "© TranspoJobs. All rights reserved.",
+  loginHeading: "Welcome back",
+  loginSubtitle: "Log in to your account to continue",
+  loginTestimonial: "TranspoJobs helped us find qualified CDL drivers within a week of posting. The quality of candidates is outstanding.",
+  loginTestimonialAuthor: "Sarah Jenkins, Logistics Director at FastFreight",
+  loginBackgroundImage: "https://images.unsplash.com/photo-1580674285054-bed31e145f59?w=800&q=80",
+  signupHeading: "Create an account",
+  signupSubtitle: "Join TranspoJobs to take the next step",
+  signupDescription: "Connect with thousands of transportation and logistics companies across the country.",
 };
 
 export const siteSettings = pgTable("site_settings", {

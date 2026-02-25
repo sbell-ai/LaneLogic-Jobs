@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Search, MapPin, Briefcase, DollarSign, ExternalLink, Clock, Building2 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
-import type { Job } from "@shared/schema";
+import type { Job, Category } from "@shared/schema";
 import { formatDistanceToNow } from "date-fns";
 import { motion } from "framer-motion";
 
@@ -22,10 +22,19 @@ export default function Jobs() {
   const [query, setQuery] = useState(params.get("q") || "");
   const [locationFilter, setLocationFilter] = useState(params.get("loc") || "");
   const [jobTypeFilter, setJobTypeFilter] = useState("all");
+  const [categoryFilter, setCategoryFilter] = useState("all");
+  const [industryFilter, setIndustryFilter] = useState("all");
 
   const { data: jobs, isLoading } = useQuery<Job[]>({
     queryKey: ["/api/jobs"],
   });
+
+  const { data: categories } = useQuery<Category[]>({
+    queryKey: ["/api/categories"],
+  });
+
+  const jobCategories = (categories || []).filter((c) => c.type === "job");
+  const industries = (categories || []).filter((c) => c.type === "industry");
 
   const filtered = (jobs || []).filter((job) => {
     const matchQuery =
@@ -36,7 +45,9 @@ export default function Jobs() {
     const loc = fmtLoc(job).toLowerCase();
     const matchLoc = !locationFilter || loc.includes(locationFilter.toLowerCase());
     const matchType = jobTypeFilter === "all" || (job.jobType || "").toLowerCase() === jobTypeFilter.toLowerCase();
-    return matchQuery && matchLoc && matchType;
+    const matchCategory = categoryFilter === "all" || (job.category || "").toLowerCase() === categoryFilter.toLowerCase();
+    const matchIndustry = industryFilter === "all" || (job.industry || "").toLowerCase() === industryFilter.toLowerCase();
+    return matchQuery && matchLoc && matchType && matchCategory && matchIndustry;
   });
 
   return (
@@ -69,7 +80,7 @@ export default function Jobs() {
                 />
               </div>
               <Select value={jobTypeFilter} onValueChange={setJobTypeFilter}>
-                <SelectTrigger data-testid="select-job-type" className="h-11 w-full md:w-[200px]">
+                <SelectTrigger data-testid="select-job-type" className="h-11 w-full md:w-[180px]">
                   <SelectValue placeholder="Job type" />
                 </SelectTrigger>
                 <SelectContent>
@@ -81,6 +92,28 @@ export default function Jobs() {
                   <SelectItem value="Owner-Operator">Owner-Operator</SelectItem>
                   <SelectItem value="Lease Purchase">Lease Purchase</SelectItem>
                   <SelectItem value="Temporary">Temporary</SelectItem>
+                </SelectContent>
+              </Select>
+              <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+                <SelectTrigger data-testid="select-category" className="h-11 w-full md:w-[180px]">
+                  <SelectValue placeholder="Category" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Categories</SelectItem>
+                  {jobCategories.map((c) => (
+                    <SelectItem key={c.id} value={c.name}>{c.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Select value={industryFilter} onValueChange={setIndustryFilter}>
+                <SelectTrigger data-testid="select-industry" className="h-11 w-full md:w-[180px]">
+                  <SelectValue placeholder="Industry" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Industries</SelectItem>
+                  {industries.map((c) => (
+                    <SelectItem key={c.id} value={c.name}>{c.name}</SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>

@@ -271,6 +271,142 @@ export async function registerRoutes(
     }
   });
 
+  // Resource update/delete
+  app.put("/api/resources/:id", async (req, res) => {
+    if (!req.isAuthenticated() || (req.user as any).role !== "admin") {
+      return res.status(403).json({ message: "Forbidden" });
+    }
+    try {
+      const resource = await storage.updateResource(Number(req.params.id), req.body);
+      res.json(resource);
+    } catch (err) {
+      res.status(400).json({ message: "Update failed" });
+    }
+  });
+
+  app.delete("/api/resources/:id", async (req, res) => {
+    if (!req.isAuthenticated() || (req.user as any).role !== "admin") {
+      return res.status(403).json({ message: "Forbidden" });
+    }
+    await storage.deleteResource(Number(req.params.id));
+    res.json({ message: "Deleted" });
+  });
+
+  // Blog update/delete
+  app.put("/api/blog/:id", async (req, res) => {
+    if (!req.isAuthenticated() || (req.user as any).role !== "admin") {
+      return res.status(403).json({ message: "Forbidden" });
+    }
+    try {
+      const post = await storage.updateBlogPost(Number(req.params.id), req.body);
+      res.json(post);
+    } catch (err) {
+      res.status(400).json({ message: "Update failed" });
+    }
+  });
+
+  app.delete("/api/blog/:id", async (req, res) => {
+    if (!req.isAuthenticated() || (req.user as any).role !== "admin") {
+      return res.status(403).json({ message: "Forbidden" });
+    }
+    await storage.deleteBlogPost(Number(req.params.id));
+    res.json({ message: "Deleted" });
+  });
+
+  // User delete
+  app.delete("/api/users/:id", async (req, res) => {
+    if (!req.isAuthenticated() || (req.user as any).role !== "admin") {
+      return res.status(403).json({ message: "Forbidden" });
+    }
+    await storage.deleteUser(Number(req.params.id));
+    res.json({ message: "Deleted" });
+  });
+
+  // Categories
+  app.get("/api/categories", async (_req, res) => {
+    const cats = await storage.getCategories();
+    res.json(cats);
+  });
+
+  app.post("/api/categories", async (req, res) => {
+    if (!req.isAuthenticated() || (req.user as any).role !== "admin") {
+      return res.status(403).json({ message: "Forbidden" });
+    }
+    try {
+      const cat = await storage.createCategory(req.body);
+      res.status(201).json(cat);
+    } catch (err) {
+      res.status(400).json({ message: "Validation error" });
+    }
+  });
+
+  app.delete("/api/categories/:id", async (req, res) => {
+    if (!req.isAuthenticated() || (req.user as any).role !== "admin") {
+      return res.status(403).json({ message: "Forbidden" });
+    }
+    await storage.deleteCategory(Number(req.params.id));
+    res.json({ message: "Deleted" });
+  });
+
+  // Coupons
+  app.get("/api/coupons", async (req, res) => {
+    if (!req.isAuthenticated() || (req.user as any).role !== "admin") {
+      return res.status(403).json({ message: "Forbidden" });
+    }
+    const allCoupons = await storage.getCoupons();
+    res.json(allCoupons);
+  });
+
+  app.post("/api/coupons", async (req, res) => {
+    if (!req.isAuthenticated() || (req.user as any).role !== "admin") {
+      return res.status(403).json({ message: "Forbidden" });
+    }
+    try {
+      const coupon = await storage.createCoupon(req.body);
+      res.status(201).json(coupon);
+    } catch (err) {
+      res.status(400).json({ message: "Validation error" });
+    }
+  });
+
+  app.put("/api/coupons/:id", async (req, res) => {
+    if (!req.isAuthenticated() || (req.user as any).role !== "admin") {
+      return res.status(403).json({ message: "Forbidden" });
+    }
+    try {
+      const coupon = await storage.updateCoupon(Number(req.params.id), req.body);
+      res.json(coupon);
+    } catch (err) {
+      res.status(400).json({ message: "Update failed" });
+    }
+  });
+
+  app.delete("/api/coupons/:id", async (req, res) => {
+    if (!req.isAuthenticated() || (req.user as any).role !== "admin") {
+      return res.status(403).json({ message: "Forbidden" });
+    }
+    await storage.deleteCoupon(Number(req.params.id));
+    res.json({ message: "Deleted" });
+  });
+
+  app.post("/api/coupons/validate", async (req, res) => {
+    const { code, tier } = req.body;
+    if (!code) return res.status(400).json({ message: "Code required" });
+    const coupon = await storage.getCouponByCode(code.toUpperCase());
+    if (!coupon) return res.status(404).json({ message: "Invalid coupon code" });
+    if (!coupon.isActive) return res.status(400).json({ message: "Coupon is no longer active" });
+    if (coupon.expiresAt && new Date(coupon.expiresAt) < new Date()) {
+      return res.status(400).json({ message: "Coupon has expired" });
+    }
+    if (coupon.maxUses && coupon.currentUses >= coupon.maxUses) {
+      return res.status(400).json({ message: "Coupon usage limit reached" });
+    }
+    if (coupon.appliesTo !== "all" && tier && coupon.appliesTo !== tier) {
+      return res.status(400).json({ message: `Coupon only applies to ${coupon.appliesTo} tier` });
+    }
+    res.json(coupon);
+  });
+
   app.post(api.uploads.csv.path, (req, res) => {
     res.json({ message: "CSV uploaded successfully", count: 10 });
   });

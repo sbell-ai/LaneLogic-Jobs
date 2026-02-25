@@ -10,10 +10,12 @@ import { insertUserSchema } from "@shared/schema";
 import { z } from "zod";
 import { Truck, ArrowLeft, Briefcase, UserRound } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { useSiteSettings } from "@/hooks/use-settings";
 
 export default function Register() {
   const { register, isRegistering } = useAuth();
   const { toast } = useToast();
+  const settings = useSiteSettings();
 
   const form = useForm<z.infer<typeof insertUserSchema>>({
     resolver: zodResolver(insertUserSchema),
@@ -52,8 +54,8 @@ export default function Register() {
           </Link>
           
           <div className="mb-8 text-center sm:text-left">
-            <h2 className="text-3xl font-bold font-display text-foreground mb-2">Create an account</h2>
-            <p className="text-muted-foreground text-lg">Join TranspoJobs to take the next step.</p>
+            <h2 className="text-3xl font-bold font-display text-foreground mb-2" data-testid="text-signup-heading">{settings.signupHeading}</h2>
+            <p className="text-muted-foreground text-lg" data-testid="text-signup-subtitle">{settings.signupSubtitle}</p>
           </div>
 
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
@@ -157,9 +159,9 @@ export default function Register() {
           <div className="w-20 h-20 rounded-2xl bg-primary flex items-center justify-center text-white mb-8 shadow-2xl shadow-primary/50">
             <Truck size={40} strokeWidth={2} />
           </div>
-          <h2 className="text-4xl font-bold font-display text-white mb-6">Join the Network</h2>
-          <p className="text-xl text-slate-300 max-w-md text-balance">
-            TranspoJobs connects the best drivers, dispatchers, and managers with top-tier logistics companies.
+          <h2 className="text-4xl font-bold font-display text-white mb-6" data-testid="text-signup-heading-side">Join the Network</h2>
+          <p className="text-xl text-slate-300 max-w-md text-balance" data-testid="text-signup-description">
+            {settings.signupDescription}
           </p>
         </div>
       </div>

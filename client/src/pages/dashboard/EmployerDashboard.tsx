@@ -16,7 +16,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Briefcase, Plus, Trash2, Users, Upload, CreditCard, CheckCircle2, MapPin } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import type { Job, Application } from "@shared/schema";
+import type { Job, Application, Category } from "@shared/schema";
 import { insertJobSchema } from "@shared/schema";
 import { z } from "zod";
 import { Link } from "wouter";
@@ -39,6 +39,10 @@ function PostJobTab({ userId }: { userId: number }) {
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
+  const { data: categories } = useQuery<Category[]>({ queryKey: ["/api/categories"] });
+  const jobCategories = (categories || []).filter((c) => c.type === "job");
+  const industries = (categories || []).filter((c) => c.type === "industry");
+
   const form = useForm<JobFormValues>({
     resolver: zodResolver(jobFormSchema),
     defaultValues: {
@@ -46,6 +50,7 @@ function PostJobTab({ userId }: { userId: number }) {
       description: "", requirements: "", benefits: "",
       locationCity: "", locationState: "", locationCountry: "USA",
       salary: "", applyUrl: "", isExternalApply: false,
+      category: "", industry: "",
     },
   });
 
@@ -109,6 +114,33 @@ function PostJobTab({ userId }: { userId: number }) {
                 <FormItem>
                   <FormLabel>Country</FormLabel>
                   <FormControl><Input placeholder="USA" data-testid="input-location-country" {...field} value={field.value ?? ""} /></FormControl>
+                </FormItem>
+              )} />
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <FormField control={form.control} name="category" render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Category</FormLabel>
+                  <Select onValueChange={field.onChange} value={field.value ?? ""}>
+                    <FormControl><SelectTrigger data-testid="select-job-category"><SelectValue placeholder="Select category" /></SelectTrigger></FormControl>
+                    <SelectContent>
+                      <SelectItem value="">None</SelectItem>
+                      {jobCategories.map(c => <SelectItem key={c.id} value={c.name}>{c.name}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </FormItem>
+              )} />
+              <FormField control={form.control} name="industry" render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Industry</FormLabel>
+                  <Select onValueChange={field.onChange} value={field.value ?? ""}>
+                    <FormControl><SelectTrigger data-testid="select-job-industry"><SelectValue placeholder="Select industry" /></SelectTrigger></FormControl>
+                    <SelectContent>
+                      <SelectItem value="">None</SelectItem>
+                      {industries.map(c => <SelectItem key={c.id} value={c.name}>{c.name}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
                 </FormItem>
               )} />
             </div>

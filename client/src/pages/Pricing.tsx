@@ -1,7 +1,8 @@
 import { Navbar } from "@/components/layout/Navbar";
 import { Footer } from "@/components/layout/Footer";
 import { Button } from "@/components/ui/button";
-import { CheckCircle2, Zap, Shield, Star } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { CheckCircle2, Zap, Shield, Star, Tag } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
 import { useState } from "react";
@@ -130,8 +131,22 @@ const employerPlans: PricingPlan[] = [
   },
 ];
 
-function PlanCard({ plan, onSelect }: { plan: PricingPlan; onSelect: (tier: string) => void }) {
+interface CouponDiscount {
+  discountType: "percent" | "fixed";
+  discountValue: number;
+}
+
+function calcDiscountedPrice(price: number, discount: CouponDiscount | null): number | null {
+  if (!discount || price === 0) return null;
+  if (discount.discountType === "percent") {
+    return Math.max(0, Math.round(price * (1 - discount.discountValue / 100) * 100) / 100);
+  }
+  return Math.max(0, price - discount.discountValue);
+}
+
+function PlanCard({ plan, onSelect, discount }: { plan: PricingPlan; onSelect: (tier: string) => void; discount: CouponDiscount | null }) {
   const Icon = plan.icon;
+  const discountedPrice = calcDiscountedPrice(plan.monthlyPrice, discount);
   return (
     <motion.div
       initial={{ opacity: 0, y: 16 }}
@@ -155,10 +170,22 @@ function PlanCard({ plan, onSelect }: { plan: PricingPlan; onSelect: (tier: stri
         </div>
         <h3 className="text-2xl font-bold font-display mb-1">{plan.name}</h3>
         <p className="text-muted-foreground text-sm mb-4">{plan.description}</p>
-        <div className="flex items-baseline gap-1">
-          <span className="text-4xl font-bold font-display">${plan.monthlyPrice}</span>
+        <div className="flex items-baseline gap-2">
+          {discountedPrice !== null ? (
+            <>
+              <span className="text-4xl font-bold font-display text-primary" data-testid={`text-discounted-price-${plan.tier}`}>${discountedPrice}</span>
+              <span className="text-xl text-muted-foreground line-through" data-testid={`text-original-price-${plan.tier}`}>${plan.monthlyPrice}</span>
+            </>
+          ) : (
+            <span className="text-4xl font-bold font-display">${plan.monthlyPrice}</span>
+          )}
           {plan.monthlyPrice > 0 && <span className="text-muted-foreground text-sm">/month</span>}
         </div>
+        {discountedPrice !== null && (
+          <p className="text-xs text-primary mt-1 font-medium" data-testid={`text-discount-label-${plan.tier}`}>
+            {discount!.discountType === "percent" ? `${discount!.discountValue}% off` : `$${discount!.discountValue} off`}
+          </p>
+        )}
       </div>
       <div className="p-8 flex flex-col flex-grow">
         <ul className="space-y-3 flex-grow mb-8">
@@ -187,6 +214,43 @@ export default function Pricing() {
   const { user } = useAuth();
   const [, setLocation] = useLocation();
   const { toast } = useToast();
+  const [couponCode, setCouponCode] = useState("");
+  const [couponDiscount, setCouponDiscount] = useState<CouponDiscount | null>(null);
+  const [couponError, setCouponError] = useState("");
+
+  const couponMutation = useMutation({
+    mutationFn: async ({ code, tier }: { code: string; tier: string }) => {
+      const res = await fetch("/api/coupons/validate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ code, tier }),
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.message || "Invalid coupon code");
+      }
+      return res.json();
+    },
+    onSuccess: (data) => {
+      setCouponDiscount({ discountType: data.discountType, discountValue: data.discountValue });
+      setCouponError("");
+      toast({ title: "Coupon applied!", description: `${data.discountType === "percent" ? `${data.discountValue}%` : `$${data.discountValue}`} discount applied.` });
+    },
+    onError: (err: Error) => {
+      setCouponDiscount(null);
+      setCouponError(err.message);
+      toast({ title: "Invalid coupon", description: err.message, variant: "destructive" });
+    },
+  });
+
+  const handleApplyCoupon = () => {
+    if (!couponCode.trim()) return;
+    setCouponError("");
+    const activePlans = tab === "seeker" ? seekerPlans : employerPlans;
+    const paidTier = activePlans.find((p) => p.highlighted)?.tier || "basic";
+    couponMutation.mutate({ code: couponCode.trim(), tier: paidTier });
+  };
 
   const upgradeMutation = useMutation({
     mutationFn: async (tier: string) => {
@@ -268,9 +332,43 @@ export default function Pricing() {
         </div>
 
         <div className="container mx-auto px-4 md:px-6 py-16">
+          <div className="max-w-md mx-auto mb-10">
+            <div className="bg-white dark:bg-slate-900 rounded-xl border border-border p-5">
+              <div className="flex items-center gap-2 mb-3">
+                <Tag size={16} className="text-muted-foreground" />
+                <span className="text-sm font-semibold">Have a coupon code?</span>
+              </div>
+              <div className="flex gap-2">
+                <Input
+                  data-testid="input-coupon-code"
+                  placeholder="Enter coupon code"
+                  value={couponCode}
+                  onChange={(e) => setCouponCode(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && handleApplyCoupon()}
+                />
+                <Button
+                  data-testid="button-apply-coupon"
+                  variant="outline"
+                  onClick={handleApplyCoupon}
+                  disabled={couponMutation.isPending || !couponCode.trim()}
+                >
+                  {couponMutation.isPending ? "Checking..." : "Apply"}
+                </Button>
+              </div>
+              {couponError && (
+                <p className="text-xs text-destructive mt-2" data-testid="text-coupon-error">{couponError}</p>
+              )}
+              {couponDiscount && (
+                <p className="text-xs text-primary mt-2 font-medium" data-testid="text-coupon-success">
+                  {couponDiscount.discountType === "percent" ? `${couponDiscount.discountValue}%` : `$${couponDiscount.discountValue}`} discount applied
+                </p>
+              )}
+            </div>
+          </div>
+
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-5xl mx-auto items-start">
             {plans.map((plan) => (
-              <PlanCard key={plan.tier} plan={plan} onSelect={handleSelect} />
+              <PlanCard key={plan.tier} plan={plan} onSelect={handleSelect} discount={couponDiscount} />
             ))}
           </div>
 

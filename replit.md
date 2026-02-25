@@ -91,11 +91,27 @@ shared/
 - `description`, `requirements`, `benefits`, `salary`
 - `isExternalApply`, `applyUrl`
 
+## Database Tables
+- `users` - User accounts with role (admin/employer/job_seeker) and membershipTier (free/basic/premium)
+- `jobs` - Job listings with category, industry, jobType fields
+- `applications` - Job applications linking seekers to jobs
+- `resources` - Member resource library with targetAudience and requiredTier gating
+- `blog_posts` - Blog posts with category field
+- `resumes` - Text-based resumes for job seekers
+- `site_settings` - Key-value site configuration (name, colors, fonts, login/signup page text)
+- `categories` - Labels for jobs, industries, blogs (id, name, type: job/industry/blog)
+- `coupons` - Promotional discount codes (code, discountType, discountValue, maxUses, currentUses, expiresAt, isActive, appliesTo)
+
 ## Key Features
-- Job listings with external/internal apply flows, job type filter, company name display
+- Job listings with external/internal apply flows, job type filter, category/industry filter, company name display
 - Resume creation (text-based)
-- CSV bulk upload for jobs (new columns: companyName, jobType, locationCity, locationState, locationCountry, benefits)
-- Membership gating on resource library
-- Blog with admin publishing
+- CSV bulk upload for jobs (companyName, jobType, locationCity, locationState, locationCountry, benefits)
+- Membership gating on resource library (separate employer/seeker tabs)
+- Blog with admin publishing and categories
 - Role-based dashboard routing
 - Design settings: brand colors, fonts, logo, announcements, footer copy (live CSS variable injection)
+- Admin Site Pages editor: customize login/signup page text, testimonials, background images
+- Categories & Labels system: job categories, industries, blog categories (admin CRUD)
+- Coupon code system: create/edit/delete coupons with percent/fixed discount, max uses, expiry, tier targeting
+- Pricing page coupon input with live discount preview
+- Full CRUD for all admin entities: users (edit/view/delete with role/tier), jobs (edit/view/delete with categories), resources (edit/delete with audience/tier), blog posts (edit/delete with categories)
