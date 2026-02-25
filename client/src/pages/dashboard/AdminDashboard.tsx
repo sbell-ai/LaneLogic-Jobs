@@ -1619,7 +1619,7 @@ function SitePagesTab() {
   const { data: saved, isLoading } = useQuery<SiteSettingsData>({ queryKey: ["/api/settings"] });
 
   const [draft, setDraft] = useState<Record<string, string>>({
-    heroBadge: "", heroHeading: "", heroSubtext: "",
+    heroSize: "default", heroBadge: "", heroHeading: "", heroSubtext: "",
     feature1Title: "", feature1Description: "",
     feature2Title: "", feature2Description: "",
     feature3Title: "", feature3Description: "",
@@ -1632,6 +1632,7 @@ function SitePagesTab() {
   useEffect(() => {
     if (saved) {
       setDraft({
+        heroSize: saved.heroSize ?? "default",
         heroBadge: saved.heroBadge ?? "",
         heroHeading: saved.heroHeading ?? "",
         heroSubtext: saved.heroSubtext ?? "",
@@ -1688,6 +1689,20 @@ function SitePagesTab() {
             </Button>
           </div>
           <div className="space-y-5">
+            <div>
+              <Label className="text-sm font-semibold mb-1 block">Hero Size</Label>
+              <p className="text-xs text-muted-foreground mb-2">Controls the height and text size of the hero section.</p>
+              <Select value={draft.heroSize} onValueChange={v => update("heroSize", v)}>
+                <SelectTrigger data-testid="select-hero-size">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="compact">Compact — shorter padding, smaller text</SelectItem>
+                  <SelectItem value="default">Default — standard size</SelectItem>
+                  <SelectItem value="large">Large — more padding, bigger text</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
             <div>
               <Label className="text-sm font-semibold mb-1 block">Badge Text</Label>
               <p className="text-xs text-muted-foreground mb-2">Small badge label above the main heading.</p>

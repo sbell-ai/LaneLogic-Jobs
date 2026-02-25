@@ -32,7 +32,11 @@ export default function Home() {
       
       <main className="flex-grow">
         {/* HERO SECTION */}
-        <section className="relative pt-20 pb-32 overflow-hidden bg-slate-50 dark:bg-slate-950">
+        <section className={`relative overflow-hidden bg-slate-50 dark:bg-slate-950 ${
+          settings.heroSize === "compact" ? "pt-10 pb-14" :
+          settings.heroSize === "large" ? "pt-28 pb-40" :
+          "pt-20 pb-32"
+        }`}>
           <div className="absolute inset-0 z-0 opacity-[0.03] dark:opacity-[0.08]" 
                style={{ backgroundImage: 'radial-gradient(#1d4ed8 1px, transparent 1px)', backgroundSize: '32px 32px' }}>
           </div>
@@ -47,7 +51,11 @@ export default function Home() {
                 <span className="inline-block py-1 px-3 rounded-full bg-primary/10 text-primary font-semibold text-sm mb-6 border border-primary/20" data-testid="text-hero-badge">
                   {settings.heroBadge || "#1 Transportation Job Board"}
                 </span>
-                <h1 className="text-5xl md:text-7xl font-bold font-display text-foreground leading-tight tracking-tighter mb-6 text-balance" data-testid="text-hero-heading">
+                <h1 className={`font-bold font-display text-foreground leading-tight tracking-tighter mb-6 text-balance ${
+                  settings.heroSize === "compact" ? "text-3xl md:text-5xl" :
+                  settings.heroSize === "large" ? "text-5xl md:text-7xl" :
+                  "text-4xl md:text-6xl"
+                }`} data-testid="text-hero-heading">
                   {settings.heroHeading || "Drive Your Career Forward"}
                 </h1>
                 <p className="text-lg md:text-xl text-muted-foreground mb-10 max-w-2xl mx-auto text-balance" data-testid="text-hero-subtext">
