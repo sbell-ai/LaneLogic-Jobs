@@ -45,12 +45,18 @@ export default function Login() {
           
           <div className="mb-8 text-center sm:text-left">
             <Link href="/" className="inline-flex items-center gap-2 mb-6">
-              <div className="w-10 h-10 rounded-xl bg-primary flex items-center justify-center text-primary-foreground">
-                <Truck size={20} strokeWidth={2.5} />
-              </div>
-              <span className="font-display font-bold text-2xl tracking-tight text-foreground">
-                Transpo<span className="text-primary">Jobs</span>
-              </span>
+              {settings.logoBase64 ? (
+                <img src={settings.logoBase64} alt={settings.siteName} className="h-10 w-auto object-contain" data-testid="img-login-logo" />
+              ) : (
+                <>
+                  <div className="w-10 h-10 rounded-xl bg-primary flex items-center justify-center text-primary-foreground">
+                    <Truck size={20} strokeWidth={2.5} />
+                  </div>
+                  <span className="font-display font-bold text-2xl tracking-tight text-foreground" data-testid="text-login-brand">
+                    {settings.siteName}
+                  </span>
+                </>
+              )}
             </Link>
             <h2 className="text-3xl font-bold font-display text-foreground mb-2" data-testid="text-login-heading">{settings.loginHeading}</h2>
             <p className="text-muted-foreground text-lg" data-testid="text-login-subtitle">{settings.loginSubtitle}</p>
