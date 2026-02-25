@@ -82,6 +82,25 @@ app.use((req, res, next) => {
 });
 
 async function startServer() {
+  if (process.env.NODE_ENV === "production") {
+    try {
+      serveStatic(app);
+    } catch (err) {
+      console.error("Failed to serve static files:", err);
+      app.use("/{*path}", (_req, res) => {
+        res.status(200).send("App is starting...");
+      });
+    }
+  }
+
+  const port = parseInt(process.env.PORT || "5000", 10);
+  httpServer.listen(
+    { port, host: "0.0.0.0", reusePort: true },
+    () => {
+      log(`serving on port ${port}`);
+    },
+  );
+
   try {
     await registerRoutes(httpServer, app);
   } catch (err) {
@@ -96,16 +115,7 @@ async function startServer() {
     return res.status(status).json({ message });
   });
 
-  if (process.env.NODE_ENV === "production") {
-    try {
-      serveStatic(app);
-    } catch (err) {
-      console.error("Failed to serve static files:", err);
-      app.use("/{*path}", (_req, res) => {
-        res.status(200).send("App is starting...");
-      });
-    }
-  } else {
+  if (process.env.NODE_ENV !== "production") {
     try {
       const { setupVite } = await import("./vite");
       await setupVite(httpServer, app);
@@ -114,14 +124,7 @@ async function startServer() {
     }
   }
 
-  const port = parseInt(process.env.PORT || "5000", 10);
-  httpServer.listen(
-    { port, host: "0.0.0.0", reusePort: true },
-    () => {
-      log(`serving on port ${port}`);
-      initStripeBackground();
-    },
-  );
+  initStripeBackground();
 }
 
 async function initStripeBackground() {
