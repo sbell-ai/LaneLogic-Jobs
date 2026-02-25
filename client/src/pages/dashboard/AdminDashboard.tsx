@@ -627,10 +627,29 @@ function UploadJobsTab({ userId }: { userId: number }) {
           setUploading(false);
           return;
         }
-        const headers = lines[0].split(",").map(h => h.trim().toLowerCase().replace(/"/g, ""));
+        const parseCsvLine = (line: string): string[] => {
+          const result: string[] = [];
+          let current = "";
+          let inQuotes = false;
+          for (let c = 0; c < line.length; c++) {
+            const ch = line[c];
+            if (ch === '"') {
+              if (inQuotes && line[c + 1] === '"') { current += '"'; c++; }
+              else { inQuotes = !inQuotes; }
+            } else if (ch === ',' && !inQuotes) {
+              result.push(current.trim());
+              current = "";
+            } else {
+              current += ch;
+            }
+          }
+          result.push(current.trim());
+          return result;
+        };
+        const headers = parseCsvLine(lines[0]).map(h => h.toLowerCase().replace(/"/g, ""));
         const rows: ParsedJob[] = [];
         for (let i = 1; i < lines.length; i++) {
-          const vals = lines[i].split(",").map(v => v.trim().replace(/"/g, ""));
+          const vals = parseCsvLine(lines[i]);
           const row: any = {};
           headers.forEach((h, idx) => { row[h] = vals[idx] || ""; });
           if (!row.title) continue;
