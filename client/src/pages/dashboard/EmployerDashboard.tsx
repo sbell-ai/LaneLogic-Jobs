@@ -16,6 +16,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Briefcase, Plus, Trash2, Users, Upload, CreditCard, CheckCircle2, MapPin } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { ImageUpload } from "@/components/ui/image-upload";
 import type { Job, Application, Category } from "@shared/schema";
 import { insertJobSchema } from "@shared/schema";
 import { z } from "zod";
@@ -416,6 +417,61 @@ function EmployerMembershipTab({ user }: { user: NonNullable<ReturnType<typeof u
   );
 }
 
+function CompanyProfileTab() {
+  const { user } = useAuth();
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const [companyName, setCompanyName] = useState(user?.companyName || "");
+  const [logo, setLogo] = useState(user?.companyLogo || "");
+
+  const saveMutation = useMutation({
+    mutationFn: (data: { companyName: string; companyLogo: string }) =>
+      apiRequest("PATCH", "/api/profile", data).then(r => r.json()),
+    onSuccess: (data: any) => {
+      queryClient.setQueryData(["/api/me"], data);
+      toast({ title: "Company profile updated!" });
+    },
+    onError: () => toast({ title: "Error", description: "Could not save profile.", variant: "destructive" }),
+  });
+
+  return (
+    <div>
+      <h2 className="text-2xl font-bold font-display mb-6">Company Profile</h2>
+      <div className="bg-white dark:bg-slate-900 rounded-2xl border border-border p-6 space-y-5">
+        <div>
+          <Label className="text-sm font-semibold mb-1 block">Company Name</Label>
+          <Input
+            value={companyName}
+            onChange={e => setCompanyName(e.target.value)}
+            placeholder="Your company name"
+            data-testid="input-company-name"
+          />
+        </div>
+        <div>
+          <Label className="text-sm font-semibold mb-1 block">Company Logo</Label>
+          <p className="text-xs text-muted-foreground mb-2">Upload your company logo or paste an image URL.</p>
+          <ImageUpload
+            value={logo}
+            onChange={setLogo}
+            placeholder="Upload or paste logo URL"
+            previewHeight="h-24"
+            data-testid="image-company-logo"
+          />
+        </div>
+        <div className="flex justify-end pt-2">
+          <Button
+            onClick={() => saveMutation.mutate({ companyName, companyLogo: logo })}
+            disabled={saveMutation.isPending}
+            data-testid="button-save-company-profile"
+          >
+            {saveMutation.isPending ? "Saving..." : "Save Profile"}
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function EmployerDashboard({ section }: { section?: string }) {
   const { user } = useAuth();
   if (!user) return null;
@@ -424,6 +480,7 @@ export default function EmployerDashboard({ section }: { section?: string }) {
     if (section === "jobs") return <MyJobsTab userId={user.id} />;
     if (section === "applicants") return <ApplicantsTab userId={user.id} />;
     if (section === "upload") return <CsvUploadTab />;
+    if (section === "profile") return <CompanyProfileTab />;
     if (section === "membership") return <EmployerMembershipTab user={user} />;
     return <PostJobTab userId={user.id} />;
   };

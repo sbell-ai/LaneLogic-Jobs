@@ -20,6 +20,7 @@ import {
   Upload, CheckCircle2, Copy, Eye, EyeOff, UserPlus,
   AlertCircle, Download, Pencil, X, Tag, Ticket, ExternalLink
 } from "lucide-react";
+import { ImageUpload } from "@/components/ui/image-upload";
 import type { User, Job, Resource, BlogPost, Category, Coupon, SiteSettingsData } from "@shared/schema";
 import { insertResourceSchema, insertBlogPostSchema, insertJobSchema } from "@shared/schema";
 import { z } from "zod";
@@ -1763,14 +1764,9 @@ function SitePagesTab() {
               <Textarea value={draft.ctaSubtext} onChange={e => update("ctaSubtext", e.target.value)} placeholder="Join thousands of employers..." className="min-h-[80px] resize-none" data-testid="textarea-cta-subtext" />
             </div>
             <div>
-              <Label className="text-sm font-semibold mb-1 block">CTA Background Image URL</Label>
-              <p className="text-xs text-muted-foreground mb-2">Background image for the call-to-action section.</p>
-              <Input value={draft.ctaBackgroundImage} onChange={e => update("ctaBackgroundImage", e.target.value)} placeholder="https://images.unsplash.com/..." data-testid="input-cta-background" />
-              {draft.ctaBackgroundImage && (
-                <div className="mt-3 rounded-xl border border-border overflow-hidden">
-                  <img src={draft.ctaBackgroundImage} alt="CTA background preview" className="w-full h-32 object-cover" />
-                </div>
-              )}
+              <Label className="text-sm font-semibold mb-1 block">CTA Background Image</Label>
+              <p className="text-xs text-muted-foreground mb-2">Upload or paste a URL for the call-to-action background.</p>
+              <ImageUpload value={draft.ctaBackgroundImage} onChange={v => update("ctaBackgroundImage", v)} data-testid="image-cta-background" />
             </div>
           </div>
         </div>
@@ -1825,19 +1821,9 @@ function SitePagesTab() {
               />
             </div>
             <div>
-              <Label className="text-sm font-semibold mb-1 block">Background Image URL</Label>
-              <p className="text-xs text-muted-foreground mb-2">URL of the background image on the right side of the login page.</p>
-              <Input
-                value={draft.loginBackgroundImage}
-                onChange={e => update("loginBackgroundImage", e.target.value)}
-                placeholder="https://images.unsplash.com/..."
-                data-testid="input-login-background-image"
-              />
-              {draft.loginBackgroundImage && (
-                <div className="mt-3 rounded-xl border border-border overflow-hidden">
-                  <img src={draft.loginBackgroundImage} alt="Login background preview" className="w-full h-32 object-cover" />
-                </div>
-              )}
+              <Label className="text-sm font-semibold mb-1 block">Background Image</Label>
+              <p className="text-xs text-muted-foreground mb-2">Upload or paste a URL for the login page background.</p>
+              <ImageUpload value={draft.loginBackgroundImage} onChange={v => update("loginBackgroundImage", v)} data-testid="image-login-background" />
             </div>
           </div>
         </div>

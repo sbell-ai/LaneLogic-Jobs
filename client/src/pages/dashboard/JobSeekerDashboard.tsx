@@ -4,10 +4,13 @@ import { useAuth } from "@/hooks/use-auth";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
+import { ImageUpload } from "@/components/ui/image-upload";
 import { FileText, Briefcase, CreditCard, Plus, CheckCircle2, Clock, XCircle, AlertCircle } from "lucide-react";
 import type { Application, Resume } from "@shared/schema";
 import { Link } from "wouter";
@@ -216,6 +219,63 @@ function MembershipTab({ user }: { user: NonNullable<ReturnType<typeof useAuth>[
   );
 }
 
+function SeekerProfileTab() {
+  const { user } = useAuth();
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const [firstName, setFirstName] = useState(user?.firstName || "");
+  const [lastName, setLastName] = useState(user?.lastName || "");
+  const [profileImage, setProfileImage] = useState(user?.profileImage || "");
+
+  const saveMutation = useMutation({
+    mutationFn: (data: { firstName: string; lastName: string; profileImage: string }) =>
+      apiRequest("PATCH", "/api/profile", data).then(r => r.json()),
+    onSuccess: (data: any) => {
+      queryClient.setQueryData(["/api/me"], data);
+      toast({ title: "Profile updated!" });
+    },
+    onError: () => toast({ title: "Error", description: "Could not save profile.", variant: "destructive" }),
+  });
+
+  return (
+    <div>
+      <h2 className="text-2xl font-bold font-display mb-6">My Profile</h2>
+      <div className="bg-white dark:bg-slate-900 rounded-2xl border border-border p-6 space-y-5">
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <Label className="text-sm font-semibold mb-1 block">First Name</Label>
+            <Input value={firstName} onChange={e => setFirstName(e.target.value)} placeholder="First name" data-testid="input-first-name" />
+          </div>
+          <div>
+            <Label className="text-sm font-semibold mb-1 block">Last Name</Label>
+            <Input value={lastName} onChange={e => setLastName(e.target.value)} placeholder="Last name" data-testid="input-last-name" />
+          </div>
+        </div>
+        <div>
+          <Label className="text-sm font-semibold mb-1 block">Profile Picture</Label>
+          <p className="text-xs text-muted-foreground mb-2">Upload a profile photo or paste an image URL.</p>
+          <ImageUpload
+            value={profileImage}
+            onChange={setProfileImage}
+            placeholder="Upload or paste image URL"
+            previewHeight="h-32"
+            data-testid="image-profile-pic"
+          />
+        </div>
+        <div className="flex justify-end pt-2">
+          <Button
+            onClick={() => saveMutation.mutate({ firstName, lastName, profileImage })}
+            disabled={saveMutation.isPending}
+            data-testid="button-save-profile"
+          >
+            {saveMutation.isPending ? "Saving..." : "Save Profile"}
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function JobSeekerDashboard({ section }: { section?: string }) {
   const { user } = useAuth();
 
@@ -223,6 +283,7 @@ export default function JobSeekerDashboard({ section }: { section?: string }) {
 
   const content = () => {
     if (section === "resume") return <ResumeTab userId={user.id} />;
+    if (section === "profile") return <SeekerProfileTab />;
     if (section === "membership") return <MembershipTab user={user} />;
     return <ApplicationsTab userId={user.id} />;
   };

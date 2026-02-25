@@ -1,7 +1,7 @@
 import { SidebarProvider, SidebarTrigger, Sidebar, SidebarContent, SidebarGroup, SidebarGroupLabel, SidebarGroupContent, SidebarMenu, SidebarMenuItem, SidebarMenuButton } from "@/components/ui/sidebar";
 import { useAuth } from "@/hooks/use-auth";
 import { Link, useLocation } from "wouter";
-import { Briefcase, LayoutDashboard, FileText, LogOut, Users, BookOpen, Upload, CreditCard, UserPlus, PlusCircle, Palette, FileEdit, Tag, Ticket } from "lucide-react";
+import { Briefcase, LayoutDashboard, FileText, LogOut, Users, BookOpen, Upload, CreditCard, UserPlus, PlusCircle, Palette, FileEdit, Tag, Ticket, UserCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 function AppSidebar({ role }: { role: string }) {
@@ -11,6 +11,7 @@ function AppSidebar({ role }: { role: string }) {
     { title: "Overview", path: "/dashboard", icon: LayoutDashboard },
     { title: "Applied Jobs", path: "/dashboard/applications", icon: Briefcase },
     { title: "My Resume", path: "/dashboard/resume", icon: FileText },
+    { title: "My Profile", path: "/dashboard/profile", icon: UserCircle },
     { title: "Membership", path: "/dashboard/membership", icon: CreditCard },
   ];
 
@@ -19,6 +20,7 @@ function AppSidebar({ role }: { role: string }) {
     { title: "My Job Postings", path: "/dashboard/jobs", icon: Briefcase },
     { title: "Applicants", path: "/dashboard/applicants", icon: Users },
     { title: "Bulk Upload (CSV)", path: "/dashboard/upload", icon: Upload },
+    { title: "Company Profile", path: "/dashboard/profile", icon: UserCircle },
     { title: "Membership", path: "/dashboard/membership", icon: CreditCard },
   ];
 
