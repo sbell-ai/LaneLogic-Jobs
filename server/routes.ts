@@ -12,12 +12,7 @@ export async function registerRoutes(
   httpServer: Server,
   app: Express
 ): Promise<Server> {
-  const PgStore = connectPgSimple(session);
-  app.use(session({
-    store: new PgStore({
-      conString: process.env.DATABASE_URL,
-      createTableIfMissing: true,
-    }),
+  const sessionConfig: session.SessionOptions = {
     secret: process.env.SESSION_SECRET || 'supersecret',
     resave: false,
     saveUninitialized: false,
@@ -25,7 +20,24 @@ export async function registerRoutes(
       maxAge: 30 * 24 * 60 * 60 * 1000,
       secure: process.env.NODE_ENV === 'production',
     },
-  }));
+  };
+
+  if (process.env.DATABASE_URL) {
+    try {
+      const PgStore = connectPgSimple(session);
+      sessionConfig.store = new PgStore({
+        conString: process.env.DATABASE_URL,
+        createTableIfMissing: true,
+        errorLog: (err: Error) => {
+          console.error('Session store error:', err.message);
+        },
+      });
+    } catch (err) {
+      console.error('Failed to create PG session store, using memory store:', err);
+    }
+  }
+
+  app.use(session(sessionConfig));
   app.use(passport.initialize());
   app.use(passport.session());
 

@@ -1,7 +1,4 @@
 import express, { type Request, Response, NextFunction } from "express";
-import { runMigrations } from 'stripe-replit-sync';
-import { WebhookHandlers } from "./webhookHandlers";
-import { getStripeSync } from "./stripeClient";
 import { registerRoutes } from "./routes";
 import { serveStatic } from "./static";
 import { createServer } from "http";
@@ -25,15 +22,20 @@ export function log(message: string, source = "express") {
   console.log(`${formattedTime} [${source}] ${message}`);
 }
 
+app.get("/api/health", (_req, res) => {
+  res.status(200).json({ status: "ok" });
+});
+
 app.post(
   '/api/stripe/webhook',
   express.raw({ type: 'application/json' }),
   async (req, res) => {
-    const signature = req.headers['stripe-signature'];
-    if (!signature) {
-      return res.status(400).json({ error: 'Missing stripe-signature' });
-    }
     try {
+      const { WebhookHandlers } = await import("./webhookHandlers");
+      const signature = req.headers['stripe-signature'];
+      if (!signature) {
+        return res.status(400).json({ error: 'Missing stripe-signature' });
+      }
       const sig = Array.isArray(signature) ? signature[0] : signature;
       await WebhookHandlers.processWebhook(req.body as Buffer, sig);
       res.status(200).json({ received: true });
@@ -79,8 +81,12 @@ app.use((req, res, next) => {
   next();
 });
 
-(async () => {
-  await registerRoutes(httpServer, app);
+async function startServer() {
+  try {
+    await registerRoutes(httpServer, app);
+  } catch (err) {
+    console.error("Failed to register routes:", err);
+  }
 
   app.use((err: any, _req: Request, res: Response, next: NextFunction) => {
     const status = err.status || err.statusCode || 500;
@@ -91,10 +97,21 @@ app.use((req, res, next) => {
   });
 
   if (process.env.NODE_ENV === "production") {
-    serveStatic(app);
+    try {
+      serveStatic(app);
+    } catch (err) {
+      console.error("Failed to serve static files:", err);
+      app.use("/{*path}", (_req, res) => {
+        res.status(200).send("App is starting...");
+      });
+    }
   } else {
-    const { setupVite } = await import("./vite");
-    await setupVite(httpServer, app);
+    try {
+      const { setupVite } = await import("./vite");
+      await setupVite(httpServer, app);
+    } catch (err) {
+      console.error("Failed to setup Vite:", err);
+    }
   }
 
   const port = parseInt(process.env.PORT || "5000", 10);
@@ -102,11 +119,10 @@ app.use((req, res, next) => {
     { port, host: "0.0.0.0", reusePort: true },
     () => {
       log(`serving on port ${port}`);
-
       initStripeBackground();
     },
   );
-})();
+}
 
 async function initStripeBackground() {
   const databaseUrl = process.env.DATABASE_URL;
@@ -115,10 +131,12 @@ async function initStripeBackground() {
     return;
   }
   try {
+    const { runMigrations } = await import('stripe-replit-sync');
     console.log('Initializing Stripe schema...');
     await runMigrations({ databaseUrl });
     console.log('Stripe schema ready');
 
+    const { getStripeSync } = await import("./stripeClient");
     const stripeSync = await getStripeSync();
 
     const webhookBaseUrl = `https://${process.env.REPLIT_DOMAINS?.split(',')[0]}`;
@@ -132,3 +150,8 @@ async function initStripeBackground() {
     console.error('Failed to initialize Stripe:', error);
   }
 }
+
+startServer().catch((err) => {
+  console.error("Fatal server error:", err);
+  process.exit(1);
+});
