@@ -131,6 +131,7 @@ export interface SiteSettingsData {
   siteTitle: string;
   siteDescription: string;
   headerAnnouncement: string;
+  headerAnnouncementLink: string;
   footerTagline: string;
   footerCopyright: string;
   loginHeading: string;
@@ -166,6 +167,7 @@ export const DEFAULT_SETTINGS: SiteSettingsData = {
   siteTitle: "TranspoJobs – Transportation & Logistics Jobs",
   siteDescription: "Find the best transportation, trucking, and logistics jobs. Browse thousands of CDL and freight roles across the country.",
   headerAnnouncement: "",
+  headerAnnouncementLink: "",
   footerTagline: "The premier destination for transportation and logistics professionals to advance their careers.",
   footerCopyright: "© TranspoJobs. All rights reserved.",
   loginHeading: "Welcome back",

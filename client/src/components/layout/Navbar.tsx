@@ -23,7 +23,13 @@ export function Navbar() {
     <header>
       {settings.headerAnnouncement && (
         <div className="w-full bg-primary text-primary-foreground text-center text-sm font-medium py-2 px-4">
-          {settings.headerAnnouncement}
+          {settings.headerAnnouncementLink ? (
+            <Link href={settings.headerAnnouncementLink} className="hover:underline" data-testid="link-header-announcement">
+              {settings.headerAnnouncement}
+            </Link>
+          ) : (
+            <span data-testid="text-header-announcement">{settings.headerAnnouncement}</span>
+          )}
         </div>
       )}
       <nav className="sticky top-0 z-50 w-full border-b border-border/40 bg-background/80 backdrop-blur-xl supports-[backdrop-filter]:bg-background/60">

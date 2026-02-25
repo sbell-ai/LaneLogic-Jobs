@@ -366,12 +366,28 @@ export default function DesignSettings() {
                 data-testid="input-header-announcement"
               />
               {draft.headerAnnouncement && (
-                <div className="mt-3 rounded-lg overflow-hidden border border-border">
-                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-3 pt-2 pb-1">Preview</p>
-                  <div className="px-4 py-2 text-sm font-medium text-center text-white" style={{ backgroundColor: draft.primaryColor }}>
-                    {draft.headerAnnouncement}
+                <>
+                  <div className="mt-3">
+                    <Label className="text-sm font-semibold mb-1 block">Banner Link (optional)</Label>
+                    <p className="text-xs text-muted-foreground mb-2">Link to a page on the site when the banner is clicked. Use a path like /jobs or /pricing.</p>
+                    <Input
+                      value={draft.headerAnnouncementLink}
+                      onChange={e => update("headerAnnouncementLink", e.target.value)}
+                      placeholder="e.g. /jobs or /pricing"
+                      data-testid="input-header-announcement-link"
+                    />
                   </div>
-                </div>
+                  <div className="mt-3 rounded-lg overflow-hidden border border-border">
+                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-3 pt-2 pb-1">Preview</p>
+                    <div className="px-4 py-2 text-sm font-medium text-center text-white" style={{ backgroundColor: draft.primaryColor }}>
+                      {draft.headerAnnouncementLink ? (
+                        <span className="underline cursor-pointer">{draft.headerAnnouncement}</span>
+                      ) : (
+                        draft.headerAnnouncement
+                      )}
+                    </div>
+                  </div>
+                </>
               )}
             </div>
 
