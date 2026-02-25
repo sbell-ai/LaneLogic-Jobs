@@ -2,6 +2,9 @@ import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { serveStatic } from "./static";
 import { createServer } from "http";
+import path from "path";
+import fs from "fs";
+import { fileURLToPath } from "url";
 
 const app = express();
 const httpServer = createServer(app);
@@ -25,6 +28,25 @@ export function log(message: string, source = "express") {
 app.get("/api/health", (_req, res) => {
   res.status(200).json({ status: "ok" });
 });
+
+if (process.env.NODE_ENV === "production") {
+  const __filename = fileURLToPath(import.meta.url);
+  const __dirname = path.dirname(__filename);
+  const distPath = path.resolve(__dirname, "public");
+  const indexPath = path.resolve(distPath, "index.html");
+
+  if (fs.existsSync(distPath)) {
+    app.use(express.static(distPath));
+  }
+
+  app.get("/", (_req, res) => {
+    if (fs.existsSync(indexPath)) {
+      res.sendFile(indexPath);
+    } else {
+      res.status(200).send("<html><body><p>Loading...</p></body></html>");
+    }
+  });
+}
 
 app.post(
   '/api/stripe/webhook',
@@ -82,17 +104,6 @@ app.use((req, res, next) => {
 });
 
 async function startServer() {
-  if (process.env.NODE_ENV === "production") {
-    try {
-      serveStatic(app);
-    } catch (err) {
-      console.error("Failed to serve static files:", err);
-      app.use("/{*path}", (_req, res) => {
-        res.status(200).send("App is starting...");
-      });
-    }
-  }
-
   const port = parseInt(process.env.PORT || "5000", 10);
   httpServer.listen(
     { port, host: "0.0.0.0", reusePort: true },
@@ -115,7 +126,9 @@ async function startServer() {
     return res.status(status).json({ message });
   });
 
-  if (process.env.NODE_ENV !== "production") {
+  if (process.env.NODE_ENV === "production") {
+    serveStatic(app);
+  } else {
     try {
       const { setupVite } = await import("./vite");
       await setupVite(httpServer, app);
