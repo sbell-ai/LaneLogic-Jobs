@@ -13,7 +13,8 @@ import { useMemo } from "react";
 
 const tierOrder: Record<string, number> = { free: 0, basic: 1, premium: 2 };
 
-function canAccess(userTier: string | undefined, requiredTier: string): boolean {
+function canAccess(userTier: string | undefined, requiredTier: string, userRole?: string): boolean {
+  if (userRole === "admin") return true;
   if (!userTier) return requiredTier === "free";
   return (tierOrder[userTier] ?? 0) >= (tierOrder[requiredTier] ?? 0);
 }
@@ -30,9 +31,9 @@ const tierColors: Record<string, string> = {
   premium: "bg-purple-100 text-purple-700 border-purple-200",
 };
 
-function ResourceGrid({ resources, userTier }: { resources: Resource[]; userTier: string | undefined }) {
-  const accessible = resources.filter((r) => canAccess(userTier, r.requiredTier));
-  const locked = resources.filter((r) => !canAccess(userTier, r.requiredTier));
+function ResourceGrid({ resources, userTier, userRole }: { resources: Resource[]; userTier: string | undefined; userRole?: string }) {
+  const accessible = resources.filter((r) => canAccess(userTier, r.requiredTier, userRole));
+  const locked = resources.filter((r) => !canAccess(userTier, r.requiredTier, userRole));
 
   if (accessible.length === 0 && locked.length === 0) {
     return (
@@ -185,10 +186,10 @@ export default function Resources() {
                 </TabsTrigger>
               </TabsList>
               <TabsContent value="employer">
-                <ResourceGrid resources={employerResources} userTier={user?.membershipTier} />
+                <ResourceGrid resources={employerResources} userTier={user?.membershipTier} userRole={user?.role} />
               </TabsContent>
               <TabsContent value="job_seeker">
-                <ResourceGrid resources={jobSeekerResources} userTier={user?.membershipTier} />
+                <ResourceGrid resources={jobSeekerResources} userTier={user?.membershipTier} userRole={user?.role} />
               </TabsContent>
             </Tabs>
           )}
