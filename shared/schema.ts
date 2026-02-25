@@ -139,6 +139,18 @@ export interface SiteSettingsData {
   signupHeading: string;
   signupSubtitle: string;
   signupDescription: string;
+  heroBadge: string;
+  heroHeading: string;
+  heroSubtext: string;
+  feature1Title: string;
+  feature1Description: string;
+  feature2Title: string;
+  feature2Description: string;
+  feature3Title: string;
+  feature3Description: string;
+  ctaHeading: string;
+  ctaSubtext: string;
+  ctaBackgroundImage: string;
 }
 
 export const DEFAULT_SETTINGS: SiteSettingsData = {
@@ -161,6 +173,18 @@ export const DEFAULT_SETTINGS: SiteSettingsData = {
   signupHeading: "Create an account",
   signupSubtitle: "Join TranspoJobs to take the next step",
   signupDescription: "Connect with thousands of transportation and logistics companies across the country.",
+  heroBadge: "#1 Transportation Job Board",
+  heroHeading: "Drive Your Career Forward",
+  heroSubtext: "Connect with top employers in logistics, freight, and transportation. Find roles that match your skills, from CDL drivers to supply chain directors.",
+  feature1Title: "10,000+ Active Jobs",
+  feature1Description: "New opportunities added daily from leading transportation companies nationwide.",
+  feature2Title: "Direct Employer Access",
+  feature2Description: "Skip the middleman. Apply directly to hiring managers and fast-track your career.",
+  feature3Title: "Verified Companies",
+  feature3Description: "Every employer is vetted to ensure quality opportunities and safe working environments.",
+  ctaHeading: "Ready to hire top transport talent?",
+  ctaSubtext: "Join thousands of employers who trust us to fill their open logistics, driving, and management positions faster.",
+  ctaBackgroundImage: "https://images.unsplash.com/photo-1601584115197-04ecc0da31d7?w=1920&h=1080&fit=crop",
 };
 
 export const siteSettings = pgTable("site_settings", {

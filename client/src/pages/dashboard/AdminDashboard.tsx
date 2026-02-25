@@ -1619,19 +1619,31 @@ function SitePagesTab() {
   const { data: saved, isLoading } = useQuery<SiteSettingsData>({ queryKey: ["/api/settings"] });
 
   const [draft, setDraft] = useState<Record<string, string>>({
-    loginHeading: "",
-    loginSubtitle: "",
-    loginTestimonial: "",
-    loginTestimonialAuthor: "",
-    loginBackgroundImage: "",
-    signupHeading: "",
-    signupSubtitle: "",
-    signupDescription: "",
+    heroBadge: "", heroHeading: "", heroSubtext: "",
+    feature1Title: "", feature1Description: "",
+    feature2Title: "", feature2Description: "",
+    feature3Title: "", feature3Description: "",
+    ctaHeading: "", ctaSubtext: "", ctaBackgroundImage: "",
+    loginHeading: "", loginSubtitle: "",
+    loginTestimonial: "", loginTestimonialAuthor: "", loginBackgroundImage: "",
+    signupHeading: "", signupSubtitle: "", signupDescription: "",
   });
 
   useEffect(() => {
     if (saved) {
       setDraft({
+        heroBadge: saved.heroBadge ?? "",
+        heroHeading: saved.heroHeading ?? "",
+        heroSubtext: saved.heroSubtext ?? "",
+        feature1Title: saved.feature1Title ?? "",
+        feature1Description: saved.feature1Description ?? "",
+        feature2Title: saved.feature2Title ?? "",
+        feature2Description: saved.feature2Description ?? "",
+        feature3Title: saved.feature3Title ?? "",
+        feature3Description: saved.feature3Description ?? "",
+        ctaHeading: saved.ctaHeading ?? "",
+        ctaSubtext: saved.ctaSubtext ?? "",
+        ctaBackgroundImage: saved.ctaBackgroundImage ?? "",
         loginHeading: saved.loginHeading ?? "",
         loginSubtitle: saved.loginSubtitle ?? "",
         loginTestimonial: saved.loginTestimonial ?? "",
@@ -1664,10 +1676,75 @@ function SitePagesTab() {
     <div className="max-w-2xl">
       <div className="mb-6">
         <h2 className="text-2xl font-bold font-display">Site Pages</h2>
-        <p className="text-muted-foreground text-sm mt-1">Customize the text and images on your Login and Signup pages.</p>
+        <p className="text-muted-foreground text-sm mt-1">Customize the text and images on your Homepage, Login, and Signup pages.</p>
       </div>
 
       <div className="space-y-5">
+        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-border p-6">
+          <h3 className="font-bold font-display text-lg mb-5 pb-4 border-b border-border">Homepage — Hero Section</h3>
+          <div className="space-y-5">
+            <div>
+              <Label className="text-sm font-semibold mb-1 block">Badge Text</Label>
+              <p className="text-xs text-muted-foreground mb-2">Small badge label above the main heading.</p>
+              <Input value={draft.heroBadge} onChange={e => update("heroBadge", e.target.value)} placeholder="#1 Transportation Job Board" data-testid="input-hero-badge" />
+            </div>
+            <div>
+              <Label className="text-sm font-semibold mb-1 block">Heading</Label>
+              <p className="text-xs text-muted-foreground mb-2">Main hero heading on the homepage.</p>
+              <Input value={draft.heroHeading} onChange={e => update("heroHeading", e.target.value)} placeholder="Drive Your Career Forward" data-testid="input-hero-heading" />
+            </div>
+            <div>
+              <Label className="text-sm font-semibold mb-1 block">Subtext</Label>
+              <p className="text-xs text-muted-foreground mb-2">Description text below the hero heading.</p>
+              <Textarea value={draft.heroSubtext} onChange={e => update("heroSubtext", e.target.value)} placeholder="Connect with top employers in logistics..." className="min-h-[80px] resize-none" data-testid="textarea-hero-subtext" />
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-border p-6">
+          <h3 className="font-bold font-display text-lg mb-5 pb-4 border-b border-border">Homepage — Feature Cards</h3>
+          <div className="space-y-5">
+            <div className="grid grid-cols-2 gap-3">
+              <div><Label className="text-sm font-semibold mb-1 block">Feature 1 Title</Label><Input value={draft.feature1Title} onChange={e => update("feature1Title", e.target.value)} placeholder="10,000+ Active Jobs" data-testid="input-feature1-title" /></div>
+              <div><Label className="text-sm font-semibold mb-1 block">Feature 1 Description</Label><Input value={draft.feature1Description} onChange={e => update("feature1Description", e.target.value)} placeholder="New opportunities added daily..." data-testid="input-feature1-desc" /></div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div><Label className="text-sm font-semibold mb-1 block">Feature 2 Title</Label><Input value={draft.feature2Title} onChange={e => update("feature2Title", e.target.value)} placeholder="Direct Employer Access" data-testid="input-feature2-title" /></div>
+              <div><Label className="text-sm font-semibold mb-1 block">Feature 2 Description</Label><Input value={draft.feature2Description} onChange={e => update("feature2Description", e.target.value)} placeholder="Skip the middleman..." data-testid="input-feature2-desc" /></div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div><Label className="text-sm font-semibold mb-1 block">Feature 3 Title</Label><Input value={draft.feature3Title} onChange={e => update("feature3Title", e.target.value)} placeholder="Verified Companies" data-testid="input-feature3-title" /></div>
+              <div><Label className="text-sm font-semibold mb-1 block">Feature 3 Description</Label><Input value={draft.feature3Description} onChange={e => update("feature3Description", e.target.value)} placeholder="Every employer is vetted..." data-testid="input-feature3-desc" /></div>
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-border p-6">
+          <h3 className="font-bold font-display text-lg mb-5 pb-4 border-b border-border">Homepage — Call to Action</h3>
+          <div className="space-y-5">
+            <div>
+              <Label className="text-sm font-semibold mb-1 block">CTA Heading</Label>
+              <p className="text-xs text-muted-foreground mb-2">Heading for the bottom call-to-action section.</p>
+              <Input value={draft.ctaHeading} onChange={e => update("ctaHeading", e.target.value)} placeholder="Ready to hire top transport talent?" data-testid="input-cta-heading" />
+            </div>
+            <div>
+              <Label className="text-sm font-semibold mb-1 block">CTA Subtext</Label>
+              <p className="text-xs text-muted-foreground mb-2">Supporting text below the CTA heading.</p>
+              <Textarea value={draft.ctaSubtext} onChange={e => update("ctaSubtext", e.target.value)} placeholder="Join thousands of employers..." className="min-h-[80px] resize-none" data-testid="textarea-cta-subtext" />
+            </div>
+            <div>
+              <Label className="text-sm font-semibold mb-1 block">CTA Background Image URL</Label>
+              <p className="text-xs text-muted-foreground mb-2">Background image for the call-to-action section.</p>
+              <Input value={draft.ctaBackgroundImage} onChange={e => update("ctaBackgroundImage", e.target.value)} placeholder="https://images.unsplash.com/..." data-testid="input-cta-background" />
+              {draft.ctaBackgroundImage && (
+                <div className="mt-3 rounded-xl border border-border overflow-hidden">
+                  <img src={draft.ctaBackgroundImage} alt="CTA background preview" className="w-full h-32 object-cover" />
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+
         <div className="bg-white dark:bg-slate-900 rounded-2xl border border-border p-6">
           <h3 className="font-bold font-display text-lg mb-5 pb-4 border-b border-border">Login Page</h3>
           <div className="space-y-5">

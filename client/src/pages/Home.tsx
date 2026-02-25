@@ -7,11 +7,13 @@ import { Search, MapPin, Briefcase, ArrowRight, ShieldCheck, Zap, Users } from "
 import { useState } from "react";
 import { motion } from "framer-motion";
 import { useJobs } from "@/hooks/use-jobs";
+import { useSiteSettings } from "@/hooks/use-settings";
 
 export default function Home() {
   const [, setLocation] = useLocation();
   const [searchQuery, setSearchQuery] = useState("");
   const [locationQuery, setLocationQuery] = useState("");
+  const settings = useSiteSettings();
   const { data: jobs, isLoading } = useJobs();
 
   const handleSearch = (e: React.FormEvent) => {
@@ -42,15 +44,14 @@ export default function Home() {
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.5 }}
               >
-                <span className="inline-block py-1 px-3 rounded-full bg-primary/10 text-primary font-semibold text-sm mb-6 border border-primary/20">
-                  #1 Transportation Job Board
+                <span className="inline-block py-1 px-3 rounded-full bg-primary/10 text-primary font-semibold text-sm mb-6 border border-primary/20" data-testid="text-hero-badge">
+                  {settings.heroBadge || "#1 Transportation Job Board"}
                 </span>
-                <h1 className="text-5xl md:text-7xl font-bold font-display text-foreground leading-tight tracking-tighter mb-6 text-balance">
-                  Drive Your Career <br className="hidden md:block"/> Forward with <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary to-accent">TranspoJobs</span>
+                <h1 className="text-5xl md:text-7xl font-bold font-display text-foreground leading-tight tracking-tighter mb-6 text-balance" data-testid="text-hero-heading">
+                  {settings.heroHeading || "Drive Your Career Forward"}
                 </h1>
-                <p className="text-lg md:text-xl text-muted-foreground mb-10 max-w-2xl mx-auto text-balance">
-                  Connect with top employers in logistics, freight, and transportation. 
-                  Find roles that match your skills, from CDL drivers to supply chain directors.
+                <p className="text-lg md:text-xl text-muted-foreground mb-10 max-w-2xl mx-auto text-balance" data-testid="text-hero-subtext">
+                  {settings.heroSubtext || "Connect with top employers in logistics, freight, and transportation. Find roles that match your skills, from CDL drivers to supply chain directors."}
                 </p>
               </motion.div>
 
@@ -104,22 +105,22 @@ export default function Home() {
                 <div className="w-16 h-16 rounded-2xl bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center text-primary mb-6">
                   <Briefcase size={32} />
                 </div>
-                <h3 className="text-xl font-bold font-display mb-3">10,000+ Active Jobs</h3>
-                <p className="text-muted-foreground">New opportunities added daily from leading transportation companies nationwide.</p>
+                <h3 className="text-xl font-bold font-display mb-3" data-testid="text-feature1-title">{settings.feature1Title || "10,000+ Active Jobs"}</h3>
+                <p className="text-muted-foreground" data-testid="text-feature1-desc">{settings.feature1Description || "New opportunities added daily from leading transportation companies nationwide."}</p>
               </div>
               <div className="flex flex-col items-center text-center p-6 rounded-2xl hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
                 <div className="w-16 h-16 rounded-2xl bg-orange-100 dark:bg-orange-900/30 flex items-center justify-center text-accent mb-6">
                   <Users size={32} />
                 </div>
-                <h3 className="text-xl font-bold font-display mb-3">Direct Employer Access</h3>
-                <p className="text-muted-foreground">Skip the middleman. Apply directly to hiring managers and fast-track your career.</p>
+                <h3 className="text-xl font-bold font-display mb-3" data-testid="text-feature2-title">{settings.feature2Title || "Direct Employer Access"}</h3>
+                <p className="text-muted-foreground" data-testid="text-feature2-desc">{settings.feature2Description || "Skip the middleman. Apply directly to hiring managers and fast-track your career."}</p>
               </div>
               <div className="flex flex-col items-center text-center p-6 rounded-2xl hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
                 <div className="w-16 h-16 rounded-2xl bg-green-100 dark:bg-green-900/30 flex items-center justify-center text-green-600 mb-6">
                   <ShieldCheck size={32} />
                 </div>
-                <h3 className="text-xl font-bold font-display mb-3">Verified Companies</h3>
-                <p className="text-muted-foreground">Every employer is vetted to ensure quality opportunities and safe working environments.</p>
+                <h3 className="text-xl font-bold font-display mb-3" data-testid="text-feature3-title">{settings.feature3Title || "Verified Companies"}</h3>
+                <p className="text-muted-foreground" data-testid="text-feature3-desc">{settings.feature3Description || "Every employer is vetted to ensure quality opportunities and safe working environments."}</p>
               </div>
             </div>
           </div>
@@ -194,16 +195,16 @@ export default function Home() {
           {/* landing page hero scenic mountain landscape */}
           <div className="absolute inset-0 z-0">
             <img 
-              src="https://images.unsplash.com/photo-1601584115197-04ecc0da31d7?w=1920&h=1080&fit=crop" 
+              src={settings.ctaBackgroundImage || "https://images.unsplash.com/photo-1601584115197-04ecc0da31d7?w=1920&h=1080&fit=crop"} 
               alt="Highway transportation" 
               className="w-full h-full object-cover brightness-[0.25] dark:brightness-[0.2]"
             />
           </div>
           
           <div className="container relative z-10 mx-auto px-4 md:px-6 text-center">
-            <h2 className="text-3xl md:text-5xl font-bold font-display text-white mb-6">Ready to hire top transport talent?</h2>
-            <p className="text-lg text-slate-300 mb-10 max-w-2xl mx-auto">
-              Join thousands of employers who trust TranspoJobs to fill their open logistics, driving, and management positions faster.
+            <h2 className="text-3xl md:text-5xl font-bold font-display text-white mb-6" data-testid="text-cta-heading">{settings.ctaHeading || "Ready to hire top transport talent?"}</h2>
+            <p className="text-lg text-slate-300 mb-10 max-w-2xl mx-auto" data-testid="text-cta-subtext">
+              {settings.ctaSubtext || "Join thousands of employers who trust us to fill their open logistics, driving, and management positions faster."}
             </p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
               <Button asChild size="lg" className="h-14 px-8 rounded-xl bg-primary hover:bg-primary/90 text-white font-semibold text-lg hover-elevate">
