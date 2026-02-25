@@ -422,6 +422,9 @@ const jobFormSchema = insertJobSchema.omit({ employerId: true }).extend({
 function PostJobTab({ userId }: { userId: number }) {
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const { data: categories } = useQuery<Category[]>({ queryKey: ["/api/categories"] });
+  const jobCats = (categories || []).filter(c => c.type === "job");
+  const industries = (categories || []).filter(c => c.type === "industry");
 
   const form = useForm<z.infer<typeof jobFormSchema>>({
     resolver: zodResolver(jobFormSchema),
@@ -494,6 +497,33 @@ function PostJobTab({ userId }: { userId: number }) {
                 <FormItem>
                   <FormLabel>Country</FormLabel>
                   <FormControl><Input placeholder="USA" data-testid="input-location-country" {...field} value={field.value ?? ""} /></FormControl>
+                </FormItem>
+              )} />
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <FormField control={form.control} name="category" render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Job Category</FormLabel>
+                  <Select onValueChange={v => field.onChange(v === "none" ? "" : v)} defaultValue={field.value || "none"}>
+                    <FormControl><SelectTrigger data-testid="select-job-category"><SelectValue placeholder="Select category" /></SelectTrigger></FormControl>
+                    <SelectContent>
+                      <SelectItem value="none">None</SelectItem>
+                      {jobCats.map(c => <SelectItem key={c.id} value={c.name}>{c.name}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </FormItem>
+              )} />
+              <FormField control={form.control} name="industry" render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Industry</FormLabel>
+                  <Select onValueChange={v => field.onChange(v === "none" ? "" : v)} defaultValue={field.value || "none"}>
+                    <FormControl><SelectTrigger data-testid="select-job-industry"><SelectValue placeholder="Select industry" /></SelectTrigger></FormControl>
+                    <SelectContent>
+                      <SelectItem value="none">None</SelectItem>
+                      {industries.map(c => <SelectItem key={c.id} value={c.name}>{c.name}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
                 </FormItem>
               )} />
             </div>
