@@ -4,6 +4,7 @@ import { storage } from "./storage";
 import { api } from "@shared/routes";
 import { z } from "zod";
 import session from "express-session";
+import connectPgSimple from "connect-pg-simple";
 import passport from "passport";
 import { Strategy as LocalStrategy } from "passport-local";
 
@@ -11,11 +12,19 @@ export async function registerRoutes(
   httpServer: Server,
   app: Express
 ): Promise<Server> {
-  // Session setup
+  const PgStore = connectPgSimple(session);
   app.use(session({
+    store: new PgStore({
+      conString: process.env.DATABASE_URL,
+      createTableIfMissing: true,
+    }),
     secret: process.env.SESSION_SECRET || 'supersecret',
     resave: false,
     saveUninitialized: false,
+    cookie: {
+      maxAge: 30 * 24 * 60 * 60 * 1000,
+      secure: process.env.NODE_ENV === 'production',
+    },
   }));
   app.use(passport.initialize());
   app.use(passport.session());
