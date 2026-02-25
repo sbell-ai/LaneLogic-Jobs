@@ -590,6 +590,8 @@ interface ParsedJob {
   title: string;
   companyName?: string;
   jobType?: string;
+  category?: string;
+  industry?: string;
   locationCity?: string;
   locationState?: string;
   locationCountry?: string;
@@ -636,6 +638,8 @@ function UploadJobsTab({ userId }: { userId: number }) {
             title: row.title,
             companyName: row.companyname || row.company_name || row.company || undefined,
             jobType: row.jobtype || row.job_type || row.type || undefined,
+            category: row.category || undefined,
+            industry: row.industry || undefined,
             locationCity: row.locationcity || row.location_city || row.city || undefined,
             locationState: row.locationstate || row.location_state || row.state || undefined,
             locationCountry: row.locationcountry || row.location_country || row.country || undefined,
@@ -681,9 +685,9 @@ function UploadJobsTab({ userId }: { userId: number }) {
     toast({ title: `Imported ${success} of ${parsed.length} jobs!` });
   };
 
-  const sampleCsv = `title,companyName,jobType,locationCity,locationState,locationCountry,description,requirements,benefits,salary,applyUrl
-CDL Class A Driver,Fast Trucking Co.,Full-time,Chicago,IL,USA,"Looking for an experienced long haul driver","CDL Class A required; 3+ years experience","Health insurance; 401k",$80000,
-Fleet Dispatcher,Metro Logistics,Contract,Atlanta,GA,USA,"Manage driver schedules and routes","2+ years dispatching experience","PTO; remote options","$55,000–$65,000",https://example.com/apply`;
+  const sampleCsv = `title,companyName,jobType,category,industry,locationCity,locationState,locationCountry,description,requirements,benefits,salary,applyUrl
+CDL Class A Driver,Fast Trucking Co.,Full-time,Driving,Trucking,Chicago,IL,USA,"Looking for an experienced long haul driver","CDL Class A required; 3+ years experience","Health insurance; 401k",$80000,
+Fleet Dispatcher,Metro Logistics,Contract,Dispatch,Logistics,Atlanta,GA,USA,"Manage driver schedules and routes","2+ years dispatching experience","PTO; remote options","$55,000–$65,000",https://example.com/apply`;
 
   const downloadSample = () => {
     const blob = new Blob([sampleCsv], { type: "text/csv" });
@@ -709,7 +713,7 @@ Fleet Dispatcher,Metro Logistics,Contract,Atlanta,GA,USA,"Manage driver schedule
       <div className="bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 rounded-xl p-4 text-sm text-blue-800 dark:text-blue-300 mb-6">
         <p className="font-semibold mb-1">Required column:</p>
         <code className="text-xs">title</code>
-        <p className="mt-1">Optional: <code className="text-xs">companyName, jobType, locationCity, locationState, locationCountry, description, requirements, benefits, salary, applyUrl</code></p>
+        <p className="mt-1">Optional: <code className="text-xs">companyName, jobType, category, industry, locationCity, locationState, locationCountry, description, requirements, benefits, salary, applyUrl</code></p>
       </div>
 
       <div className="bg-white dark:bg-slate-900 rounded-2xl border border-border p-8 mb-6">
@@ -748,6 +752,8 @@ Fleet Dispatcher,Metro Logistics,Contract,Atlanta,GA,USA,"Manage driver schedule
                 <p className="text-muted-foreground">
                   {[job.locationCity, job.locationState, job.locationCountry].filter(Boolean).join(", ")}
                   {job.jobType ? ` · ${job.jobType}` : ""}
+                  {job.category ? ` · ${job.category}` : ""}
+                  {job.industry ? ` · ${job.industry}` : ""}
                   {job.salary ? ` · ${job.salary}` : ""}
                 </p>
               </div>
