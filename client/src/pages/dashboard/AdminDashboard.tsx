@@ -18,7 +18,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import {
   Users, Briefcase, BookOpen, FileText, Plus, Trash2,
   Upload, CheckCircle2, Copy, Eye, EyeOff, UserPlus,
-  AlertCircle, Download, Pencil, X, Tag, Ticket
+  AlertCircle, Download, Pencil, X, Tag, Ticket, ExternalLink
 } from "lucide-react";
 import type { User, Job, Resource, BlogPost, Category, Coupon, SiteSettingsData } from "@shared/schema";
 import { insertResourceSchema, insertBlogPostSchema, insertJobSchema } from "@shared/schema";
@@ -1681,7 +1681,12 @@ function SitePagesTab() {
 
       <div className="space-y-5">
         <div className="bg-white dark:bg-slate-900 rounded-2xl border border-border p-6">
-          <h3 className="font-bold font-display text-lg mb-5 pb-4 border-b border-border">Homepage — Hero Section</h3>
+          <div className="flex items-center justify-between mb-5 pb-4 border-b border-border">
+            <h3 className="font-bold font-display text-lg">Homepage — Hero Section</h3>
+            <Button variant="outline" size="sm" className="gap-1.5 text-xs" asChild data-testid="button-preview-homepage">
+              <a href="/" target="_blank" rel="noopener noreferrer"><ExternalLink size={14} /> Preview Live Page</a>
+            </Button>
+          </div>
           <div className="space-y-5">
             <div>
               <Label className="text-sm font-semibold mb-1 block">Badge Text</Label>
@@ -1702,7 +1707,12 @@ function SitePagesTab() {
         </div>
 
         <div className="bg-white dark:bg-slate-900 rounded-2xl border border-border p-6">
-          <h3 className="font-bold font-display text-lg mb-5 pb-4 border-b border-border">Homepage — Feature Cards</h3>
+          <div className="flex items-center justify-between mb-5 pb-4 border-b border-border">
+            <h3 className="font-bold font-display text-lg">Homepage — Feature Cards</h3>
+            <Button variant="outline" size="sm" className="gap-1.5 text-xs" asChild data-testid="button-preview-homepage-features">
+              <a href="/" target="_blank" rel="noopener noreferrer"><ExternalLink size={14} /> Preview Live Page</a>
+            </Button>
+          </div>
           <div className="space-y-5">
             <div className="grid grid-cols-2 gap-3">
               <div><Label className="text-sm font-semibold mb-1 block">Feature 1 Title</Label><Input value={draft.feature1Title} onChange={e => update("feature1Title", e.target.value)} placeholder="10,000+ Active Jobs" data-testid="input-feature1-title" /></div>
@@ -1720,7 +1730,12 @@ function SitePagesTab() {
         </div>
 
         <div className="bg-white dark:bg-slate-900 rounded-2xl border border-border p-6">
-          <h3 className="font-bold font-display text-lg mb-5 pb-4 border-b border-border">Homepage — Call to Action</h3>
+          <div className="flex items-center justify-between mb-5 pb-4 border-b border-border">
+            <h3 className="font-bold font-display text-lg">Homepage — Call to Action</h3>
+            <Button variant="outline" size="sm" className="gap-1.5 text-xs" asChild data-testid="button-preview-homepage-cta">
+              <a href="/" target="_blank" rel="noopener noreferrer"><ExternalLink size={14} /> Preview Live Page</a>
+            </Button>
+          </div>
           <div className="space-y-5">
             <div>
               <Label className="text-sm font-semibold mb-1 block">CTA Heading</Label>
@@ -1746,7 +1761,12 @@ function SitePagesTab() {
         </div>
 
         <div className="bg-white dark:bg-slate-900 rounded-2xl border border-border p-6">
-          <h3 className="font-bold font-display text-lg mb-5 pb-4 border-b border-border">Login Page</h3>
+          <div className="flex items-center justify-between mb-5 pb-4 border-b border-border">
+            <h3 className="font-bold font-display text-lg">Login Page</h3>
+            <Button variant="outline" size="sm" className="gap-1.5 text-xs" asChild data-testid="button-preview-login">
+              <a href="/login" target="_blank" rel="noopener noreferrer"><ExternalLink size={14} /> Preview Live Page</a>
+            </Button>
+          </div>
           <div className="space-y-5">
             <div>
               <Label className="text-sm font-semibold mb-1 block">Heading</Label>
@@ -1808,7 +1828,12 @@ function SitePagesTab() {
         </div>
 
         <div className="bg-white dark:bg-slate-900 rounded-2xl border border-border p-6">
-          <h3 className="font-bold font-display text-lg mb-5 pb-4 border-b border-border">Signup Page</h3>
+          <div className="flex items-center justify-between mb-5 pb-4 border-b border-border">
+            <h3 className="font-bold font-display text-lg">Signup Page</h3>
+            <Button variant="outline" size="sm" className="gap-1.5 text-xs" asChild data-testid="button-preview-signup">
+              <a href="/register" target="_blank" rel="noopener noreferrer"><ExternalLink size={14} /> Preview Live Page</a>
+            </Button>
+          </div>
           <div className="space-y-5">
             <div>
               <Label className="text-sm font-semibold mb-1 block">Heading</Label>
