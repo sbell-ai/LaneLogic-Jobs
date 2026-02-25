@@ -14,6 +14,7 @@ export function Navbar() {
 
   const navLinks = [
     { name: "Jobs", path: "/jobs" },
+    { name: "Employers", path: "/employers" },
     { name: "Resources", path: "/resources" },
     { name: "Blog", path: "/blog" },
     { name: "Pricing", path: "/pricing" },

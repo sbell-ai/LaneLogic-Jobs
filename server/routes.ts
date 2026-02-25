@@ -173,6 +173,32 @@ export async function registerRoutes(
     }
   });
 
+  app.get("/api/employers", async (_req, res) => {
+    try {
+      const allUsers = await storage.getUsers();
+      const allJobs = await storage.getJobs();
+      const employers = allUsers
+        .filter((u) => u.role === "employer")
+        .map((u) => {
+          const employerJobs = allJobs.filter((j) => j.employerId === u.id);
+          return {
+            id: u.id,
+            companyName: u.companyName || "Unnamed Company",
+            companyLogo: u.companyLogo,
+            firstName: u.firstName,
+            lastName: u.lastName,
+            jobCount: employerJobs.length,
+            industries: [...new Set(employerJobs.map((j) => j.industry).filter(Boolean))],
+            locations: [...new Set(employerJobs.map((j) => [j.locationCity, j.locationState].filter(Boolean).join(", ")).filter(Boolean))],
+            createdAt: u.createdAt,
+          };
+        });
+      res.json(employers);
+    } catch (err) {
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
   // Jobs
   app.get(api.jobs.list.path, async (req, res) => {
     const jobs = await storage.getJobs();
