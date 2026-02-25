@@ -11,7 +11,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { ImageUpload } from "@/components/ui/image-upload";
-import { FileText, Briefcase, CreditCard, Plus, CheckCircle2, Clock, XCircle, AlertCircle } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
+import { FileText, Briefcase, CreditCard, Plus, CheckCircle2, Clock, XCircle, AlertCircle, Eye, EyeOff } from "lucide-react";
 import type { Application, Resume } from "@shared/schema";
 import { Link } from "wouter";
 import { formatDistanceToNow } from "date-fns";
@@ -226,9 +227,12 @@ function SeekerProfileTab() {
   const [firstName, setFirstName] = useState(user?.firstName || "");
   const [lastName, setLastName] = useState(user?.lastName || "");
   const [profileImage, setProfileImage] = useState(user?.profileImage || "");
+  const [showProfile, setShowProfile] = useState(user?.showProfile ?? true);
+  const [showName, setShowName] = useState(user?.showName ?? true);
+  const [showCurrentEmployer, setShowCurrentEmployer] = useState(user?.showCurrentEmployer ?? true);
 
   const saveMutation = useMutation({
-    mutationFn: (data: { firstName: string; lastName: string; profileImage: string }) =>
+    mutationFn: (data: { firstName: string; lastName: string; profileImage: string; showProfile: boolean; showName: boolean; showCurrentEmployer: boolean }) =>
       apiRequest("PATCH", "/api/profile", data).then(r => r.json()),
     onSuccess: (data: any) => {
       queryClient.setQueryData(["/api/me"], data);
@@ -262,9 +266,53 @@ function SeekerProfileTab() {
             data-testid="image-profile-pic"
           />
         </div>
+
+        <div className="border-t border-border pt-5">
+          <div className="flex items-center gap-2 mb-4">
+            {showProfile ? <Eye size={18} className="text-primary" /> : <EyeOff size={18} className="text-muted-foreground" />}
+            <h3 className="text-lg font-bold font-display">Privacy Settings</h3>
+          </div>
+          <p className="text-sm text-muted-foreground mb-4">Choose what employers and other users can see on your public profile.</p>
+          <div className="space-y-4">
+            <div className="flex items-center justify-between p-4 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-border">
+              <div>
+                <Label className="text-sm font-semibold">Show Profile</Label>
+                <p className="text-xs text-muted-foreground mt-0.5">Allow your profile to be visible to employers</p>
+              </div>
+              <Switch
+                checked={showProfile}
+                onCheckedChange={setShowProfile}
+                data-testid="switch-show-profile"
+              />
+            </div>
+            <div className="flex items-center justify-between p-4 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-border">
+              <div>
+                <Label className="text-sm font-semibold">Show Name</Label>
+                <p className="text-xs text-muted-foreground mt-0.5">Display your full name on your profile</p>
+              </div>
+              <Switch
+                checked={showName}
+                onCheckedChange={setShowName}
+                data-testid="switch-show-name"
+              />
+            </div>
+            <div className="flex items-center justify-between p-4 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-border">
+              <div>
+                <Label className="text-sm font-semibold">Show Current Employer</Label>
+                <p className="text-xs text-muted-foreground mt-0.5">Display your current company on your profile</p>
+              </div>
+              <Switch
+                checked={showCurrentEmployer}
+                onCheckedChange={setShowCurrentEmployer}
+                data-testid="switch-show-current-employer"
+              />
+            </div>
+          </div>
+        </div>
+
         <div className="flex justify-end pt-2">
           <Button
-            onClick={() => saveMutation.mutate({ firstName, lastName, profileImage })}
+            onClick={() => saveMutation.mutate({ firstName, lastName, profileImage, showProfile, showName, showCurrentEmployer })}
             disabled={saveMutation.isPending}
             data-testid="button-save-profile"
           >

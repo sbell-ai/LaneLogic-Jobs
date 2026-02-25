@@ -27,7 +27,7 @@ client/src/
     dashboard/
       DashboardLayout.tsx       - Shared sidebar layout for all dashboards
       Overview.tsx              - Default dashboard overview
-      JobSeekerDashboard.tsx    - Applications, Resume, Membership tabs
+      JobSeekerDashboard.tsx    - Applications, Resume, Membership tabs, Profile with privacy toggles (show/hide Profile, Name, Current Employer)
       EmployerDashboard.tsx     - Post Job, My Jobs, Applicants, CSV Upload, Membership
       AdminDashboard.tsx        - Users, Jobs, Resources, Blog management
   components/
