@@ -155,9 +155,13 @@ export default function Jobs() {
                     >
                       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                         <div className="flex items-start gap-4">
-                          <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center text-primary font-bold text-lg shrink-0">
-                            {job.title.charAt(0)}
-                          </div>
+                          {(job as any).employerLogo ? (
+                            <img src={(job as any).employerLogo} alt={job.companyName || ""} className="w-12 h-12 rounded-xl object-contain bg-white dark:bg-slate-800 border border-border shrink-0" data-testid={`img-company-logo-${job.id}`} />
+                          ) : (
+                            <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center text-primary font-bold text-lg shrink-0" data-testid={`placeholder-company-logo-${job.id}`}>
+                              {(job.companyName || job.title).charAt(0).toUpperCase()}
+                            </div>
+                          )}
                           <div>
                             <h2 className="text-lg font-bold font-display group-hover:text-primary transition-colors">
                               {job.title}

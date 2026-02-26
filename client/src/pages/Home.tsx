@@ -147,9 +147,13 @@ export default function Home() {
                   <Link key={job.id} href={`/jobs/${job.id}`} data-testid={`card-job-${job.id}`}>
                     <div className="bg-card rounded-2xl p-5 border border-border shadow-sm hover:shadow-lg hover:border-primary/40 transition-all duration-300 h-full flex flex-col group cursor-pointer">
                       <div className="flex items-start justify-between mb-3">
-                        <div className="w-10 h-10 rounded-xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-lg font-bold text-slate-400 shrink-0">
-                          {job.title.charAt(0)}
-                        </div>
+                        {(job as any).employerLogo ? (
+                          <img src={(job as any).employerLogo} alt={job.companyName || ""} className="w-10 h-10 rounded-xl object-contain bg-white dark:bg-slate-800 border border-border shrink-0" data-testid={`img-company-logo-${job.id}`} />
+                        ) : (
+                          <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center text-lg font-bold text-primary shrink-0" data-testid={`placeholder-company-logo-${job.id}`}>
+                            {(job.companyName || job.title).charAt(0).toUpperCase()}
+                          </div>
+                        )}
                         {job.jobType && (
                           <span className="px-2.5 py-0.5 bg-primary/10 text-primary text-xs font-semibold rounded-full">
                             {job.jobType}

@@ -103,9 +103,13 @@ export default function JobDetail() {
             <div className="p-8 border-b border-border">
               <div className="flex flex-col md:flex-row md:items-start justify-between gap-6">
                 <div className="flex items-start gap-5">
-                  <div className="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center text-primary font-bold text-2xl shrink-0">
-                    {job.title.charAt(0)}
-                  </div>
+                  {(job as any).employerLogo ? (
+                    <img src={(job as any).employerLogo} alt={job.companyName || ""} className="w-16 h-16 rounded-2xl object-contain bg-white dark:bg-slate-800 border border-border shrink-0" data-testid="img-company-logo" />
+                  ) : (
+                    <div className="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center text-primary font-bold text-2xl shrink-0" data-testid="placeholder-company-logo">
+                      {(job.companyName || job.title).charAt(0).toUpperCase()}
+                    </div>
+                  )}
                   <div>
                     <h1 className="text-2xl md:text-3xl font-bold font-display mb-1">{job.title}</h1>
                     {job.companyName && (

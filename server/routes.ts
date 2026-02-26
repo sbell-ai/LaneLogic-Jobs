@@ -252,14 +252,21 @@ export async function registerRoutes(
 
   // Jobs
   app.get(api.jobs.list.path, async (req, res) => {
-    const jobs = await storage.getJobs();
-    res.json(jobs);
+    const allJobs = await storage.getJobs();
+    const allUsers = await storage.getUsers();
+    const employerMap = new Map(allUsers.filter(u => u.role === "employer").map(u => [u.id, u]));
+    const enriched = allJobs.map(job => ({
+      ...job,
+      employerLogo: employerMap.get(job.employerId)?.companyLogo || null,
+    }));
+    res.json(enriched);
   });
 
   app.get(api.jobs.get.path, async (req, res) => {
     const job = await storage.getJob(Number(req.params.id));
     if (!job) return res.status(404).json({ message: "Not found" });
-    res.json(job);
+    const employer = await storage.getUser(job.employerId);
+    res.json({ ...job, employerLogo: employer?.companyLogo || null });
   });
 
   app.post(api.jobs.create.path, async (req, res) => {
