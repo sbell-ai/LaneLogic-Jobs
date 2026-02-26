@@ -174,11 +174,18 @@ export default function Home() {
                         <MapPin size={14} className="mr-1 shrink-0" />
                         <span className="line-clamp-1">{[job.locationCity, job.locationState].filter(Boolean).join(", ") || "Remote / TBD"}</span>
                       </div>
-                      {job.salary && (
-                        <span className="text-sm font-semibold text-green-600 dark:text-green-400 mt-auto" data-testid={`text-job-salary-${job.id}`}>
-                          {job.salary}
-                        </span>
-                      )}
+                      <div className="flex items-center gap-2 mt-auto">
+                        {job.salary && (
+                          <span className="text-sm font-semibold text-green-600 dark:text-green-400" data-testid={`text-job-salary-${job.id}`}>
+                            {job.salary}
+                          </span>
+                        )}
+                        {job.createdAt && (Date.now() - new Date(job.createdAt).getTime()) > 21 * 24 * 60 * 60 * 1000 && (
+                          <span className="ml-auto px-2 py-0.5 bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300 text-[10px] font-semibold rounded-full whitespace-nowrap" data-testid={`badge-actively-interviewing-${job.id}`}>
+                            Actively Interviewing: Apply Soon
+                          </span>
+                        )}
+                      </div>
                     </div>
                   </Link>
                 ))
