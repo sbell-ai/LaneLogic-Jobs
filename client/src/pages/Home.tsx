@@ -33,9 +33,17 @@ export default function Home() {
       <main className="flex-grow">
         {/* HERO SECTION */}
         <section className={`relative overflow-hidden bg-slate-50 dark:bg-slate-950 ${
-          settings.heroSize === "compact" ? "pt-10 pb-14" :
-          settings.heroSize === "large" ? "pt-28 pb-40" :
-          "pt-20 pb-32"
+          (() => {
+            const hasHeading = !!settings.heroHeading?.trim();
+            const hasSubtext = !!settings.heroSubtext?.trim();
+            const hasBadge = !!settings.heroBadge?.trim();
+            const contentCount = [hasHeading, hasSubtext, hasBadge].filter(Boolean).length;
+            if (contentCount === 0) return "pt-8 pb-10";
+            if (settings.heroSize === "compact") return "pt-10 pb-14";
+            if (settings.heroSize === "large") return "pt-28 pb-40";
+            if (contentCount <= 1) return "pt-12 pb-16";
+            return "pt-20 pb-32";
+          })()
         }`}>
           <div className="absolute inset-0 z-0 opacity-[0.03] dark:opacity-[0.08]" 
                style={{ backgroundImage: 'radial-gradient(#1d4ed8 1px, transparent 1px)', backgroundSize: '32px 32px' }}>
@@ -48,19 +56,25 @@ export default function Home() {
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.5 }}
               >
-                <span className="inline-block py-1 px-3 rounded-full bg-primary/10 text-primary font-semibold text-sm mb-6 border border-primary/20" data-testid="text-hero-badge">
-                  {settings.heroBadge || "#1 Transportation Job Board"}
-                </span>
-                <h1 className={`font-bold font-display text-foreground leading-tight tracking-tighter mb-6 text-balance ${
-                  settings.heroSize === "compact" ? "text-3xl md:text-5xl" :
-                  settings.heroSize === "large" ? "text-5xl md:text-7xl" :
-                  "text-4xl md:text-6xl"
-                }`} data-testid="text-hero-heading">
-                  {settings.heroHeading || "Drive Your Career Forward"}
-                </h1>
-                <p className="text-lg md:text-xl text-muted-foreground mb-10 max-w-2xl mx-auto text-balance" data-testid="text-hero-subtext">
-                  {settings.heroSubtext || "Connect with top employers in logistics, freight, and transportation. Find roles that match your skills, from CDL drivers to supply chain directors."}
-                </p>
+                {settings.heroBadge?.trim() && (
+                  <span className="inline-block py-1 px-3 rounded-full bg-primary/10 text-primary font-semibold text-sm mb-6 border border-primary/20" data-testid="text-hero-badge">
+                    {settings.heroBadge}
+                  </span>
+                )}
+                {settings.heroHeading?.trim() && (
+                  <h1 className={`font-bold font-display text-foreground leading-tight tracking-tighter mb-6 text-balance ${
+                    settings.heroSize === "compact" ? "text-3xl md:text-5xl" :
+                    settings.heroSize === "large" ? "text-5xl md:text-7xl" :
+                    "text-4xl md:text-6xl"
+                  }`} data-testid="text-hero-heading">
+                    {settings.heroHeading}
+                  </h1>
+                )}
+                {settings.heroSubtext?.trim() && (
+                  <p className="text-lg md:text-xl text-muted-foreground mb-10 max-w-2xl mx-auto text-balance" data-testid="text-hero-subtext">
+                    {settings.heroSubtext}
+                  </p>
+                )}
               </motion.div>
 
               <motion.form 
@@ -106,33 +120,30 @@ export default function Home() {
         </section>
 
         {/* STATS/FEATURES SECTION */}
-        <section className="py-20 bg-white dark:bg-slate-900 border-y border-border/50">
-          <div className="container mx-auto px-4 md:px-6">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-              <div className="flex flex-col items-center text-center p-6 rounded-2xl hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
-                <div className="w-16 h-16 rounded-2xl bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center text-primary mb-6">
-                  <Briefcase size={32} />
+        {(() => {
+          const features = [
+            { title: settings.feature1Title, desc: settings.feature1Description, icon: <Briefcase size={32} />, bg: "bg-blue-100 dark:bg-blue-900/30", color: "text-primary", tid: "1" },
+            { title: settings.feature2Title, desc: settings.feature2Description, icon: <Users size={32} />, bg: "bg-orange-100 dark:bg-orange-900/30", color: "text-accent", tid: "2" },
+            { title: settings.feature3Title, desc: settings.feature3Description, icon: <ShieldCheck size={32} />, bg: "bg-green-100 dark:bg-green-900/30", color: "text-green-600", tid: "3" },
+          ].filter(f => f.title?.trim() || f.desc?.trim());
+          return features.length > 0 ? (
+            <section className="py-20 bg-white dark:bg-slate-900 border-y border-border/50">
+              <div className="container mx-auto px-4 md:px-6">
+                <div className={`grid grid-cols-1 ${features.length === 1 ? "max-w-md mx-auto" : features.length === 2 ? "md:grid-cols-2 max-w-3xl mx-auto" : "md:grid-cols-3"} gap-8`}>
+                  {features.map(f => (
+                    <div key={f.tid} className="flex flex-col items-center text-center p-6 rounded-2xl hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
+                      <div className={`w-16 h-16 rounded-2xl ${f.bg} flex items-center justify-center ${f.color} mb-6`}>
+                        {f.icon}
+                      </div>
+                      {f.title?.trim() && <h3 className="text-xl font-bold font-display mb-3" data-testid={`text-feature${f.tid}-title`}>{f.title}</h3>}
+                      {f.desc?.trim() && <p className="text-muted-foreground" data-testid={`text-feature${f.tid}-desc`}>{f.desc}</p>}
+                    </div>
+                  ))}
                 </div>
-                <h3 className="text-xl font-bold font-display mb-3" data-testid="text-feature1-title">{settings.feature1Title || "10,000+ Active Jobs"}</h3>
-                <p className="text-muted-foreground" data-testid="text-feature1-desc">{settings.feature1Description || "New opportunities added daily from leading transportation companies nationwide."}</p>
               </div>
-              <div className="flex flex-col items-center text-center p-6 rounded-2xl hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
-                <div className="w-16 h-16 rounded-2xl bg-orange-100 dark:bg-orange-900/30 flex items-center justify-center text-accent mb-6">
-                  <Users size={32} />
-                </div>
-                <h3 className="text-xl font-bold font-display mb-3" data-testid="text-feature2-title">{settings.feature2Title || "Direct Employer Access"}</h3>
-                <p className="text-muted-foreground" data-testid="text-feature2-desc">{settings.feature2Description || "Skip the middleman. Apply directly to hiring managers and fast-track your career."}</p>
-              </div>
-              <div className="flex flex-col items-center text-center p-6 rounded-2xl hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
-                <div className="w-16 h-16 rounded-2xl bg-green-100 dark:bg-green-900/30 flex items-center justify-center text-green-600 mb-6">
-                  <ShieldCheck size={32} />
-                </div>
-                <h3 className="text-xl font-bold font-display mb-3" data-testid="text-feature3-title">{settings.feature3Title || "Verified Companies"}</h3>
-                <p className="text-muted-foreground" data-testid="text-feature3-desc">{settings.feature3Description || "Every employer is vetted to ensure quality opportunities and safe working environments."}</p>
-              </div>
-            </div>
-          </div>
-        </section>
+            </section>
+          ) : null;
+        })()}
 
         {/* FEATURED JOBS SECTION */}
         <section className="py-24 bg-slate-50 dark:bg-slate-950">
@@ -200,7 +211,6 @@ export default function Home() {
         
         {/* CTA SECTION */}
         <section className="py-24 relative overflow-hidden">
-          {/* landing page hero scenic mountain landscape */}
           <div className="absolute inset-0 z-0">
             <img 
               src={settings.ctaBackgroundImage || "https://images.unsplash.com/photo-1601584115197-04ecc0da31d7?w=1920&h=1080&fit=crop"} 
@@ -210,10 +220,14 @@ export default function Home() {
           </div>
           
           <div className="container relative z-10 mx-auto px-4 md:px-6 text-center">
-            <h2 className="text-3xl md:text-5xl font-bold font-display text-white mb-6" data-testid="text-cta-heading">{settings.ctaHeading || "Ready to hire top transport talent?"}</h2>
-            <p className="text-lg text-slate-300 mb-10 max-w-2xl mx-auto" data-testid="text-cta-subtext">
-              {settings.ctaSubtext || "Join thousands of employers who trust us to fill their open logistics, driving, and management positions faster."}
-            </p>
+            {settings.ctaHeading?.trim() && (
+              <h2 className="text-3xl md:text-5xl font-bold font-display text-white mb-6" data-testid="text-cta-heading">{settings.ctaHeading}</h2>
+            )}
+            {settings.ctaSubtext?.trim() && (
+              <p className="text-lg text-slate-300 mb-10 max-w-2xl mx-auto" data-testid="text-cta-subtext">
+                {settings.ctaSubtext}
+              </p>
+            )}
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
               <Button asChild size="lg" className="h-14 px-8 rounded-xl bg-primary hover:bg-primary/90 text-white font-semibold text-lg hover-elevate">
                 <Link href="/register">Post a Job Now</Link>
