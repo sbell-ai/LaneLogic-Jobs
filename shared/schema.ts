@@ -174,6 +174,7 @@ export interface SiteSettingsData {
   heroSize: "compact" | "default" | "large";
   heroBgColor: string;
   heroBorderColor: string;
+  heroFontColor: string;
 }
 
 export const DEFAULT_SETTINGS: SiteSettingsData = {
@@ -221,6 +222,7 @@ export const DEFAULT_SETTINGS: SiteSettingsData = {
   heroSize: "default",
   heroBgColor: "",
   heroBorderColor: "",
+  heroFontColor: "",
 };
 
 export const siteSettings = pgTable("site_settings", {

@@ -1620,7 +1620,7 @@ function SitePagesTab() {
   const { data: saved, isLoading } = useQuery<SiteSettingsData>({ queryKey: ["/api/settings"] });
 
   const [draft, setDraft] = useState<Record<string, string>>({
-    heroSize: "default", heroBadge: "", heroHeading: "", heroSubtext: "", heroPopularSearches: "", heroBgColor: "", heroBorderColor: "",
+    heroSize: "default", heroBadge: "", heroHeading: "", heroSubtext: "", heroPopularSearches: "", heroBgColor: "", heroBorderColor: "", heroFontColor: "",
     feature1Title: "", feature1Description: "",
     feature2Title: "", feature2Description: "",
     feature3Title: "", feature3Description: "",
@@ -1640,6 +1640,7 @@ function SitePagesTab() {
         heroPopularSearches: saved.heroPopularSearches ?? "",
         heroBgColor: saved.heroBgColor ?? "",
         heroBorderColor: saved.heroBorderColor ?? "",
+        heroFontColor: saved.heroFontColor ?? "",
         feature1Title: saved.feature1Title ?? "",
         feature1Description: saved.feature1Description ?? "",
         feature2Title: saved.feature2Title ?? "",
@@ -1727,7 +1728,7 @@ function SitePagesTab() {
               <p className="text-xs text-muted-foreground mb-2">Comma-separated list of quick search links shown below the search bar. Leave empty to hide this section and shrink the hero.</p>
               <Input value={draft.heroPopularSearches} onChange={e => update("heroPopularSearches", e.target.value)} placeholder="CDL Driver, Logistics Manager, Dispatcher, Fleet Manager" data-testid="input-hero-popular-searches" />
             </div>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-3 gap-3">
               <div>
                 <Label className="text-sm font-semibold mb-1 block">Background Color</Label>
                 <p className="text-xs text-muted-foreground mb-2">Leave empty for default theme color.</p>
@@ -1744,6 +1745,15 @@ function SitePagesTab() {
                   <input type="color" value={draft.heroBorderColor || "#e2e8f0"} onChange={e => update("heroBorderColor", e.target.value)} className="w-10 h-10 rounded-lg border border-border cursor-pointer" data-testid="input-hero-border-color" />
                   <Input value={draft.heroBorderColor} onChange={e => update("heroBorderColor", e.target.value)} placeholder="#e2e8f0" className="flex-1" data-testid="input-hero-border-color-text" />
                   {draft.heroBorderColor && <Button variant="ghost" size="sm" onClick={() => update("heroBorderColor", "")} className="text-xs px-2">Reset</Button>}
+                </div>
+              </div>
+              <div>
+                <Label className="text-sm font-semibold mb-1 block">Font Color</Label>
+                <p className="text-xs text-muted-foreground mb-2">Leave empty for default.</p>
+                <div className="flex items-center gap-2">
+                  <input type="color" value={draft.heroFontColor || "#0f172a"} onChange={e => update("heroFontColor", e.target.value)} className="w-10 h-10 rounded-lg border border-border cursor-pointer" data-testid="input-hero-font-color" />
+                  <Input value={draft.heroFontColor} onChange={e => update("heroFontColor", e.target.value)} placeholder="#0f172a" className="flex-1" data-testid="input-hero-font-color-text" />
+                  {draft.heroFontColor && <Button variant="ghost" size="sm" onClick={() => update("heroFontColor", "")} className="text-xs px-2">Reset</Button>}
                 </div>
               </div>
             </div>

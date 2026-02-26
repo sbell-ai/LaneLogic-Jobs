@@ -54,7 +54,7 @@ export default function Home() {
                style={{ backgroundImage: 'radial-gradient(#1d4ed8 1px, transparent 1px)', backgroundSize: '32px 32px' }}>
           </div>
           
-          <div className="container relative z-10 mx-auto px-4 md:px-6">
+          <div className="container relative z-10 mx-auto px-4 md:px-6" style={settings.heroFontColor ? { color: settings.heroFontColor } : undefined}>
             <div className="max-w-4xl mx-auto text-center">
               <motion.div
                 initial={{ opacity: 0, y: 20 }}
@@ -67,7 +67,7 @@ export default function Home() {
                   </span>
                 )}
                 {settings.heroHeading?.trim() && (
-                  <h1 className={`font-bold font-display text-foreground leading-tight tracking-tighter mb-6 text-balance ${
+                  <h1 className={`font-bold font-display leading-tight tracking-tighter mb-6 text-balance ${!settings.heroFontColor ? 'text-foreground' : ''} ${
                     settings.heroSize === "compact" ? "text-3xl md:text-5xl" :
                     settings.heroSize === "large" ? "text-5xl md:text-7xl" :
                     "text-4xl md:text-6xl"
@@ -76,7 +76,7 @@ export default function Home() {
                   </h1>
                 )}
                 {settings.heroSubtext?.trim() && (
-                  <p className="text-lg md:text-xl text-muted-foreground mb-10 max-w-2xl mx-auto text-balance" data-testid="text-hero-subtext">
+                  <p className={`text-lg md:text-xl mb-10 max-w-2xl mx-auto text-balance ${!settings.heroFontColor ? 'text-muted-foreground' : 'opacity-80'}`} data-testid="text-hero-subtext">
                     {settings.heroSubtext}
                   </p>
                 )}
