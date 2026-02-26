@@ -264,7 +264,7 @@ function AllJobsTab() {
 
   const openEdit = (j: Job) => {
     setEditForm({
-      title: j.title, companyName: j.companyName || "", jobType: j.jobType || "Full-time",
+      title: j.title, companyName: j.companyName || "", jobType: j.jobType || "",
       category: j.category || "", industry: j.industry || "",
       description: j.description, requirements: j.requirements,
       benefits: j.benefits || "", salary: j.salary || "",
