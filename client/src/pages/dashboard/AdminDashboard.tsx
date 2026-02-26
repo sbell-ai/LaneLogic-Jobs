@@ -9,6 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { useForm } from "react-hook-form";
@@ -243,6 +244,9 @@ function AllJobsTab() {
   const [viewJob, setViewJob] = useState<Job | null>(null);
   const [editJob, setEditJob] = useState<Job | null>(null);
   const [editForm, setEditForm] = useState<Record<string, any>>({});
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  const [bulkEditOpen, setBulkEditOpen] = useState(false);
+  const [bulkForm, setBulkForm] = useState<{ jobType: string; category: string; industry: string }>({ jobType: "", category: "", industry: "" });
 
   const deleteMutation = useMutation({
     mutationFn: (id: number) => apiRequest("DELETE", `/api/jobs/${id}`),
@@ -261,6 +265,46 @@ function AllJobsTab() {
       toast({ title: "Job updated" });
     },
   });
+
+  const bulkUpdateMutation = useMutation({
+    mutationFn: (data: { ids: number[]; updates: Record<string, string> }) =>
+      apiRequest("PUT", "/api/jobs-bulk-update", data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/jobs"] });
+      setBulkEditOpen(false);
+      setSelectedIds(new Set());
+      setBulkForm({ jobType: "", category: "", industry: "" });
+      toast({ title: "Jobs updated" });
+    },
+  });
+
+  const toggleSelect = (id: number) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedIds.size === filtered.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(filtered.map(j => j.id)));
+    }
+  };
+
+  const handleBulkSave = () => {
+    const updates: Record<string, string> = {};
+    if (bulkForm.jobType && bulkForm.jobType !== "__unchanged__") updates.jobType = bulkForm.jobType;
+    if (bulkForm.category && bulkForm.category !== "__unchanged__") updates.category = bulkForm.category === "__clear__" ? "" : bulkForm.category;
+    if (bulkForm.industry && bulkForm.industry !== "__unchanged__") updates.industry = bulkForm.industry === "__clear__" ? "" : bulkForm.industry;
+    if (Object.keys(updates).length === 0) {
+      toast({ title: "No changes", description: "Select at least one field to update.", variant: "destructive" });
+      return;
+    }
+    bulkUpdateMutation.mutate({ ids: [...selectedIds], updates });
+  };
 
   const openEdit = (j: Job) => {
     setEditForm({
@@ -313,20 +357,44 @@ function AllJobsTab() {
           <Input placeholder="Search jobs..." className="w-56" value={search} onChange={e => setSearch(e.target.value)} data-testid="input-jobs-search" />
         </div>
       </div>
+      {selectedIds.size > 0 && (
+        <div className="mb-4 flex items-center gap-3 bg-primary/5 border border-primary/20 rounded-xl px-5 py-3" data-testid="bulk-action-bar">
+          <span className="text-sm font-medium">{selectedIds.size} job{selectedIds.size !== 1 ? "s" : ""} selected</span>
+          <Button size="sm" onClick={() => { setBulkForm({ jobType: "", category: "", industry: "" }); setBulkEditOpen(true); }} data-testid="button-bulk-edit">
+            <Pencil size={14} className="mr-1.5" /> Bulk Edit
+          </Button>
+          <Button variant="ghost" size="sm" onClick={() => setSelectedIds(new Set())} data-testid="button-clear-selection">Clear</Button>
+        </div>
+      )}
       <div className="space-y-3">
+        <div className="flex items-center gap-3 px-5 py-2">
+          <Checkbox
+            checked={filtered.length > 0 && selectedIds.size === filtered.length}
+            onCheckedChange={toggleSelectAll}
+            data-testid="checkbox-select-all-jobs"
+          />
+          <span className="text-sm text-muted-foreground font-medium">Select All</span>
+        </div>
         {filtered.map((job) => (
           <div key={job.id} data-testid={`card-admin-job-${job.id}`} className="bg-white dark:bg-slate-900 rounded-xl border border-border p-5 flex items-center justify-between gap-4">
-            <div className="flex-1">
-              <div className="flex items-center gap-2 flex-wrap">
-                <h3 className="font-semibold">{job.title}</h3>
-                {job.companyName && <span className="text-sm text-muted-foreground">· {job.companyName}</span>}
-                {job.category && <Badge variant="outline" className="text-xs">{job.category}</Badge>}
-                {job.industry && <Badge variant="outline" className="text-xs">{job.industry}</Badge>}
+            <div className="flex items-center gap-3 flex-1 min-w-0">
+              <Checkbox
+                checked={selectedIds.has(job.id)}
+                onCheckedChange={() => toggleSelect(job.id)}
+                data-testid={`checkbox-job-${job.id}`}
+              />
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h3 className="font-semibold">{job.title}</h3>
+                  {job.companyName && <span className="text-sm text-muted-foreground">· {job.companyName}</span>}
+                  {job.category && <Badge variant="outline" className="text-xs">{job.category}</Badge>}
+                  {job.industry && <Badge variant="outline" className="text-xs">{job.industry}</Badge>}
+                </div>
+                <p className="text-sm text-muted-foreground mt-0.5">
+                  {fmtLoc(job)}{job.salary ? ` · ${job.salary}` : ""}
+                  {job.jobType && <span className="ml-2 text-xs">{job.jobType}</span>}
+                </p>
               </div>
-              <p className="text-sm text-muted-foreground mt-0.5">
-                {fmtLoc(job)}{job.salary ? ` · ${job.salary}` : ""}
-                {job.jobType && <span className="ml-2 text-xs">{job.jobType}</span>}
-              </p>
             </div>
             <div className="flex gap-1 shrink-0">
               <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setViewJob(job)} data-testid={`button-view-job-${job.id}`}><Eye size={15} /></Button>
@@ -402,6 +470,52 @@ function AllJobsTab() {
             <div><Label>Benefits</Label><Textarea value={editForm.benefits || ""} onChange={e => setEditForm(f => ({ ...f, benefits: e.target.value }))} className="min-h-[60px]" /></div>
             <Button className="w-full" disabled={updateMutation.isPending} onClick={() => editJob && updateMutation.mutate({ id: editJob.id, ...editForm })} data-testid="button-save-edit-job">
               {updateMutation.isPending ? "Saving..." : "Save Changes"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={bulkEditOpen} onOpenChange={setBulkEditOpen}>
+        <DialogContent className="max-w-md" data-testid="dialog-bulk-edit">
+          <DialogHeader>
+            <DialogTitle>Bulk Edit {selectedIds.size} Job{selectedIds.size !== 1 ? "s" : ""}</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">Only fields you change will be updated. Leave a field unchanged to keep existing values.</p>
+          <div className="space-y-4 mt-2">
+            <div>
+              <Label className="text-sm font-semibold mb-1.5 block">Job Type</Label>
+              <Select value={bulkForm.jobType} onValueChange={v => setBulkForm(f => ({ ...f, jobType: v }))}>
+                <SelectTrigger data-testid="select-bulk-job-type"><SelectValue placeholder="— No change —" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__unchanged__">— No change —</SelectItem>
+                  {["Full-time","Part-time","Contract","Seasonal","Owner-Operator","Lease Purchase","Temporary"].map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label className="text-sm font-semibold mb-1.5 block">Category</Label>
+              <Select value={bulkForm.category} onValueChange={v => setBulkForm(f => ({ ...f, category: v }))}>
+                <SelectTrigger data-testid="select-bulk-category"><SelectValue placeholder="— No change —" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__unchanged__">— No change —</SelectItem>
+                  <SelectItem value="__clear__">Clear category</SelectItem>
+                  {jobCats.map(c => <SelectItem key={c.id} value={c.name}>{c.name}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label className="text-sm font-semibold mb-1.5 block">Industry</Label>
+              <Select value={bulkForm.industry} onValueChange={v => setBulkForm(f => ({ ...f, industry: v }))}>
+                <SelectTrigger data-testid="select-bulk-industry"><SelectValue placeholder="— No change —" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__unchanged__">— No change —</SelectItem>
+                  <SelectItem value="__clear__">Clear industry</SelectItem>
+                  {industries.map(c => <SelectItem key={c.id} value={c.name}>{c.name}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <Button className="w-full" disabled={bulkUpdateMutation.isPending} onClick={handleBulkSave} data-testid="button-save-bulk-edit">
+              {bulkUpdateMutation.isPending ? "Updating..." : `Update ${selectedIds.size} Job${selectedIds.size !== 1 ? "s" : ""}`}
             </Button>
           </div>
         </DialogContent>

@@ -296,6 +296,23 @@ export async function registerRoutes(
     res.status(204).end();
   });
 
+  app.put("/api/jobs-bulk-update", async (req, res) => {
+    try {
+      const { ids, updates } = req.body as { ids: number[]; updates: Record<string, any> };
+      if (!Array.isArray(ids) || ids.length === 0) return res.status(400).json({ message: "No job IDs provided" });
+      const allowed = ["jobType", "category", "industry"];
+      const filtered: Record<string, any> = {};
+      for (const key of allowed) {
+        if (key in updates) filtered[key] = updates[key];
+      }
+      if (Object.keys(filtered).length === 0) return res.status(400).json({ message: "No valid fields to update" });
+      const results = await Promise.all(ids.map(id => storage.updateJob(id, filtered)));
+      res.json({ updated: results.length });
+    } catch (err) {
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
   // Applications
   app.get(api.applications.list.path, async (req, res) => {
     const apps = await storage.getApplications();
