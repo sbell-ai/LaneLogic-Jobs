@@ -53,13 +53,15 @@ function PostJobTab({ userId }: { userId: number }) {
       description: "", requirements: "", benefits: "",
       locationCity: "", locationState: "", locationCountry: "USA",
       salary: "", applyUrl: "", isExternalApply: false,
-      category: "", industry: "",
+      category: "", industry: "", expiresAt: "",
     },
   });
 
   const createMutation = useMutation({
-    mutationFn: (values: JobFormValues) =>
-      apiRequest("POST", "/api/jobs", { ...values, employerId: userId }),
+    mutationFn: (values: JobFormValues) => {
+      const payload = { ...values, employerId: userId, expiresAt: values.expiresAt ? new Date(values.expiresAt).toISOString() : null };
+      return apiRequest("POST", "/api/jobs", payload);
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/jobs"] });
       form.reset();
@@ -148,12 +150,20 @@ function PostJobTab({ userId }: { userId: number }) {
               )} />
             </div>
 
-            <FormField control={form.control} name="salary" render={({ field }) => (
-              <FormItem>
-                <FormLabel>Salary (optional)</FormLabel>
-                <FormControl><Input placeholder="$70,000 – $90,000/yr" data-testid="input-job-salary" {...field} value={field.value ?? ""} /></FormControl>
-              </FormItem>
-            )} />
+            <div className="grid grid-cols-2 gap-4">
+              <FormField control={form.control} name="salary" render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Salary (optional)</FormLabel>
+                  <FormControl><Input placeholder="$70,000 – $90,000/yr" data-testid="input-job-salary" {...field} value={field.value ?? ""} /></FormControl>
+                </FormItem>
+              )} />
+              <FormField control={form.control} name="expiresAt" render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Expiration Date (optional)</FormLabel>
+                  <FormControl><Input type="date" data-testid="input-job-expires" {...field} value={field.value ?? ""} /></FormControl>
+                </FormItem>
+              )} />
+            </div>
 
             <FormField control={form.control} name="description" render={({ field }) => (
               <FormItem>

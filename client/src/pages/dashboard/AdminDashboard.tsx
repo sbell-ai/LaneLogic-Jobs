@@ -314,6 +314,7 @@ function AllJobsTab() {
       benefits: j.benefits || "", salary: j.salary || "",
       locationCity: j.locationCity || "", locationState: j.locationState || "", locationCountry: j.locationCountry || "",
       applyUrl: j.applyUrl || "", isExternalApply: j.isExternalApply || false,
+      expiresAt: j.expiresAt ? new Date(j.expiresAt).toISOString().slice(0, 10) : "",
     });
     setEditJob(j);
   };
@@ -422,6 +423,7 @@ function AllJobsTab() {
                 <div><p className="text-muted-foreground">Salary</p><p className="font-medium">{viewJob.salary || "—"}</p></div>
                 <div><p className="text-muted-foreground">Job Type</p><p className="font-medium">{viewJob.jobType || "—"}</p></div>
                 <div><p className="text-muted-foreground">Category</p><p className="font-medium">{viewJob.category || "—"}</p></div>
+                <div><p className="text-muted-foreground">Expires</p><p className="font-medium">{viewJob.expiresAt ? new Date(viewJob.expiresAt).toLocaleDateString() : "No expiration"}</p></div>
               </div>
               <div><p className="text-muted-foreground">Description</p><p className="whitespace-pre-wrap">{viewJob.description}</p></div>
               <div><p className="text-muted-foreground">Requirements</p><p className="whitespace-pre-wrap">{viewJob.requirements}</p></div>
@@ -464,11 +466,14 @@ function AllJobsTab() {
               <div><Label>State</Label><Input value={editForm.locationState || ""} onChange={e => setEditForm(f => ({ ...f, locationState: e.target.value }))} /></div>
               <div><Label>Country</Label><Input value={editForm.locationCountry || ""} onChange={e => setEditForm(f => ({ ...f, locationCountry: e.target.value }))} /></div>
             </div>
-            <div><Label>Salary</Label><Input value={editForm.salary || ""} onChange={e => setEditForm(f => ({ ...f, salary: e.target.value }))} /></div>
+            <div className="grid grid-cols-2 gap-3">
+              <div><Label>Salary</Label><Input value={editForm.salary || ""} onChange={e => setEditForm(f => ({ ...f, salary: e.target.value }))} /></div>
+              <div><Label>Expiration Date</Label><Input type="date" value={editForm.expiresAt || ""} onChange={e => setEditForm(f => ({ ...f, expiresAt: e.target.value }))} data-testid="input-edit-job-expires" /></div>
+            </div>
             <div><Label>Description</Label><Textarea value={editForm.description || ""} onChange={e => setEditForm(f => ({ ...f, description: e.target.value }))} className="min-h-[100px]" /></div>
             <div><Label>Requirements</Label><Textarea value={editForm.requirements || ""} onChange={e => setEditForm(f => ({ ...f, requirements: e.target.value }))} className="min-h-[80px]" /></div>
             <div><Label>Benefits</Label><Textarea value={editForm.benefits || ""} onChange={e => setEditForm(f => ({ ...f, benefits: e.target.value }))} className="min-h-[60px]" /></div>
-            <Button className="w-full" disabled={updateMutation.isPending} onClick={() => editJob && updateMutation.mutate({ id: editJob.id, ...editForm })} data-testid="button-save-edit-job">
+            <Button className="w-full" disabled={updateMutation.isPending} onClick={() => editJob && updateMutation.mutate({ id: editJob.id, ...editForm, expiresAt: editForm.expiresAt ? new Date(editForm.expiresAt).toISOString() : null })} data-testid="button-save-edit-job">
               {updateMutation.isPending ? "Saving..." : "Save Changes"}
             </Button>
           </div>
@@ -548,12 +553,15 @@ function PostJobTab({ userId }: { userId: number }) {
       description: "", requirements: "", benefits: "",
       locationCity: "", locationState: "", locationCountry: "USA",
       salary: "", applyUrl: "", isExternalApply: false,
+      expiresAt: "",
     },
   });
 
   const createMutation = useMutation({
-    mutationFn: (values: z.infer<typeof jobFormSchema>) =>
-      apiRequest("POST", "/api/jobs", { ...values, employerId: userId }),
+    mutationFn: (values: z.infer<typeof jobFormSchema>) => {
+      const payload = { ...values, employerId: userId, expiresAt: values.expiresAt ? new Date(values.expiresAt).toISOString() : null };
+      return apiRequest("POST", "/api/jobs", payload);
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/jobs"] });
       form.reset();
@@ -643,12 +651,20 @@ function PostJobTab({ userId }: { userId: number }) {
               )} />
             </div>
 
-            <FormField control={form.control} name="salary" render={({ field }) => (
-              <FormItem>
-                <FormLabel>Salary (optional)</FormLabel>
-                <FormControl><Input placeholder="$70,000 – $90,000" data-testid="input-job-salary" {...field} value={field.value ?? ""} /></FormControl>
-              </FormItem>
-            )} />
+            <div className="grid grid-cols-2 gap-4">
+              <FormField control={form.control} name="salary" render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Salary (optional)</FormLabel>
+                  <FormControl><Input placeholder="$70,000 – $90,000" data-testid="input-job-salary" {...field} value={field.value ?? ""} /></FormControl>
+                </FormItem>
+              )} />
+              <FormField control={form.control} name="expiresAt" render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Expiration Date (optional)</FormLabel>
+                  <FormControl><Input type="date" data-testid="input-job-expires" {...field} value={field.value ?? ""} /></FormControl>
+                </FormItem>
+              )} />
+            </div>
 
             <FormField control={form.control} name="description" render={({ field }) => (
               <FormItem>

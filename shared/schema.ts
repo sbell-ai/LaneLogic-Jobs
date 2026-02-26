@@ -44,6 +44,7 @@ export const jobs = pgTable("jobs", {
   salary: text("salary"),
   applyUrl: text("apply_url"),
   isExternalApply: boolean("is_external_apply").default(false),
+  expiresAt: timestamp("expires_at"),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
