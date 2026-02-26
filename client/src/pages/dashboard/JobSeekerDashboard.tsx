@@ -349,7 +349,6 @@ function SeekerProfileTab() {
                           Anonymous Job Seeker
                         </h3>
                       )}
-                      <Badge variant="outline" className="text-xs mt-1 capitalize">{user?.membershipTier} Member</Badge>
                     </div>
                   </div>
                   {showCurrentEmployer ? (
