@@ -1620,7 +1620,7 @@ function SitePagesTab() {
   const { data: saved, isLoading } = useQuery<SiteSettingsData>({ queryKey: ["/api/settings"] });
 
   const [draft, setDraft] = useState<Record<string, string>>({
-    heroSize: "default", heroBadge: "", heroHeading: "", heroSubtext: "",
+    heroSize: "default", heroBadge: "", heroHeading: "", heroSubtext: "", heroPopularSearches: "",
     feature1Title: "", feature1Description: "",
     feature2Title: "", feature2Description: "",
     feature3Title: "", feature3Description: "",
@@ -1637,6 +1637,7 @@ function SitePagesTab() {
         heroBadge: saved.heroBadge ?? "",
         heroHeading: saved.heroHeading ?? "",
         heroSubtext: saved.heroSubtext ?? "",
+        heroPopularSearches: saved.heroPopularSearches ?? "",
         feature1Title: saved.feature1Title ?? "",
         feature1Description: saved.feature1Description ?? "",
         feature2Title: saved.feature2Title ?? "",
@@ -1718,6 +1719,11 @@ function SitePagesTab() {
               <Label className="text-sm font-semibold mb-1 block">Subtext</Label>
               <p className="text-xs text-muted-foreground mb-2">Description text below the hero heading.</p>
               <Textarea value={draft.heroSubtext} onChange={e => update("heroSubtext", e.target.value)} placeholder="Connect with top employers in logistics..." className="min-h-[80px] resize-none" data-testid="textarea-hero-subtext" />
+            </div>
+            <div>
+              <Label className="text-sm font-semibold mb-1 block">Popular Searches</Label>
+              <p className="text-xs text-muted-foreground mb-2">Comma-separated list of quick search links shown below the search bar. Leave empty to hide this section and shrink the hero.</p>
+              <Input value={draft.heroPopularSearches} onChange={e => update("heroPopularSearches", e.target.value)} placeholder="CDL Driver, Logistics Manager, Dispatcher, Fleet Manager" data-testid="input-hero-popular-searches" />
             </div>
           </div>
         </div>

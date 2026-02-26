@@ -161,6 +161,7 @@ export interface SiteSettingsData {
   heroBadge: string;
   heroHeading: string;
   heroSubtext: string;
+  heroPopularSearches: string;
   feature1Title: string;
   feature1Description: string;
   feature2Title: string;
@@ -205,6 +206,7 @@ export const DEFAULT_SETTINGS: SiteSettingsData = {
   heroBadge: "#1 Transportation Job Board",
   heroHeading: "Drive Your Career Forward",
   heroSubtext: "Connect with top employers in logistics, freight, and transportation. Find roles that match your skills, from CDL drivers to supply chain directors.",
+  heroPopularSearches: "CDL Driver, Logistics Manager, Dispatcher, Fleet Manager",
   feature1Title: "10,000+ Active Jobs",
   feature1Description: "New opportunities added daily from leading transportation companies nationwide.",
   feature2Title: "Direct Employer Access",

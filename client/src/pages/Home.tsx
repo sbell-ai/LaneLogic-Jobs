@@ -108,13 +108,17 @@ export default function Home() {
                 </Button>
               </motion.form>
               
-              <div className="mt-8 flex flex-wrap justify-center gap-4 text-sm text-muted-foreground">
-                <span className="font-medium">Popular:</span>
-                <Link href="/jobs?q=CDL+Driver" className="hover:text-primary transition-colors">CDL Driver</Link>
-                <Link href="/jobs?q=Logistics+Manager" className="hover:text-primary transition-colors">Logistics Manager</Link>
-                <Link href="/jobs?q=Dispatcher" className="hover:text-primary transition-colors">Dispatcher</Link>
-                <Link href="/jobs?q=Fleet+Manager" className="hover:text-primary transition-colors">Fleet Manager</Link>
-              </div>
+              {(() => {
+                const searches = (settings.heroPopularSearches || "").split(",").map(s => s.trim()).filter(Boolean);
+                return searches.length > 0 ? (
+                  <div className="mt-8 flex flex-wrap justify-center gap-4 text-sm text-muted-foreground" data-testid="hero-popular-searches">
+                    <span className="font-medium">Popular:</span>
+                    {searches.map(term => (
+                      <Link key={term} href={`/jobs?q=${encodeURIComponent(term)}`} className="hover:text-primary transition-colors">{term}</Link>
+                    ))}
+                  </div>
+                ) : null;
+              })()}
             </div>
           </div>
         </section>
