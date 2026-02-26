@@ -1465,6 +1465,7 @@ function CategoriesTab() {
   const { data: categories, isLoading } = useQuery<Category[]>({ queryKey: ["/api/categories"] });
   const [newName, setNewName] = useState("");
   const [newType, setNewType] = useState<"job" | "industry" | "blog">("job");
+  const [csvUploading, setCsvUploading] = useState(false);
 
   const createMutation = useMutation({
     mutationFn: (data: { name: string; type: string }) => apiRequest("POST", "/api/categories", data),
@@ -1475,6 +1476,37 @@ function CategoriesTab() {
     },
     onError: () => toast({ title: "Error", description: "Could not add category.", variant: "destructive" }),
   });
+
+  const handleCsvUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setCsvUploading(true);
+    try {
+      const text = await file.text();
+      const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+      const existing = new Set((categories || []).map(c => `${c.type}:${c.name.toLowerCase()}`));
+      let added = 0;
+      let skipped = 0;
+      for (const line of lines) {
+        const parts = line.split(",").map(p => p.trim().replace(/^["']|["']$/g, ""));
+        if (parts.length < 2) continue;
+        const [name, type] = parts;
+        if (!name || !["job", "industry", "blog"].includes(type.toLowerCase())) continue;
+        const normalizedType = type.toLowerCase() as "job" | "industry" | "blog";
+        if (existing.has(`${normalizedType}:${name.toLowerCase()}`)) { skipped++; continue; }
+        existing.add(`${normalizedType}:${name.toLowerCase()}`);
+        await apiRequest("POST", "/api/categories", { name, type: normalizedType });
+        added++;
+      }
+      queryClient.invalidateQueries({ queryKey: ["/api/categories"] });
+      toast({ title: `Upload complete`, description: `${added} added, ${skipped} duplicates skipped.` });
+    } catch {
+      toast({ title: "Upload failed", variant: "destructive" });
+    } finally {
+      setCsvUploading(false);
+      e.target.value = "";
+    }
+  };
 
   const deleteMutation = useMutation({
     mutationFn: (id: number) => apiRequest("DELETE", `/api/categories/${id}`),
@@ -1530,9 +1562,21 @@ function CategoriesTab() {
 
   return (
     <div>
-      <div className="mb-6">
-        <h2 className="text-2xl font-bold font-display">Categories & Labels</h2>
-        <p className="text-muted-foreground text-sm mt-1">Manage categories for jobs, industries, and blog posts.</p>
+      <div className="flex flex-wrap items-end justify-between gap-4 mb-6">
+        <div>
+          <h2 className="text-2xl font-bold font-display">Categories & Labels</h2>
+          <p className="text-muted-foreground text-sm mt-1">Manage categories for jobs, industries, and blog posts.</p>
+        </div>
+        <div className="bg-white dark:bg-slate-900 rounded-xl border border-border p-4 flex flex-col gap-2 max-w-sm">
+          <p className="text-sm font-semibold">Bulk Upload via CSV</p>
+          <p className="text-xs text-muted-foreground">CSV format: <code className="bg-muted px-1 rounded">name,type</code> — one per line. Type must be <code className="bg-muted px-1 rounded">job</code>, <code className="bg-muted px-1 rounded">industry</code>, or <code className="bg-muted px-1 rounded">blog</code>. Duplicates are skipped.</p>
+          <label className="cursor-pointer">
+            <input type="file" accept=".csv,.txt" onChange={handleCsvUpload} className="hidden" data-testid="input-csv-categories" />
+            <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-lg border border-border hover:bg-accent transition-colors ${csvUploading ? "opacity-50 pointer-events-none" : ""}`}>
+              <Upload size={14} /> {csvUploading ? "Uploading..." : "Choose CSV File"}
+            </span>
+          </label>
+        </div>
       </div>
       <div className="space-y-6">
         {renderSection("Job Categories", "job", jobCats)}
