@@ -14,7 +14,9 @@ import { useToast } from "@/hooks/use-toast";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
-import { Briefcase, Plus, Trash2, Users, Upload, CreditCard, CheckCircle2, MapPin } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Briefcase, Plus, Trash2, Users, Upload, CreditCard, CheckCircle2, MapPin, Eye, Building2 } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ImageUpload } from "@/components/ui/image-upload";
 import type { Job, Application, Category } from "@shared/schema";
@@ -424,6 +426,9 @@ function CompanyProfileTab() {
   const [companyName, setCompanyName] = useState(user?.companyName || "");
   const [logo, setLogo] = useState(user?.companyLogo || "");
 
+  const { data: jobs } = useQuery<Job[]>({ queryKey: ["/api/jobs"] });
+  const myJobs = (jobs || []).filter((j) => j.employerId === user?.id);
+
   const saveMutation = useMutation({
     mutationFn: (data: { companyName: string; companyLogo: string }) =>
       apiRequest("PATCH", "/api/profile", data).then(r => r.json()),
@@ -458,7 +463,64 @@ function CompanyProfileTab() {
             data-testid="image-company-logo"
           />
         </div>
-        <div className="flex justify-end pt-2">
+        <div className="flex justify-end gap-3 pt-2">
+          <Dialog>
+            <DialogTrigger asChild>
+              <Button variant="outline" data-testid="button-view-employer-profile">
+                <Eye size={16} className="mr-2" /> View Profile
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-md">
+              <DialogHeader>
+                <DialogTitle className="font-display">Public Company Profile Preview</DialogTitle>
+              </DialogHeader>
+              <p className="text-xs text-muted-foreground mb-4">This is how job seekers see your company on the platform.</p>
+              <div className="bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-border p-6">
+                <div className="flex items-center gap-4 mb-5">
+                  <Avatar className="h-16 w-16 border-2 border-border rounded-xl">
+                    <AvatarImage src={logo} />
+                    <AvatarFallback className="bg-primary/10 text-primary text-lg rounded-xl">
+                      {companyName ? companyName[0]?.toUpperCase() : <Building2 size={24} />}
+                    </AvatarFallback>
+                  </Avatar>
+                  <div>
+                    <h3 className="font-bold font-display text-lg" data-testid="text-preview-company-name">
+                      {companyName || "No company name set"}
+                    </h3>
+                    <div className="flex items-center gap-2 mt-1">
+                      <CheckCircle2 size={14} className="text-primary" />
+                      <span className="text-xs text-muted-foreground">Verified Employer</span>
+                    </div>
+                  </div>
+                </div>
+                <div className="border-t border-border pt-4">
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground mb-2">
+                    <Briefcase size={14} />
+                    <span data-testid="text-preview-job-count">{myJobs.length} active job{myJobs.length !== 1 ? "s" : ""} posted</span>
+                  </div>
+                  {myJobs.length > 0 && (
+                    <div className="space-y-2 mt-3">
+                      {myJobs.slice(0, 3).map((job) => (
+                        <div key={job.id} className="text-sm bg-white dark:bg-slate-900 rounded-lg border border-border px-3 py-2">
+                          <p className="font-medium">{job.title}</p>
+                          {(job.locationCity || job.locationState) && (
+                            <p className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
+                              <MapPin size={10} /> {fmtLoc(job)}
+                            </p>
+                          )}
+                        </div>
+                      ))}
+                      {myJobs.length > 3 && (
+                        <p className="text-xs text-muted-foreground text-center pt-1">
+                          +{myJobs.length - 3} more listing{myJobs.length - 3 !== 1 ? "s" : ""}
+                        </p>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </DialogContent>
+          </Dialog>
           <Button
             onClick={() => saveMutation.mutate({ companyName, companyLogo: logo })}
             disabled={saveMutation.isPending}

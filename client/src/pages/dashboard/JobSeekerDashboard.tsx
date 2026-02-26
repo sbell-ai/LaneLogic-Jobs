@@ -12,7 +12,9 @@ import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { ImageUpload } from "@/components/ui/image-upload";
 import { Switch } from "@/components/ui/switch";
-import { FileText, Briefcase, CreditCard, Plus, CheckCircle2, Clock, XCircle, AlertCircle, Eye, EyeOff } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { FileText, Briefcase, CreditCard, Plus, CheckCircle2, Clock, XCircle, AlertCircle, Eye, EyeOff, User } from "lucide-react";
 import type { Application, Resume } from "@shared/schema";
 import { Link } from "wouter";
 import { formatDistanceToNow } from "date-fns";
@@ -310,7 +312,61 @@ function SeekerProfileTab() {
           </div>
         </div>
 
-        <div className="flex justify-end pt-2">
+        <div className="flex justify-end gap-3 pt-2">
+          <Dialog>
+            <DialogTrigger asChild>
+              <Button variant="outline" data-testid="button-view-profile">
+                <Eye size={16} className="mr-2" /> View Profile
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-md">
+              <DialogHeader>
+                <DialogTitle className="font-display">Public Profile Preview</DialogTitle>
+              </DialogHeader>
+              <p className="text-xs text-muted-foreground mb-4">This is how employers and other users see your profile.</p>
+              {!showProfile ? (
+                <div className="text-center py-10 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-dashed border-border">
+                  <EyeOff className="mx-auto mb-3 text-muted-foreground" size={32} />
+                  <p className="font-semibold text-sm">Profile Hidden</p>
+                  <p className="text-xs text-muted-foreground mt-1">Your profile is not visible to others.</p>
+                </div>
+              ) : (
+                <div className="bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-border p-6">
+                  <div className="flex items-center gap-4 mb-4">
+                    <Avatar className="h-16 w-16 border-2 border-border">
+                      <AvatarImage src={profileImage} />
+                      <AvatarFallback className="bg-primary/10 text-primary text-lg">
+                        {showName && firstName ? firstName[0]?.toUpperCase() : <User size={24} />}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div>
+                      {showName ? (
+                        <h3 className="font-bold font-display text-lg" data-testid="text-preview-name">
+                          {firstName || lastName ? `${firstName} ${lastName}`.trim() : "No name set"}
+                        </h3>
+                      ) : (
+                        <h3 className="font-bold font-display text-lg text-muted-foreground italic" data-testid="text-preview-name">
+                          Anonymous Job Seeker
+                        </h3>
+                      )}
+                      <Badge variant="outline" className="text-xs mt-1 capitalize">{user?.membershipTier} Member</Badge>
+                    </div>
+                  </div>
+                  {showCurrentEmployer ? (
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground" data-testid="text-preview-employer">
+                      <Briefcase size={14} />
+                      <span>{user?.companyName || "No current employer listed"}</span>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground italic" data-testid="text-preview-employer">
+                      <Briefcase size={14} />
+                      <span>Current employer hidden</span>
+                    </div>
+                  )}
+                </div>
+              )}
+            </DialogContent>
+          </Dialog>
           <Button
             onClick={() => saveMutation.mutate({ firstName, lastName, profileImage, showProfile, showName, showCurrentEmployer })}
             disabled={saveMutation.isPending}
