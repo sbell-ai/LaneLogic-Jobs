@@ -135,6 +135,7 @@ export interface SiteSettingsData {
   headingFont: string;
   bodyFont: string;
   logoBase64: string | null;
+  logoSize: "small" | "medium" | "large";
   siteName: string;
   siteTitle: string;
   siteDescription: string;
@@ -171,6 +172,7 @@ export const DEFAULT_SETTINGS: SiteSettingsData = {
   headingFont: "Plus Jakarta Sans",
   bodyFont: "Inter",
   logoBase64: null,
+  logoSize: "medium",
   siteName: "TranspoJobs",
   siteTitle: "TranspoJobs – Transportation & Logistics Jobs",
   siteDescription: "Find the best transportation, trucking, and logistics jobs. Browse thousands of CDL and freight roles across the country.",

@@ -12,7 +12,11 @@ export function Footer() {
           <div className="col-span-1 md:col-span-1">
             <Link href="/" className="flex items-center gap-2 mb-4 group">
               {settings.logoBase64 ? (
-                <img src={settings.logoBase64} alt={settings.siteName} className="h-8 object-contain" />
+                <img src={settings.logoBase64} alt={settings.siteName} className={`object-contain ${
+                  settings.logoSize === "small" ? "h-7" :
+                  settings.logoSize === "large" ? "h-12" :
+                  "h-9"
+                }`} />
               ) : (
                 <>
                   <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center text-white">

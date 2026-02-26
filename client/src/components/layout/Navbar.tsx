@@ -37,7 +37,11 @@ export function Navbar() {
         <div className="container mx-auto px-4 md:px-6 h-16 flex items-center justify-between">
           <Link href="/" className="flex items-center gap-2 group">
             {settings.logoBase64 ? (
-              <img src={settings.logoBase64} alt={settings.siteName} className="h-9 object-contain" />
+              <img src={settings.logoBase64} alt={settings.siteName} className={`object-contain ${
+                settings.logoSize === "small" ? "h-8" :
+                settings.logoSize === "large" ? "h-14" :
+                "h-10"
+              }`} />
             ) : (
               <>
                 <div className="w-10 h-10 rounded-xl bg-primary flex items-center justify-center text-primary-foreground group-hover:scale-105 transition-transform duration-200">
