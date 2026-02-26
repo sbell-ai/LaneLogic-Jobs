@@ -647,7 +647,7 @@ export async function registerRoutes(
     }
     try {
       const userId = (req.user as any).id;
-      const allowed = ["firstName", "lastName", "companyName", "profileImage", "companyLogo", "showProfile", "showName", "showCurrentEmployer"];
+      const allowed = ["firstName", "lastName", "companyName", "companyAddress", "contactName", "contactEmail", "contactPhone", "aboutCompany", "profileImage", "companyLogo", "showProfile", "showName", "showCurrentEmployer"];
       const updates: Record<string, any> = {};
       for (const key of allowed) {
         if (key in req.body) updates[key] = req.body[key];

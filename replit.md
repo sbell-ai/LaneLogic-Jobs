@@ -92,7 +92,7 @@ shared/
 - `isExternalApply`, `applyUrl`
 
 ## Database Tables
-- `users` - User accounts with role (admin/employer/job_seeker) and membershipTier (free/basic/premium)
+- `users` - User accounts with role (admin/employer/job_seeker), membershipTier (free/basic/premium), employer profile fields (companyAddress, contactName, contactEmail, contactPhone, aboutCompany)
 - `jobs` - Job listings with category, industry, jobType fields
 - `applications` - Job applications linking seekers to jobs
 - `resources` - Member resource library with targetAudience and requiredTier gating

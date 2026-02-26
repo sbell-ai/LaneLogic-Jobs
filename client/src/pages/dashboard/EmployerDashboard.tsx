@@ -16,7 +16,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Briefcase, Plus, Trash2, Users, Upload, CreditCard, CheckCircle2, MapPin, Eye, Building2 } from "lucide-react";
+import { Briefcase, Plus, Trash2, Users, Upload, CreditCard, CheckCircle2, MapPin, Eye, Building2, Phone, Mail, User } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ImageUpload } from "@/components/ui/image-upload";
 import type { Job, Application, Category } from "@shared/schema";
@@ -424,13 +424,18 @@ function CompanyProfileTab() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [companyName, setCompanyName] = useState(user?.companyName || "");
+  const [companyAddress, setCompanyAddress] = useState(user?.companyAddress || "");
+  const [contactName, setContactName] = useState(user?.contactName || "");
+  const [contactEmail, setContactEmail] = useState(user?.contactEmail || "");
+  const [contactPhone, setContactPhone] = useState(user?.contactPhone || "");
+  const [aboutCompany, setAboutCompany] = useState(user?.aboutCompany || "");
   const [logo, setLogo] = useState(user?.companyLogo || "");
 
   const { data: jobs } = useQuery<Job[]>({ queryKey: ["/api/jobs"] });
   const myJobs = (jobs || []).filter((j) => j.employerId === user?.id);
 
   const saveMutation = useMutation({
-    mutationFn: (data: { companyName: string; companyLogo: string }) =>
+    mutationFn: (data: Record<string, string>) =>
       apiRequest("PATCH", "/api/profile", data).then(r => r.json()),
     onSuccess: (data: any) => {
       queryClient.setQueryData(["/api/me"], data);
@@ -450,6 +455,56 @@ function CompanyProfileTab() {
             onChange={e => setCompanyName(e.target.value)}
             placeholder="Your company name"
             data-testid="input-company-name"
+          />
+        </div>
+        <div>
+          <Label className="text-sm font-semibold mb-1 block">Company Address</Label>
+          <Input
+            value={companyAddress}
+            onChange={e => setCompanyAddress(e.target.value)}
+            placeholder="123 Main St, City, State ZIP"
+            data-testid="input-company-address"
+          />
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <Label className="text-sm font-semibold mb-1 block">Contact Name</Label>
+            <Input
+              value={contactName}
+              onChange={e => setContactName(e.target.value)}
+              placeholder="Full name of primary contact"
+              data-testid="input-contact-name"
+            />
+          </div>
+          <div>
+            <Label className="text-sm font-semibold mb-1 block">Contact Email Address</Label>
+            <Input
+              type="email"
+              value={contactEmail}
+              onChange={e => setContactEmail(e.target.value)}
+              placeholder="contact@company.com"
+              data-testid="input-contact-email"
+            />
+          </div>
+        </div>
+        <div>
+          <Label className="text-sm font-semibold mb-1 block">Contact Phone Number</Label>
+          <Input
+            type="tel"
+            value={contactPhone}
+            onChange={e => setContactPhone(e.target.value)}
+            placeholder="(555) 123-4567"
+            data-testid="input-contact-phone"
+          />
+        </div>
+        <div>
+          <Label className="text-sm font-semibold mb-1 block">About Company</Label>
+          <Textarea
+            value={aboutCompany}
+            onChange={e => setAboutCompany(e.target.value)}
+            placeholder="Tell job seekers about your company, mission, and culture..."
+            rows={4}
+            data-testid="input-about-company"
           />
         </div>
         <div>
@@ -493,6 +548,39 @@ function CompanyProfileTab() {
                     </div>
                   </div>
                 </div>
+                {(companyAddress || contactName || contactEmail || contactPhone) && (
+                  <div className="border-t border-border pt-4 mb-4 space-y-2">
+                    {companyAddress && (
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                        <MapPin size={14} />
+                        <span data-testid="text-preview-company-address">{companyAddress}</span>
+                      </div>
+                    )}
+                    {contactName && (
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                        <User size={14} />
+                        <span data-testid="text-preview-contact-name">{contactName}</span>
+                      </div>
+                    )}
+                    {contactEmail && (
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                        <Mail size={14} />
+                        <span data-testid="text-preview-contact-email">{contactEmail}</span>
+                      </div>
+                    )}
+                    {contactPhone && (
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                        <Phone size={14} />
+                        <span data-testid="text-preview-contact-phone">{contactPhone}</span>
+                      </div>
+                    )}
+                  </div>
+                )}
+                {aboutCompany && (
+                  <div className="border-t border-border pt-4 mb-4">
+                    <p className="text-sm text-muted-foreground whitespace-pre-wrap" data-testid="text-preview-about-company">{aboutCompany}</p>
+                  </div>
+                )}
                 <div className="border-t border-border pt-4">
                   <div className="flex items-center gap-2 text-sm text-muted-foreground mb-2">
                     <Briefcase size={14} />
@@ -522,7 +610,7 @@ function CompanyProfileTab() {
             </DialogContent>
           </Dialog>
           <Button
-            onClick={() => saveMutation.mutate({ companyName, companyLogo: logo })}
+            onClick={() => saveMutation.mutate({ companyName, companyAddress, contactName, contactEmail, contactPhone, aboutCompany, companyLogo: logo })}
             disabled={saveMutation.isPending}
             data-testid="button-save-company-profile"
           >
