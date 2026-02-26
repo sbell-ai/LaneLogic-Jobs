@@ -35,6 +35,7 @@ export default function Jobs() {
 
   const jobCategories = (categories || []).filter((c) => c.type === "job");
   const industries = (categories || []).filter((c) => c.type === "industry");
+  const availableJobTypes = [...new Set((jobs || []).map(j => j.jobType).filter(Boolean))] as string[];
 
   const filtered = (jobs || []).filter((job) => {
     const matchQuery =
@@ -85,13 +86,19 @@ export default function Jobs() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All Types</SelectItem>
-                  <SelectItem value="Full-time">Full-time</SelectItem>
-                  <SelectItem value="Part-time">Part-time</SelectItem>
-                  <SelectItem value="Contract">Contract</SelectItem>
-                  <SelectItem value="Seasonal">Seasonal</SelectItem>
-                  <SelectItem value="Owner-Operator">Owner-Operator</SelectItem>
-                  <SelectItem value="Lease Purchase">Lease Purchase</SelectItem>
-                  <SelectItem value="Temporary">Temporary</SelectItem>
+                  {availableJobTypes.length > 0 ? (
+                    availableJobTypes.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)
+                  ) : (
+                    <>
+                      <SelectItem value="Full-time">Full-time</SelectItem>
+                      <SelectItem value="Part-time">Part-time</SelectItem>
+                      <SelectItem value="Contract">Contract</SelectItem>
+                      <SelectItem value="Seasonal">Seasonal</SelectItem>
+                      <SelectItem value="Owner-Operator">Owner-Operator</SelectItem>
+                      <SelectItem value="Lease Purchase">Lease Purchase</SelectItem>
+                      <SelectItem value="Temporary">Temporary</SelectItem>
+                    </>
+                  )}
                 </SelectContent>
               </Select>
               <Select value={categoryFilter} onValueChange={setCategoryFilter}>
