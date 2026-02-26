@@ -180,7 +180,7 @@ export default function Home() {
                             {job.salary}
                           </span>
                         )}
-                        {(job.expiresAt || (job.createdAt && (Date.now() - new Date(job.createdAt).getTime()) > 21 * 24 * 60 * 60 * 1000)) && (
+                        {job.expiresAt && (
                           <span className="ml-auto px-2 py-0.5 bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300 text-[10px] font-semibold rounded-full whitespace-nowrap" data-testid={`badge-actively-interviewing-${job.id}`}>
                             Actively Interviewing: Apply Soon
                           </span>

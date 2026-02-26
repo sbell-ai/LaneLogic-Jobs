@@ -196,7 +196,7 @@ export default function Jobs() {
                                 <Clock size={14} />
                                 {job.createdAt ? formatDistanceToNow(new Date(job.createdAt), { addSuffix: true }) : "Recently"}
                               </span>
-                              {(job.expiresAt || (job.createdAt && (Date.now() - new Date(job.createdAt).getTime()) > 21 * 24 * 60 * 60 * 1000)) && (
+                              {job.expiresAt && (
                                 <Badge className="bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800 text-[10px] font-semibold hover:bg-amber-100" data-testid={`badge-actively-interviewing-${job.id}`}>
                                   Actively Interviewing: Apply Soon
                                 </Badge>
