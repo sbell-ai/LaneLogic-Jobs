@@ -172,6 +172,8 @@ export interface SiteSettingsData {
   ctaSubtext: string;
   ctaBackgroundImage: string;
   heroSize: "compact" | "default" | "large";
+  heroBgColor: string;
+  heroBorderColor: string;
 }
 
 export const DEFAULT_SETTINGS: SiteSettingsData = {
@@ -217,6 +219,8 @@ export const DEFAULT_SETTINGS: SiteSettingsData = {
   ctaSubtext: "Join thousands of employers who trust us to fill their open logistics, driving, and management positions faster.",
   ctaBackgroundImage: "https://images.unsplash.com/photo-1601584115197-04ecc0da31d7?w=1920&h=1080&fit=crop",
   heroSize: "default",
+  heroBgColor: "",
+  heroBorderColor: "",
 };
 
 export const siteSettings = pgTable("site_settings", {

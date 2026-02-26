@@ -31,19 +31,25 @@ export default function Home() {
       
       <main className="flex-grow">
         {/* HERO SECTION */}
-        <section className={`relative overflow-hidden bg-slate-50 dark:bg-slate-950 ${
-          (() => {
-            const hasHeading = !!settings.heroHeading?.trim();
-            const hasSubtext = !!settings.heroSubtext?.trim();
-            const hasBadge = !!settings.heroBadge?.trim();
-            const contentCount = [hasHeading, hasSubtext, hasBadge].filter(Boolean).length;
-            if (contentCount === 0) return "pt-8 pb-10";
-            if (settings.heroSize === "compact") return "pt-10 pb-14";
-            if (settings.heroSize === "large") return "pt-28 pb-40";
-            if (contentCount <= 1) return "pt-12 pb-16";
-            return "pt-20 pb-32";
-          })()
-        }`}>
+        <section
+          className={`relative overflow-hidden ${!settings.heroBgColor ? 'bg-slate-50 dark:bg-slate-950' : ''} ${
+            (() => {
+              const hasHeading = !!settings.heroHeading?.trim();
+              const hasSubtext = !!settings.heroSubtext?.trim();
+              const hasBadge = !!settings.heroBadge?.trim();
+              const contentCount = [hasHeading, hasSubtext, hasBadge].filter(Boolean).length;
+              if (contentCount === 0) return "pt-8 pb-10";
+              if (settings.heroSize === "compact") return "pt-10 pb-14";
+              if (settings.heroSize === "large") return "pt-28 pb-40";
+              if (contentCount <= 1) return "pt-12 pb-16";
+              return "pt-20 pb-32";
+            })()
+          }`}
+          style={{
+            ...(settings.heroBgColor ? { backgroundColor: settings.heroBgColor } : {}),
+            ...(settings.heroBorderColor ? { borderBottom: `2px solid ${settings.heroBorderColor}` } : {}),
+          }}
+        >
           <div className="absolute inset-0 z-0 opacity-[0.03] dark:opacity-[0.08]" 
                style={{ backgroundImage: 'radial-gradient(#1d4ed8 1px, transparent 1px)', backgroundSize: '32px 32px' }}>
           </div>

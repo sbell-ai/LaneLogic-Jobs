@@ -1620,7 +1620,7 @@ function SitePagesTab() {
   const { data: saved, isLoading } = useQuery<SiteSettingsData>({ queryKey: ["/api/settings"] });
 
   const [draft, setDraft] = useState<Record<string, string>>({
-    heroSize: "default", heroBadge: "", heroHeading: "", heroSubtext: "", heroPopularSearches: "",
+    heroSize: "default", heroBadge: "", heroHeading: "", heroSubtext: "", heroPopularSearches: "", heroBgColor: "", heroBorderColor: "",
     feature1Title: "", feature1Description: "",
     feature2Title: "", feature2Description: "",
     feature3Title: "", feature3Description: "",
@@ -1638,6 +1638,8 @@ function SitePagesTab() {
         heroHeading: saved.heroHeading ?? "",
         heroSubtext: saved.heroSubtext ?? "",
         heroPopularSearches: saved.heroPopularSearches ?? "",
+        heroBgColor: saved.heroBgColor ?? "",
+        heroBorderColor: saved.heroBorderColor ?? "",
         feature1Title: saved.feature1Title ?? "",
         feature1Description: saved.feature1Description ?? "",
         feature2Title: saved.feature2Title ?? "",
@@ -1724,6 +1726,26 @@ function SitePagesTab() {
               <Label className="text-sm font-semibold mb-1 block">Popular Searches</Label>
               <p className="text-xs text-muted-foreground mb-2">Comma-separated list of quick search links shown below the search bar. Leave empty to hide this section and shrink the hero.</p>
               <Input value={draft.heroPopularSearches} onChange={e => update("heroPopularSearches", e.target.value)} placeholder="CDL Driver, Logistics Manager, Dispatcher, Fleet Manager" data-testid="input-hero-popular-searches" />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label className="text-sm font-semibold mb-1 block">Background Color</Label>
+                <p className="text-xs text-muted-foreground mb-2">Leave empty for default theme color.</p>
+                <div className="flex items-center gap-2">
+                  <input type="color" value={draft.heroBgColor || "#f8fafc"} onChange={e => update("heroBgColor", e.target.value)} className="w-10 h-10 rounded-lg border border-border cursor-pointer" data-testid="input-hero-bg-color" />
+                  <Input value={draft.heroBgColor} onChange={e => update("heroBgColor", e.target.value)} placeholder="#f8fafc" className="flex-1" data-testid="input-hero-bg-color-text" />
+                  {draft.heroBgColor && <Button variant="ghost" size="sm" onClick={() => update("heroBgColor", "")} className="text-xs px-2">Reset</Button>}
+                </div>
+              </div>
+              <div>
+                <Label className="text-sm font-semibold mb-1 block">Bottom Border Color</Label>
+                <p className="text-xs text-muted-foreground mb-2">Leave empty for no border.</p>
+                <div className="flex items-center gap-2">
+                  <input type="color" value={draft.heroBorderColor || "#e2e8f0"} onChange={e => update("heroBorderColor", e.target.value)} className="w-10 h-10 rounded-lg border border-border cursor-pointer" data-testid="input-hero-border-color" />
+                  <Input value={draft.heroBorderColor} onChange={e => update("heroBorderColor", e.target.value)} placeholder="#e2e8f0" className="flex-1" data-testid="input-hero-border-color-text" />
+                  {draft.heroBorderColor && <Button variant="ghost" size="sm" onClick={() => update("heroBorderColor", "")} className="text-xs px-2">Reset</Button>}
+                </div>
+              </div>
             </div>
           </div>
         </div>
