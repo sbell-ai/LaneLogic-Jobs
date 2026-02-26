@@ -109,7 +109,7 @@ shared/
 - Membership gating on resource library (separate employer/seeker tabs)
 - Blog with admin publishing and categories
 - Role-based dashboard routing
-- Design settings: brand colors, fonts, logo, announcements, footer copy (live CSS variable injection)
+- Design settings: brand colors, fonts, logo (with size control: small/medium/large/x-large), announcements, footer background color, footer copy, social media links (X/LinkedIn/Facebook/Instagram/YouTube/TikTok) (live CSS variable injection)
 - Admin Site Pages editor: customize login/signup page text, testimonials, background images
 - Categories & Labels system: job categories, industries, blog categories (admin CRUD)
 - Coupon code system: create/edit/delete coupons with percent/fixed discount, max uses, expiry, tier targeting

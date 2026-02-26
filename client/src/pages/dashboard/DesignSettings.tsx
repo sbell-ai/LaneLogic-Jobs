@@ -421,6 +421,29 @@ export default function DesignSettings() {
             </div>
 
             <div>
+              <Label className="text-sm font-semibold mb-3 block">Footer Background Color</Label>
+              <p className="text-xs text-muted-foreground mb-3">The background color of the site footer.</p>
+              <div className="flex items-center gap-3">
+                <ColorSwatch color={draft.footerBgColor || "#020617"} />
+                <div className="flex items-center gap-2 border border-border rounded-lg px-3 py-2 flex-1">
+                  <input
+                    type="color"
+                    value={draft.footerBgColor || "#020617"}
+                    onChange={e => update("footerBgColor", e.target.value)}
+                    className="w-8 h-8 rounded cursor-pointer border-0 bg-transparent"
+                    data-testid="input-footer-bg-color"
+                  />
+                  <Input
+                    value={draft.footerBgColor || "#020617"}
+                    onChange={e => update("footerBgColor", e.target.value)}
+                    className="border-0 shadow-none p-0 h-auto font-mono text-sm focus-visible:ring-0"
+                    data-testid="input-footer-bg-color-hex"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div>
               <Label className="text-sm font-semibold mb-1 block">Footer Tagline</Label>
               <p className="text-xs text-muted-foreground mb-2">The description paragraph shown in the footer's brand column.</p>
               <Textarea
@@ -441,6 +464,32 @@ export default function DesignSettings() {
                 placeholder="© TranspoJobs. All rights reserved."
                 data-testid="input-footer-copyright"
               />
+            </div>
+
+            <div>
+              <Label className="text-sm font-semibold mb-3 block">Social Media Links</Label>
+              <p className="text-xs text-muted-foreground mb-3">Add URLs for your social media profiles. Only filled-in links will show icons in the footer.</p>
+              <div className="space-y-3">
+                {[
+                  { key: "socialTwitter" as const, label: "X / Twitter", placeholder: "https://x.com/yourcompany" },
+                  { key: "socialLinkedin" as const, label: "LinkedIn", placeholder: "https://linkedin.com/company/yourcompany" },
+                  { key: "socialFacebook" as const, label: "Facebook", placeholder: "https://facebook.com/yourcompany" },
+                  { key: "socialInstagram" as const, label: "Instagram", placeholder: "https://instagram.com/yourcompany" },
+                  { key: "socialYoutube" as const, label: "YouTube", placeholder: "https://youtube.com/@yourcompany" },
+                  { key: "socialTiktok" as const, label: "TikTok", placeholder: "https://tiktok.com/@yourcompany" },
+                ].map(({ key, label, placeholder }) => (
+                  <div key={key} className="flex items-center gap-2">
+                    <span className="text-xs font-medium text-muted-foreground w-20 shrink-0">{label}</span>
+                    <Input
+                      value={draft[key] || ""}
+                      onChange={e => update(key, e.target.value)}
+                      placeholder={placeholder}
+                      className="flex-1"
+                      data-testid={`input-${key}`}
+                    />
+                  </div>
+                ))}
+              </div>
             </div>
           </Section>
 

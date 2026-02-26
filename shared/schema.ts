@@ -141,8 +141,15 @@ export interface SiteSettingsData {
   siteDescription: string;
   headerAnnouncement: string;
   headerAnnouncementLink: string;
+  footerBgColor: string;
   footerTagline: string;
   footerCopyright: string;
+  socialTwitter: string;
+  socialLinkedin: string;
+  socialFacebook: string;
+  socialInstagram: string;
+  socialYoutube: string;
+  socialTiktok: string;
   loginHeading: string;
   loginSubtitle: string;
   loginTestimonial: string;
@@ -178,8 +185,15 @@ export const DEFAULT_SETTINGS: SiteSettingsData = {
   siteDescription: "Find the best transportation, trucking, and logistics jobs. Browse thousands of CDL and freight roles across the country.",
   headerAnnouncement: "",
   headerAnnouncementLink: "",
+  footerBgColor: "#020617",
   footerTagline: "The premier destination for transportation and logistics professionals to advance their careers.",
   footerCopyright: "© TranspoJobs. All rights reserved.",
+  socialTwitter: "",
+  socialLinkedin: "",
+  socialFacebook: "",
+  socialInstagram: "",
+  socialYoutube: "",
+  socialTiktok: "",
   loginHeading: "Welcome back",
   loginSubtitle: "Log in to your account to continue",
   loginTestimonial: "TranspoJobs helped us find qualified CDL drivers within a week of posting. The quality of candidates is outstanding.",
