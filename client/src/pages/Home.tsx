@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Navbar } from "@/components/layout/Navbar";
 import { Footer } from "@/components/layout/Footer";
-import { Search, MapPin, Briefcase, ArrowRight, ShieldCheck, Zap, Users } from "lucide-react";
+import { Search, MapPin, Briefcase, ArrowRight, ShieldCheck, Users, ChevronDown } from "lucide-react";
 import { useState } from "react";
 import { motion } from "framer-motion";
 import { useJobs } from "@/hooks/use-jobs";
@@ -13,6 +13,7 @@ export default function Home() {
   const [, setLocation] = useLocation();
   const [searchQuery, setSearchQuery] = useState("");
   const [locationQuery, setLocationQuery] = useState("");
+  const [visibleJobCount, setVisibleJobCount] = useState(12);
   const settings = useSiteSettings();
   const { data: jobs, isLoading } = useJobs();
 
@@ -23,8 +24,6 @@ export default function Home() {
     if (locationQuery) params.set("loc", locationQuery);
     setLocation(`/jobs?${params.toString()}`);
   };
-
-  const featuredJobs = jobs?.slice(0, 3) || [];
 
   return (
     <div className="min-h-screen flex flex-col font-sans">
@@ -123,6 +122,87 @@ export default function Home() {
           </div>
         </section>
 
+        {/* ALL JOBS SECTION */}
+        <section className="py-16 bg-white dark:bg-slate-900">
+          <div className="container mx-auto px-4 md:px-6">
+            <div className="flex justify-between items-end mb-10">
+              <div>
+                <h2 className="text-3xl md:text-4xl font-bold font-display tracking-tight text-foreground mb-2" data-testid="text-all-jobs-heading">All Jobs</h2>
+                <p className="text-muted-foreground text-lg">Browse the latest openings in transportation and logistics.</p>
+              </div>
+              <Button asChild variant="ghost" className="hidden md:flex hover-elevate">
+                <Link href="/jobs" className="group">
+                  View all <ArrowRight className="ml-2 w-4 h-4 group-hover:translate-x-1 transition-transform" />
+                </Link>
+              </Button>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+              {isLoading ? (
+                Array.from({ length: 12 }).map((_, i) => (
+                  <div key={i} className="bg-card rounded-2xl p-5 border border-border h-48 animate-pulse" />
+                ))
+              ) : (jobs && jobs.length > 0) ? (
+                jobs.slice(0, visibleJobCount).map(job => (
+                  <Link key={job.id} href={`/jobs/${job.id}`} data-testid={`card-job-${job.id}`}>
+                    <div className="bg-card rounded-2xl p-5 border border-border shadow-sm hover:shadow-lg hover:border-primary/40 transition-all duration-300 h-full flex flex-col group cursor-pointer">
+                      <div className="flex items-start justify-between mb-3">
+                        <div className="w-10 h-10 rounded-xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-lg font-bold text-slate-400 shrink-0">
+                          {job.title.charAt(0)}
+                        </div>
+                        {job.jobType && (
+                          <span className="px-2.5 py-0.5 bg-primary/10 text-primary text-xs font-semibold rounded-full">
+                            {job.jobType}
+                          </span>
+                        )}
+                      </div>
+                      <h3 className="text-base font-bold font-display mb-1 group-hover:text-primary transition-colors line-clamp-1" data-testid={`text-job-title-${job.id}`}>{job.title}</h3>
+                      {job.companyName && (
+                        <p className="text-sm text-muted-foreground mb-2">{job.companyName}</p>
+                      )}
+                      <div className="flex items-center text-muted-foreground text-xs mb-3">
+                        <MapPin size={14} className="mr-1 shrink-0" />
+                        <span className="line-clamp-1">{[job.locationCity, job.locationState].filter(Boolean).join(", ") || "Remote / TBD"}</span>
+                      </div>
+                      {job.salary && (
+                        <span className="text-sm font-semibold text-green-600 dark:text-green-400 mt-auto" data-testid={`text-job-salary-${job.id}`}>
+                          {job.salary}
+                        </span>
+                      )}
+                    </div>
+                  </Link>
+                ))
+              ) : (
+                <div className="col-span-full text-center py-12 bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-dashed border-border">
+                  <Briefcase className="mx-auto mb-3 text-muted-foreground" size={32} />
+                  <p className="text-muted-foreground">No jobs posted yet. Check back soon!</p>
+                </div>
+              )}
+            </div>
+
+            {!isLoading && jobs && jobs.length > visibleJobCount && (
+              <div className="mt-8 text-center">
+                <Button
+                  variant="outline"
+                  size="lg"
+                  className="gap-2 rounded-xl hover-elevate"
+                  onClick={() => setVisibleJobCount(prev => prev + 12)}
+                  data-testid="button-show-more-jobs"
+                >
+                  <ChevronDown size={18} />
+                  Show More Jobs
+                </Button>
+              </div>
+            )}
+
+            <div className="mt-8 text-center md:hidden">
+              <Button asChild variant="outline" className="w-full">
+                <Link href="/jobs">View all jobs</Link>
+              </Button>
+            </div>
+          </div>
+        </section>
+
         {/* STATS/FEATURES SECTION */}
         {(() => {
           const features = [
@@ -149,69 +229,6 @@ export default function Home() {
           ) : null;
         })()}
 
-        {/* FEATURED JOBS SECTION */}
-        <section className="py-24 bg-slate-50 dark:bg-slate-950">
-          <div className="container mx-auto px-4 md:px-6">
-            <div className="flex justify-between items-end mb-12">
-              <div>
-                <h2 className="text-3xl md:text-4xl font-bold font-display tracking-tight text-foreground mb-4">Featured Opportunities</h2>
-                <p className="text-muted-foreground text-lg">Top roles curated for you.</p>
-              </div>
-              <Button asChild variant="ghost" className="hidden md:flex hover-elevate">
-                <Link href="/jobs" className="group">
-                  View all jobs <ArrowRight className="ml-2 w-4 h-4 group-hover:translate-x-1 transition-transform" />
-                </Link>
-              </Button>
-            </div>
-
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              {isLoading ? (
-                Array.from({ length: 3 }).map((_, i) => (
-                  <div key={i} className="bg-card rounded-2xl p-6 border border-border h-64 animate-pulse"></div>
-                ))
-              ) : featuredJobs.length > 0 ? (
-                featuredJobs.map(job => (
-                  <Link key={job.id} href={`/jobs/${job.id}`}>
-                    <div className="bg-card rounded-2xl p-6 border border-border shadow-sm hover:shadow-xl hover:border-primary/50 transition-all duration-300 h-full flex flex-col group cursor-pointer">
-                      <div className="flex justify-between items-start mb-4">
-                        <div className="w-12 h-12 rounded-xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-xl font-bold text-slate-400">
-                          {job.title.charAt(0)}
-                        </div>
-                        {job.salary && (
-                          <span className="px-3 py-1 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 text-xs font-semibold rounded-full">
-                            {job.salary}
-                          </span>
-                        )}
-                      </div>
-                      <h3 className="text-xl font-bold font-display mb-2 group-hover:text-primary transition-colors">{job.title}</h3>
-                      <div className="flex items-center text-muted-foreground text-sm mb-4">
-                        <MapPin size={16} className="mr-1" />
-                        {[job.locationCity, job.locationState, job.locationCountry].filter(Boolean).join(", ") || "Location TBD"}
-                      </div>
-                      <p className="text-muted-foreground text-sm line-clamp-3 mb-6 flex-grow">
-                        {job.description}
-                      </p>
-                      <div className="pt-4 border-t border-border mt-auto flex items-center justify-between">
-                        <span className="text-sm text-muted-foreground">Posted recently</span>
-                        <span className="text-primary font-medium text-sm group-hover:underline">Apply Now</span>
-                      </div>
-                    </div>
-                  </Link>
-                ))
-              ) : (
-                <div className="col-span-full text-center py-12 bg-white dark:bg-slate-900 rounded-2xl border border-dashed border-border">
-                  <p className="text-muted-foreground">No jobs posted yet. Check back soon!</p>
-                </div>
-              )}
-            </div>
-            
-            <div className="mt-8 text-center md:hidden">
-              <Button asChild variant="outline" className="w-full">
-                <Link href="/jobs">View all jobs</Link>
-              </Button>
-            </div>
-          </div>
-        </section>
         
         {/* CTA SECTION */}
         <section className="py-24 relative overflow-hidden">
