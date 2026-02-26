@@ -319,9 +319,10 @@ export default function DesignSettings() {
                     <Select value={draft.logoSize || "medium"} onValueChange={v => update("logoSize", v)}>
                       <SelectTrigger data-testid="select-logo-size"><SelectValue /></SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="small">Small (32px)</SelectItem>
-                        <SelectItem value="medium">Medium (40px)</SelectItem>
-                        <SelectItem value="large">Large (56px)</SelectItem>
+                        <SelectItem value="small">Small (40px)</SelectItem>
+                        <SelectItem value="medium">Medium (56px)</SelectItem>
+                        <SelectItem value="large">Large (80px)</SelectItem>
+                        <SelectItem value="x-large">Extra Large (96px)</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
@@ -329,9 +330,10 @@ export default function DesignSettings() {
                     <p className="text-xs text-muted-foreground mb-2 font-semibold uppercase tracking-wider">Navbar Preview</p>
                     <div className="flex items-center gap-3 p-3 bg-white dark:bg-slate-900 rounded-lg border border-border">
                       <img src={logoPreview} alt="Nav logo" className={`object-contain ${
-                        draft.logoSize === "small" ? "h-8" :
-                        draft.logoSize === "large" ? "h-14" :
-                        "h-10"
+                        draft.logoSize === "small" ? "h-10" :
+                        draft.logoSize === "large" ? "h-20" :
+                        draft.logoSize === "x-large" ? "h-24" :
+                        "h-14"
                       }`} />
                     </div>
                   </div>

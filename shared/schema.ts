@@ -135,7 +135,7 @@ export interface SiteSettingsData {
   headingFont: string;
   bodyFont: string;
   logoBase64: string | null;
-  logoSize: "small" | "medium" | "large";
+  logoSize: "small" | "medium" | "large" | "x-large";
   siteName: string;
   siteTitle: string;
   siteDescription: string;

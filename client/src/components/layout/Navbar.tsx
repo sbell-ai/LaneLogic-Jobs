@@ -34,13 +34,14 @@ export function Navbar() {
         </div>
       )}
       <nav className="sticky top-0 z-50 w-full border-b border-border/40 bg-background/80 backdrop-blur-xl supports-[backdrop-filter]:bg-background/60">
-        <div className="container mx-auto px-4 md:px-6 h-16 flex items-center justify-between">
+        <div className="container mx-auto px-4 md:px-6 min-h-16 py-2 flex items-center justify-between">
           <Link href="/" className="flex items-center gap-2 group">
             {settings.logoBase64 ? (
               <img src={settings.logoBase64} alt={settings.siteName} className={`object-contain ${
-                settings.logoSize === "small" ? "h-8" :
-                settings.logoSize === "large" ? "h-14" :
-                "h-10"
+                settings.logoSize === "small" ? "h-10" :
+                settings.logoSize === "large" ? "h-20" :
+                settings.logoSize === "x-large" ? "h-24" :
+                "h-14"
               }`} />
             ) : (
               <>

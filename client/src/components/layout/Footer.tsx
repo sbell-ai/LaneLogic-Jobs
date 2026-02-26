@@ -13,9 +13,10 @@ export function Footer() {
             <Link href="/" className="flex items-center gap-2 mb-4 group">
               {settings.logoBase64 ? (
                 <img src={settings.logoBase64} alt={settings.siteName} className={`object-contain ${
-                  settings.logoSize === "small" ? "h-7" :
-                  settings.logoSize === "large" ? "h-12" :
-                  "h-9"
+                  settings.logoSize === "small" ? "h-8" :
+                  settings.logoSize === "large" ? "h-16" :
+                  settings.logoSize === "x-large" ? "h-20" :
+                  "h-12"
                 }`} />
               ) : (
                 <>

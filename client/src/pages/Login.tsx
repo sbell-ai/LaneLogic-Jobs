@@ -47,9 +47,10 @@ export default function Login() {
             <Link href="/" className="inline-flex items-center gap-2 mb-6">
               {settings.logoBase64 ? (
                 <img src={settings.logoBase64} alt={settings.siteName} className={`w-auto object-contain ${
-                  settings.logoSize === "small" ? "h-9" :
-                  settings.logoSize === "large" ? "h-16" :
-                  "h-12"
+                  settings.logoSize === "small" ? "h-10" :
+                  settings.logoSize === "large" ? "h-20" :
+                  settings.logoSize === "x-large" ? "h-24" :
+                  "h-14"
                 }`} data-testid="img-login-logo" />
               ) : (
                 <>
