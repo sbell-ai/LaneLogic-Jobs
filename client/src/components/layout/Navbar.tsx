@@ -22,9 +22,9 @@ export function Navbar() {
 
   return (
     <header>
-      {settings.headerAnnouncement && (
+      {settings.headerAnnouncement?.trim() && (
         <div className="w-full bg-primary text-primary-foreground text-center text-sm font-medium py-2 px-4">
-          {settings.headerAnnouncementLink ? (
+          {settings.headerAnnouncementLink?.trim() ? (
             <Link href={settings.headerAnnouncementLink} className="hover:underline" data-testid="link-header-announcement">
               {settings.headerAnnouncement}
             </Link>
