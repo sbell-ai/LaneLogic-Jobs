@@ -271,7 +271,10 @@ export async function registerRoutes(
 
   app.post(api.jobs.create.path, async (req, res) => {
     try {
-      const input = api.jobs.create.input.parse(req.body);
+      const body = { ...req.body };
+      if (body.expiresAt && typeof body.expiresAt === "string") body.expiresAt = new Date(body.expiresAt);
+      if (body.expiresAt === null || body.expiresAt === "") body.expiresAt = null;
+      const input = api.jobs.create.input.parse(body);
       const job = await storage.createJob(input);
       res.status(201).json(job);
     } catch (err) {
@@ -282,7 +285,10 @@ export async function registerRoutes(
 
   app.put(api.jobs.update.path, async (req, res) => {
     try {
-      const input = api.jobs.update.input.parse(req.body);
+      const body = { ...req.body };
+      if (body.expiresAt && typeof body.expiresAt === "string") body.expiresAt = new Date(body.expiresAt);
+      if (body.expiresAt === null || body.expiresAt === "") body.expiresAt = null;
+      const input = api.jobs.update.input.parse(body);
       const job = await storage.updateJob(Number(req.params.id), input);
       res.json(job);
     } catch (err) {

@@ -10,7 +10,7 @@ import {
   type Coupon, type InsertCoupon,
   type SiteSettingsData, DEFAULT_SETTINGS
 } from "@shared/schema";
-import { eq, sql } from "drizzle-orm";
+import { eq, sql, desc } from "drizzle-orm";
 
 export interface IStorage {
   // Users
@@ -97,7 +97,7 @@ export class DatabaseStorage implements IStorage {
 
   // Jobs
   async getJobs(): Promise<Job[]> {
-    return await db.select().from(jobs);
+    return await db.select().from(jobs).orderBy(desc(jobs.createdAt));
   }
   async getJob(id: number): Promise<Job | undefined> {
     const [job] = await db.select().from(jobs).where(eq(jobs.id, id));
