@@ -9,7 +9,7 @@ import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { Textarea } from "@/components/ui/textarea";
-import { Palette, Type, ImageIcon, Eye, EyeOff, Save, RotateCcw, CheckCircle2, Globe, Megaphone } from "lucide-react";
+import { Palette, Type, ImageIcon, Eye, EyeOff, Save, RotateCcw, CheckCircle2, Globe, Megaphone, ExternalLink } from "lucide-react";
 import type { SiteSettingsData } from "@shared/schema";
 import { DEFAULT_SETTINGS } from "@shared/schema";
 import { applySettingsToDOM, hexToHsl } from "@/hooks/use-settings";
@@ -124,7 +124,7 @@ export default function DesignSettings() {
             <p className="text-muted-foreground text-sm mt-1">Customize your site's look and feel globally.</p>
           </div>
           <div className="flex items-center gap-3">
-            <div className="flex items-center gap-2 bg-white border border-border rounded-lg px-3 py-2">
+            <div className="flex items-center gap-2 bg-white dark:bg-slate-900 border border-border rounded-lg px-3 py-2">
               {livePreview ? <Eye size={15} className="text-primary" /> : <EyeOff size={15} className="text-muted-foreground" />}
               <span className="text-sm font-medium">Live Preview</span>
               <Switch
@@ -133,6 +133,15 @@ export default function DesignSettings() {
                 data-testid="switch-live-preview"
               />
             </div>
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-1.5"
+              onClick={() => window.open("/", "_blank")}
+              data-testid="button-open-preview"
+            >
+              <ExternalLink size={14} /> Preview Site
+            </Button>
           </div>
         </div>
 
