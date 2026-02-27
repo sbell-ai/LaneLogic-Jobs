@@ -35,18 +35,16 @@ export async function registerRoutes(
   httpServer: Server,
   app: Express
 ): Promise<Server> {
-  if (process.env.NODE_ENV === 'production') {
-    app.set('trust proxy', 1);
-  }
+  app.set('trust proxy', 1);
 
   const sessionConfig: session.SessionOptions = {
     secret: process.env.SESSION_SECRET || 'supersecret',
     resave: false,
     saveUninitialized: false,
+    proxy: true,
     cookie: {
       maxAge: 30 * 24 * 60 * 60 * 1000,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: process.env.NODE_ENV === 'production' ? 'lax' : 'lax',
+      sameSite: 'lax',
       httpOnly: true,
     },
   };
@@ -57,10 +55,13 @@ export async function registerRoutes(
       sessionConfig.store = new PgStore({
         conString: process.env.DATABASE_URL,
         createTableIfMissing: true,
+        tableName: 'session',
+        pruneSessionInterval: 60 * 15,
         errorLog: (err: Error) => {
           console.error('Session store error:', err.message);
         },
       });
+      console.log('Using PostgreSQL session store');
     } catch (err) {
       console.error('Failed to create PG session store, using memory store:', err);
     }
