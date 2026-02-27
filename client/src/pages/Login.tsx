@@ -127,7 +127,7 @@ export default function Login() {
         />
         <div className="absolute inset-0 bg-gradient-to-t from-slate-900/90 via-slate-900/40 to-transparent flex flex-col justify-end p-12">
           <blockquote className="text-white max-w-lg mb-6" data-testid="text-login-testimonial">
-            <p className="text-2xl font-medium font-display leading-tight mb-4">"{settings.loginTestimonial}"</p>
+            <p className="text-2xl font-medium font-display leading-tight mb-4">{settings.loginTestimonial}</p>
             <footer className="text-slate-300 font-medium" data-testid="text-login-testimonial-author">
               {settings.loginTestimonialAuthor}
             </footer>
