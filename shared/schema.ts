@@ -137,6 +137,7 @@ export interface SiteSettingsData {
   bodyFont: string;
   logoBase64: string | null;
   logoSize: "small" | "medium" | "large" | "x-large";
+  faviconBase64: string | null;
   siteName: string;
   siteTitle: string;
   siteDescription: string;
@@ -187,6 +188,7 @@ export const DEFAULT_SETTINGS: SiteSettingsData = {
   bodyFont: "Inter",
   logoBase64: null,
   logoSize: "medium",
+  faviconBase64: null,
   siteName: "LaneLogic Jobs",
   siteTitle: "LaneLogic Jobs – Transportation & Logistics Jobs",
   siteDescription: "Find the best transportation, trucking, and logistics jobs. Browse thousands of CDL and freight roles across the country.",

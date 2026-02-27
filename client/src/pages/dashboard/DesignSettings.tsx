@@ -53,12 +53,15 @@ export default function DesignSettings() {
   const [livePreview, setLivePreview] = useState(true);
   const [draft, setDraft] = useState<SiteSettingsData>(DEFAULT_SETTINGS);
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
+  const [faviconPreview, setFaviconPreview] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  const faviconRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (saved) {
       setDraft({ ...DEFAULT_SETTINGS, ...saved });
       setLogoPreview(saved.logoBase64 || null);
+      setFaviconPreview(saved.faviconBase64 || null);
     }
   }, [saved]);
 
@@ -100,9 +103,27 @@ export default function DesignSettings() {
     e.target.value = "";
   };
 
+  const handleFaviconUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 200 * 1024) {
+      toast({ title: "File too large", description: "Please use an image under 200KB. Favicons should be small (32×32 or 64×64).", variant: "destructive" });
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const base64 = ev.target?.result as string;
+      setFaviconPreview(base64);
+      update("faviconBase64", base64);
+    };
+    reader.readAsDataURL(file);
+    e.target.value = "";
+  };
+
   const resetToDefaults = () => {
     setDraft({ ...DEFAULT_SETTINGS });
     setLogoPreview(null);
+    setFaviconPreview(null);
     if (livePreview) applySettingsToDOM(DEFAULT_SETTINGS);
     toast({ title: "Reset to defaults" });
   };
@@ -338,6 +359,69 @@ export default function DesignSettings() {
                     </div>
                   </div>
                 </>
+              )}
+            </div>
+          </Section>
+
+          {/* Favicon */}
+          <Section icon={ImageIcon} title="Site Favicon">
+            <div>
+              <p className="text-sm text-muted-foreground mb-4">
+                Upload a custom favicon (the small icon shown in the browser tab). Recommended: PNG or ICO, 32×32 or 64×64 pixels, under 200KB.
+              </p>
+
+              <div className="flex items-start gap-4">
+                <div className="w-20 h-20 rounded-xl border-2 border-dashed border-border flex items-center justify-center bg-slate-50 dark:bg-slate-800 overflow-hidden shrink-0">
+                  {faviconPreview ? (
+                    <img src={faviconPreview} alt="Favicon preview" className="w-10 h-10 object-contain" />
+                  ) : (
+                    <div className="text-center">
+                      <ImageIcon className="mx-auto text-muted-foreground mb-1" size={18} />
+                      <p className="text-[10px] text-muted-foreground">No icon</p>
+                    </div>
+                  )}
+                </div>
+                <div className="space-y-2 flex-1">
+                  <input
+                    ref={faviconRef}
+                    type="file"
+                    accept="image/png,image/x-icon,image/svg+xml,image/jpeg"
+                    className="hidden"
+                    onChange={handleFaviconUpload}
+                    data-testid="input-favicon-upload"
+                  />
+                  <Button
+                    variant="outline"
+                    className="w-full"
+                    onClick={() => faviconRef.current?.click()}
+                    data-testid="button-upload-favicon"
+                  >
+                    <ImageIcon size={15} className="mr-2" />
+                    {faviconPreview ? "Change Favicon" : "Upload Favicon"}
+                  </Button>
+                  {faviconPreview && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="w-full text-destructive hover:text-destructive"
+                      onClick={() => { setFaviconPreview(null); update("faviconBase64", null); }}
+                      data-testid="button-remove-favicon"
+                    >
+                      Remove Favicon
+                    </Button>
+                  )}
+                  <p className="text-xs text-muted-foreground">PNG, ICO, SVG · Max 200KB · 32×32 or 64×64 recommended</p>
+                </div>
+              </div>
+
+              {faviconPreview && (
+                <div className="mt-4 p-4 bg-slate-50 dark:bg-slate-800 rounded-xl border border-border">
+                  <p className="text-xs text-muted-foreground mb-2 font-semibold uppercase tracking-wider">Browser Tab Preview</p>
+                  <div className="flex items-center gap-2 p-2 bg-white dark:bg-slate-900 rounded-lg border border-border max-w-xs">
+                    <img src={faviconPreview} alt="Favicon" className="w-4 h-4 object-contain shrink-0" />
+                    <span className="text-xs font-medium truncate">{draft.siteTitle || draft.siteName || "LaneLogic Jobs"}</span>
+                  </div>
+                </div>
               )}
             </div>
           </Section>

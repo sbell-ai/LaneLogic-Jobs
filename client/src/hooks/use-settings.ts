@@ -48,6 +48,15 @@ function updateMetaTags(settings: SiteSettingsData) {
     }
     meta.content = settings.siteDescription;
   }
+  const existingFavicon = document.querySelector<HTMLLinkElement>('link[rel="icon"]');
+  if (settings.faviconBase64) {
+    const link = existingFavicon || document.createElement("link");
+    link.rel = "icon";
+    link.href = settings.faviconBase64;
+    if (!existingFavicon) document.head.appendChild(link);
+  } else if (existingFavicon) {
+    existingFavicon.href = "/favicon.ico";
+  }
 }
 
 export function applySettingsToDOM(settings: SiteSettingsData) {
