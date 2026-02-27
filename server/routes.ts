@@ -712,6 +712,19 @@ export async function registerRoutes(
 
 async function seedDatabase() {
   const users = await storage.getUsers();
+
+  const existingAdmin = await storage.getUserByEmail("steph@lanelogicjobs.com");
+  if (!existingAdmin) {
+    await storage.createUser({
+      email: "steph@lanelogicjobs.com",
+      password: "Michigan2026$",
+      role: "admin",
+      membershipTier: "premium",
+      firstName: "Steph",
+      lastName: "Admin"
+    });
+  }
+
   if (users.length === 0) {
     const admin = await storage.createUser({
       email: "admin@transportjobs.com",
