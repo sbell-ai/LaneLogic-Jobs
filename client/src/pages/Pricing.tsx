@@ -378,7 +378,7 @@ export default function Pricing() {
               We offer custom enterprise pricing for large fleets and staffing agencies.
             </p>
             <Button variant="outline" size="lg" asChild>
-              <Link href="mailto:sales@transpojobs.com">Contact Sales</Link>
+              <Link href="mailto:sales@lanelogicjobs.com">Contact Sales</Link>
             </Button>
           </div>
         </div>

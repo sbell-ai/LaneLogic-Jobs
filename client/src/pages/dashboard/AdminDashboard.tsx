@@ -844,7 +844,7 @@ Fleet Dispatcher,Metro Logistics,Contract,Dispatch,Logistics,Atlanta,GA,USA,"Man
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = "transpojobs-sample.csv";
+    a.download = "lanelogicjobs-sample.csv";
     a.click();
   };
 
@@ -1800,8 +1800,8 @@ function SitePagesTab() {
     feature3Title: "", feature3Description: "",
     ctaHeading: "", ctaSubtext: "", ctaBackgroundImage: "",
     loginHeading: "", loginSubtitle: "",
-    loginTestimonial: "", loginTestimonialAuthor: "", loginBackgroundImage: "",
-    signupHeading: "", signupSubtitle: "", signupDescription: "",
+    loginTestimonial: "", loginTestimonialAuthor: "", loginBackgroundImage: "", loginIconType: "truck",
+    signupHeading: "", signupSubtitle: "", signupDescription: "", signupIconType: "truck",
   });
 
   useEffect(() => {
@@ -1829,9 +1829,11 @@ function SitePagesTab() {
         loginTestimonial: saved.loginTestimonial ?? "",
         loginTestimonialAuthor: saved.loginTestimonialAuthor ?? "",
         loginBackgroundImage: saved.loginBackgroundImage ?? "",
+        loginIconType: saved.loginIconType ?? "truck",
         signupHeading: saved.signupHeading ?? "",
         signupSubtitle: saved.signupSubtitle ?? "",
         signupDescription: saved.signupDescription ?? "",
+        signupIconType: saved.signupIconType ?? "truck",
       });
     }
   }, [saved]);
@@ -2017,7 +2019,7 @@ function SitePagesTab() {
               <Textarea
                 value={draft.loginTestimonial}
                 onChange={e => update("loginTestimonial", e.target.value)}
-                placeholder="TranspoJobs helped us find qualified CDL drivers..."
+                placeholder="Great platform for finding qualified drivers..."
                 className="min-h-[80px] resize-none"
                 data-testid="textarea-login-testimonial"
               />
@@ -2036,6 +2038,23 @@ function SitePagesTab() {
               <Label className="text-sm font-semibold mb-1 block">Background Image</Label>
               <p className="text-xs text-muted-foreground mb-2">Upload or paste a URL for the login page background.</p>
               <ImageUpload value={draft.loginBackgroundImage} onChange={v => update("loginBackgroundImage", v)} data-testid="image-login-background" />
+            </div>
+            <div>
+              <Label className="text-sm font-semibold mb-1 block">Brand Icon</Label>
+              <p className="text-xs text-muted-foreground mb-2">Icon shown next to the site name when no logo is uploaded. Choose "None" to hide.</p>
+              <Select value={draft.loginIconType} onValueChange={v => update("loginIconType", v)}>
+                <SelectTrigger data-testid="select-login-icon-type"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">None (hidden)</SelectItem>
+                  <SelectItem value="truck">Truck</SelectItem>
+                  <SelectItem value="building">Building</SelectItem>
+                  <SelectItem value="briefcase">Briefcase</SelectItem>
+                  <SelectItem value="mappin">Map Pin</SelectItem>
+                  <SelectItem value="shield">Shield</SelectItem>
+                  <SelectItem value="package">Package</SelectItem>
+                  <SelectItem value="navigation">Navigation</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
           </div>
         </div>
@@ -2064,7 +2083,7 @@ function SitePagesTab() {
               <Input
                 value={draft.signupSubtitle}
                 onChange={e => update("signupSubtitle", e.target.value)}
-                placeholder="Join TranspoJobs to take the next step"
+                placeholder="Join us to take the next step"
                 data-testid="input-signup-subtitle"
               />
             </div>
@@ -2078,6 +2097,23 @@ function SitePagesTab() {
                 className="min-h-[80px] resize-none"
                 data-testid="textarea-signup-description"
               />
+            </div>
+            <div>
+              <Label className="text-sm font-semibold mb-1 block">Side Panel Icon</Label>
+              <p className="text-xs text-muted-foreground mb-2">Icon shown on the right side panel of the signup page. Choose "None" to hide.</p>
+              <Select value={draft.signupIconType} onValueChange={v => update("signupIconType", v)}>
+                <SelectTrigger data-testid="select-signup-icon-type"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">None (hidden)</SelectItem>
+                  <SelectItem value="truck">Truck</SelectItem>
+                  <SelectItem value="building">Building</SelectItem>
+                  <SelectItem value="briefcase">Briefcase</SelectItem>
+                  <SelectItem value="mappin">Map Pin</SelectItem>
+                  <SelectItem value="shield">Shield</SelectItem>
+                  <SelectItem value="package">Package</SelectItem>
+                  <SelectItem value="navigation">Navigation</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
           </div>
         </div>

@@ -21,7 +21,7 @@ export default function Blog() {
             <span className="inline-block py-1 px-3 rounded-full bg-primary/10 text-primary font-semibold text-sm mb-4 border border-primary/20">
               Industry News & Insights
             </span>
-            <h1 className="text-4xl font-bold font-display mb-3">TranspoJobs Blog</h1>
+            <h1 className="text-4xl font-bold font-display mb-3">Industry Blog</h1>
             <p className="text-muted-foreground max-w-xl mx-auto">
               Stay informed on hiring trends, career tips, and the latest news in the transportation industry.
             </p>

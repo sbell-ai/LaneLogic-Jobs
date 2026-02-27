@@ -8,7 +8,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { insertUserSchema } from "@shared/schema";
 import { z } from "zod";
-import { Truck, ArrowLeft, Briefcase, UserRound } from "lucide-react";
+import { Truck, ArrowLeft, Briefcase, UserRound, Building2, MapPin, Shield, Package, Navigation } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useSiteSettings } from "@/hooks/use-settings";
 
@@ -156,9 +156,22 @@ export default function Register() {
       <div className="hidden lg:block relative flex-1 bg-slate-900">
         <div className="absolute inset-0 opacity-20" style={{ backgroundImage: 'radial-gradient(circle at 2px 2px, white 1px, transparent 0)', backgroundSize: '32px 32px' }}></div>
         <div className="h-full flex flex-col justify-center items-center p-12 text-center relative z-10">
-          <div className="w-20 h-20 rounded-2xl bg-primary flex items-center justify-center text-white mb-8 shadow-2xl shadow-primary/50">
-            <Truck size={40} strokeWidth={2} />
-          </div>
+          {settings.signupIconType !== "none" && (
+            <div className="w-20 h-20 rounded-2xl bg-primary flex items-center justify-center text-white mb-8 shadow-2xl shadow-primary/50">
+              {(() => {
+                const iconProps = { size: 40, strokeWidth: 2 };
+                switch (settings.signupIconType) {
+                  case "building": return <Building2 {...iconProps} />;
+                  case "briefcase": return <Briefcase {...iconProps} />;
+                  case "mappin": return <MapPin {...iconProps} />;
+                  case "shield": return <Shield {...iconProps} />;
+                  case "package": return <Package {...iconProps} />;
+                  case "navigation": return <Navigation {...iconProps} />;
+                  case "truck": default: return <Truck {...iconProps} />;
+                }
+              })()}
+            </div>
+          )}
           <h2 className="text-4xl font-bold font-display text-white mb-6" data-testid="text-signup-heading-side">Join the Network</h2>
           <p className="text-xl text-slate-300 max-w-md text-balance" data-testid="text-signup-description">
             {settings.signupDescription}

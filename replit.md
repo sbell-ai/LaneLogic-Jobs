@@ -1,4 +1,4 @@
-# TranspoJobs - Transportation Sector Job Board
+# LaneLogic Jobs - Transportation Sector Job Board
 
 ## Overview
 A full-stack job board platform specifically for the transportation industry, featuring membership-based access for job seekers and employers, resource libraries, blog, dashboards, and Stripe payment integration.
@@ -110,7 +110,7 @@ shared/
 - Blog with admin publishing and categories
 - Role-based dashboard routing
 - Design settings: brand colors, fonts, logo (with size control: small/medium/large/x-large), announcements, footer background color, footer copy, social media links (X/LinkedIn/Facebook/Instagram/YouTube/TikTok) (live CSS variable injection)
-- Admin Site Pages editor: customize login/signup page text, testimonials, background images
+- Admin Site Pages editor: customize login/signup page text, testimonials, background images, brand icon selection (truck/building/briefcase/mappin/shield/package/navigation/none)
 - Categories & Labels system: job categories, industries, blog categories (admin CRUD)
 - Coupon code system: create/edit/delete coupons with percent/fixed discount, max uses, expiry, tier targeting
 - Pricing page coupon input with live discount preview

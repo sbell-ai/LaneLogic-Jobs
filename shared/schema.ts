@@ -156,9 +156,11 @@ export interface SiteSettingsData {
   loginTestimonial: string;
   loginTestimonialAuthor: string;
   loginBackgroundImage: string;
+  loginIconType: string;
   signupHeading: string;
   signupSubtitle: string;
   signupDescription: string;
+  signupIconType: string;
   heroBadge: string;
   heroHeading: string;
   heroSubtext: string;
@@ -204,9 +206,11 @@ export const DEFAULT_SETTINGS: SiteSettingsData = {
   loginTestimonial: "",
   loginTestimonialAuthor: "",
   loginBackgroundImage: "",
+  loginIconType: "truck",
   signupHeading: "",
   signupSubtitle: "",
   signupDescription: "",
+  signupIconType: "truck",
   heroBadge: "",
   heroHeading: "",
   heroSubtext: "",

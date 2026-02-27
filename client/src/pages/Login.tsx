@@ -7,7 +7,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { loginSchema } from "@shared/schema";
 import { z } from "zod";
-import { Truck, ArrowLeft } from "lucide-react";
+import { Truck, ArrowLeft, Building2, Briefcase, MapPin, Shield, Package, Navigation } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useSiteSettings } from "@/hooks/use-settings";
 
@@ -54,9 +54,22 @@ export default function Login() {
                 }`} data-testid="img-login-logo" />
               ) : (
                 <>
-                  <div className="w-10 h-10 rounded-xl bg-primary flex items-center justify-center text-primary-foreground">
-                    <Truck size={20} strokeWidth={2.5} />
-                  </div>
+                  {settings.loginIconType !== "none" && (
+                    <div className="w-10 h-10 rounded-xl bg-primary flex items-center justify-center text-primary-foreground">
+                      {(() => {
+                        const iconProps = { size: 20, strokeWidth: 2.5 };
+                        switch (settings.loginIconType) {
+                          case "building": return <Building2 {...iconProps} />;
+                          case "briefcase": return <Briefcase {...iconProps} />;
+                          case "mappin": return <MapPin {...iconProps} />;
+                          case "shield": return <Shield {...iconProps} />;
+                          case "package": return <Package {...iconProps} />;
+                          case "navigation": return <Navigation {...iconProps} />;
+                          case "truck": default: return <Truck {...iconProps} />;
+                        }
+                      })()}
+                    </div>
+                  )}
                   <span className="font-display font-bold text-2xl tracking-tight text-foreground" data-testid="text-login-brand">
                     {settings.siteName}
                   </span>

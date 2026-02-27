@@ -351,7 +351,7 @@ export default function DesignSettings() {
                 <Input
                   value={draft.siteName}
                   onChange={e => update("siteName", e.target.value)}
-                  placeholder="TranspoJobs"
+                  placeholder="LaneLogic Jobs"
                   data-testid="input-site-name"
                 />
               </div>
@@ -362,7 +362,7 @@ export default function DesignSettings() {
                 <Input
                   value={draft.siteTitle}
                   onChange={e => update("siteTitle", e.target.value)}
-                  placeholder="TranspoJobs – Transportation & Logistics Jobs"
+                  placeholder="LaneLogic Jobs – Transportation & Logistics Jobs"
                   data-testid="input-site-title"
                 />
                 <p className="text-xs text-muted-foreground mt-1">{draft.siteTitle.length} / 70 characters recommended</p>
@@ -461,7 +461,7 @@ export default function DesignSettings() {
               <Input
                 value={draft.footerCopyright}
                 onChange={e => update("footerCopyright", e.target.value)}
-                placeholder="© TranspoJobs. All rights reserved."
+                placeholder="© LaneLogic Jobs. All rights reserved."
                 data-testid="input-footer-copyright"
               />
             </div>
