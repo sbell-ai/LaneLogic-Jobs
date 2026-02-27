@@ -65,7 +65,7 @@ async function buildAll() {
   });
 
   console.log("copying seed data files...");
-  const seedFiles = ["seed-jobs.json", "seed-categories.json"];
+  const seedFiles = ["seed-jobs.json", "seed-categories.json", "seed-settings.json"];
   for (const file of seedFiles) {
     const src = `server/${file}`;
     if (existsSync(src)) {

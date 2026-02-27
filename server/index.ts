@@ -214,6 +214,17 @@ async function seedDatabaseIfEmpty() {
       log(`Seeded ${count} categories`);
     }
 
+    const seedSettingsPath = findSeedFile("seed-settings.json");
+    if (seedSettingsPath) {
+      const currentSettings = await storage.getSiteSettings();
+      const isDefault = !currentSettings.heroHeading && !currentSettings.logoBase64;
+      if (isDefault) {
+        const settingsData = JSON.parse(fs.readFileSync(seedSettingsPath, "utf-8"));
+        await storage.updateSiteSettings(settingsData);
+        log("Seeded site settings");
+      }
+    }
+
     log("Database seeding complete");
   } catch (err) {
     console.error("Error seeding database:", err);
