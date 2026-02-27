@@ -105,12 +105,6 @@ app.use((req, res, next) => {
 
 async function startServer() {
   const port = parseInt(process.env.PORT || "5000", 10);
-  httpServer.listen(
-    { port, host: "0.0.0.0", reusePort: true },
-    () => {
-      log(`serving on port ${port}`);
-    },
-  );
 
   try {
     await registerRoutes(httpServer, app);
@@ -136,6 +130,13 @@ async function startServer() {
       console.error("Failed to setup Vite:", err);
     }
   }
+
+  httpServer.listen(
+    { port, host: "0.0.0.0", reusePort: true },
+    () => {
+      log(`serving on port ${port}`);
+    },
+  );
 
   initStripeBackground();
 }
