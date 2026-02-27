@@ -1,0 +1,1 @@
+LINE 1: SELECT data FROM site_settings WHERE id = 1               ^

@@ -1,6 +1,7 @@
 import { build as esbuild } from "esbuild";
 import { build as viteBuild } from "vite";
-import { rm, readFile } from "fs/promises";
+import { rm, readFile, copyFile } from "fs/promises";
+import { existsSync } from "fs";
 
 // server deps to bundle to reduce openat(2) syscalls
 // which helps cold start times
@@ -62,6 +63,16 @@ async function buildAll() {
     external: externals,
     logLevel: "info",
   });
+
+  console.log("copying seed data files...");
+  const seedFiles = ["seed-jobs.json", "seed-categories.json"];
+  for (const file of seedFiles) {
+    const src = `server/${file}`;
+    if (existsSync(src)) {
+      await copyFile(src, `dist/${file}`);
+      console.log(`  copied ${file}`);
+    }
+  }
 }
 
 buildAll().catch((err) => {

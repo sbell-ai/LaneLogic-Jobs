@@ -131,6 +131,8 @@ async function startServer() {
     }
   }
 
+  await seedDatabaseIfEmpty();
+
   httpServer.listen(
     { port, host: "0.0.0.0", reusePort: true },
     () => {
@@ -139,6 +141,83 @@ async function startServer() {
   );
 
   initStripeBackground();
+}
+
+async function seedDatabaseIfEmpty() {
+  try {
+    const { storage } = await import("./storage");
+    const existingJobs = await storage.getJobs();
+    if (existingJobs.length > 1) {
+      log("Database already has jobs, skipping seed");
+      return;
+    }
+    log("Seeding database with initial data...");
+
+    const baseDir = path.dirname(fileURLToPath(import.meta.url));
+    const findSeedFile = (name: string) => {
+      const candidates = [
+        path.resolve(baseDir, name),
+        path.resolve(baseDir, "..", "server", name),
+        path.resolve("server", name),
+      ];
+      return candidates.find(p => fs.existsSync(p)) || null;
+    };
+    const seedJobsPath = findSeedFile("seed-jobs.json");
+    const seedCategoriesPath = findSeedFile("seed-categories.json");
+
+    if (seedJobsPath) {
+      const jobsData = JSON.parse(fs.readFileSync(seedJobsPath, "utf-8"));
+      const allUsers = await storage.getUsers();
+      const adminUser = allUsers.find(u => u.role === "admin") || allUsers.find(u => u.role === "employer") || allUsers[0];
+      const fallbackEmployerId = adminUser?.id || 1;
+      let count = 0;
+      for (const job of jobsData) {
+        try {
+          const employerExists = allUsers.some(u => u.id === job.employer_id);
+          await storage.createJob({
+            employerId: employerExists ? job.employer_id : fallbackEmployerId,
+            title: job.title,
+            companyName: job.company_name,
+            jobType: job.job_type || "Full-time",
+            category: job.category || null,
+            industry: job.industry || null,
+            description: job.description,
+            requirements: job.requirements,
+            benefits: job.benefits,
+            locationCity: job.location_city,
+            locationState: job.location_state,
+            locationCountry: job.location_country,
+            salary: job.salary,
+            applyUrl: job.apply_url,
+            isExternalApply: job.is_external_apply,
+            expiresAt: job.expires_at ? new Date(job.expires_at) : null,
+          });
+          count++;
+        } catch (e) {
+          // skip individual job errors
+        }
+      }
+      log(`Seeded ${count} jobs`);
+    }
+
+    if (seedCategoriesPath) {
+      const catsData = JSON.parse(fs.readFileSync(seedCategoriesPath, "utf-8"));
+      let count = 0;
+      for (const cat of catsData) {
+        try {
+          await storage.createCategory({ name: cat.name, type: cat.type });
+          count++;
+        } catch (e) {
+          // skip duplicates
+        }
+      }
+      log(`Seeded ${count} categories`);
+    }
+
+    log("Database seeding complete");
+  } catch (err) {
+    console.error("Error seeding database:", err);
+  }
 }
 
 async function initStripeBackground() {

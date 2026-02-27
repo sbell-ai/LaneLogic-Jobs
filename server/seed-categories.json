@@ -1,0 +1,74 @@
+[
+  {
+    "name": "Maritime & Port Operations",
+    "type": "industry"
+  },
+  {
+    "name": "Aviation & Air Cargo",
+    "type": "industry"
+  },
+  {
+    "name": "Trucking & Ground Transportation",
+    "type": "industry"
+  },
+  {
+    "name": "Warehousing & Distribution",
+    "type": "industry"
+  },
+  {
+    "name": "Supply Chain & Procurement",
+    "type": "industry"
+  },
+  {
+    "name": "Public Transportation",
+    "type": "industry"
+  },
+  {
+    "name": "Public School Transportation",
+    "type": "industry"
+  },
+  {
+    "name": "Last Mile & E-Commerce",
+    "type": "industry"
+  },
+  {
+    "name": "Freight Brokerage & 3PL",
+    "type": "industry"
+  },
+  {
+    "name": "Waste Management",
+    "type": "industry"
+  },
+  {
+    "name": "Industrial Processing & Manufacturing",
+    "type": "industry"
+  },
+  {
+    "name": "Cold Storage",
+    "type": "industry"
+  },
+  {
+    "name": "Green Logistics & Sustainability",
+    "type": "industry"
+  },
+  {
+    "name": "Packaging",
+    "type": "industry"
+  },
+  {
+    "name": "Heavy Construction & Infrastructure",
+    "type": "industry"
+  },
+  {
+    "name": "Energy & Fuel Transportation",
+    "type": "industry"
+  },
+  {
+    "name": "Defense Logistics & Government Contracting",
+    "type": "industry"
+  },
+  {
+    "name": "Driver",
+    "type": "job"
+  }
+]
