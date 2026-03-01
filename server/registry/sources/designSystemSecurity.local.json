@@ -1,0 +1,12 @@
+{
+  "registry": "design_system_security",
+  "rules": [
+    {
+      "ruleId": "AUTH-LOCKOUT-01",
+      "elementName": "Authentication & Password",
+      "category": "Security",
+      "canonical": true,
+      "activeLogic": "Lockout after 5 attempts for 15 minutes. Password complexity rules apply."
+    }
+  ]
+}

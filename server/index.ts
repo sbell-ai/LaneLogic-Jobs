@@ -5,9 +5,36 @@ import { createServer } from "http";
 import path from "path";
 import fs from "fs";
 import { fileURLToPath } from "url";
+import { writeRegistrySnapshot, setActiveSnapshot, setLastKnownGoodSnapshot } from "./snapshotStore";
+import { logRegistryEvent } from "./eventLog";
+import { syncDesignSystemSecurity } from "./registry/syncDesignSystemSecurity.ts";
+import { requireAdminSecret } from "./middleware/requireAdminSecret.ts";
+import { adminRouter } from "./routes/admin.ts";
 
 const app = express();
 const httpServer = createServer(app);
+
+app.post(
+  "/admin/registry-sync/design-system-security",
+  requireAdminSecret,
+  async (req, res) => {
+    try {
+      const environment = process.env.NODE_ENV === "production" ? "prod" : "staging";
+      const result = await syncDesignSystemSecurity({ environment });
+      res.json(result);
+    } catch (err: any) {
+      console.error(err);
+      res.status(500).json({ ok: false, error: err?.message ?? String(err) });
+    }
+  },
+);
+// Admin 404 handler (Express 5 requires named wildcards)
+app.all("/admin/*path", (req, res) => {
+  res.status(404).json({ ok: false, error: "Admin route not found" });
+});
+import crypto from "node:crypto";
+import { writeRegistrySnapshot, setActiveSnapshot, setLastKnownGoodSnapshot } from "./registry/snapshotStore";
+import { logRegistryEvent } from "./registry/eventLog";
 
 declare module "http" {
   interface IncomingMessage {
@@ -67,6 +94,8 @@ app.post(
     }
   }
 );
+
+app.use("/admin", adminRouter);
 
 app.use(
   express.json({
