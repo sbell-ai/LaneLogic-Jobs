@@ -86,7 +86,7 @@ export function Footer() {
             <h4 className="text-white font-semibold mb-4 font-display">Company</h4>
             <ul className="space-y-2 text-sm">
               <li><Link href="/about" className="text-slate-400 hover:text-primary transition-colors">About Us</Link></li>
-              <li><Link href="/contact" className="text-slate-400 hover:text-primary transition-colors">Contact</Link></li>
+              <li><a href="https://mailgun-form-sender.replit.app" target="_blank" rel="noopener noreferrer" className="text-slate-400 hover:text-primary transition-colors">Contact</a></li>
               <li><Link href="/privacy" className="text-slate-400 hover:text-primary transition-colors">Privacy Policy</Link></li>
               <li><Link href="/terms" className="text-slate-400 hover:text-primary transition-colors">Terms of Service</Link></li>
             </ul>
