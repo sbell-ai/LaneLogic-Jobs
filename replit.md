@@ -9,6 +9,7 @@ A full-stack job board platform specifically for the transportation industry, fe
 - **Database**: PostgreSQL with Drizzle ORM
 - **Auth**: Passport.js (local strategy, session-based)
 - **Payments**: Stripe (subscription-based memberships)
+- **Email**: Mailgun (contact form submissions)
 - **Build**: Vite (frontend), tsx (backend)
 
 ## Project Structure
@@ -22,6 +23,7 @@ client/src/
     BlogPost.tsx       - Individual blog post
     Resources.tsx      - Member-gated resource library
     Pricing.tsx        - Membership pricing page (job seeker + employer tabs)
+    Contact.tsx        - Contact form (sends email via Mailgun)
     Login.tsx          - Login page
     Register.tsx       - Registration page
     dashboard/
