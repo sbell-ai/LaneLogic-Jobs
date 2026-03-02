@@ -7,6 +7,8 @@ import {
   writeRegistrySnapshot,
 } from "./snapshotStore";
 import { logRegistryEvent } from "./eventLog";
+import { shouldSendAlert } from "../alerts/shouldSendAlert";
+import { sendAlertEmail } from "../alerts/sendAlertEmail";
 
 type Severity = "SEV-1" | "SEV-2" | "SEV-3";
 
@@ -200,52 +202,79 @@ export async function syncDesignSystemSecurity(args: { environment: string }) {
     invalidRowCount: failures.length,
   });
 
-  if (failures.length === 0) {
-    await setLastKnownGoodSnapshot({
-      snapshotId: snapRow.id,
-      environment,
-      registryName: REGISTRY_NAME,
-    });
-    await setActiveSnapshot({
-      snapshotId: snapRow.id,
-      environment,
-      registryName: REGISTRY_NAME,
-    });
+ if (failures.length === 0) {
+  await setLastKnownGoodSnapshot({
+    snapshotId: snapRow.id,
+    environment,
+    registryName: REGISTRY_NAME,
+  });
 
-    await logRegistryEvent({
-      environment,
-      registryName: REGISTRY_NAME,
-      eventType: "registry.sync_success",
-      severity: "SEV-3",
-      activeSnapshotId: snapRow.id,
-      lastKnownGoodSnapshotId: snapRow.id,
-      details: {
-        contentHash,
-        ruleCount: snapshot.rules.length,
-      },
-    });
-
-    return { ok: true, snapshotId: snapRow.id, promoted: true };
-  }
-
-  // If invalid, do not promote; log top failures
-  const top = failures.slice(0, 5);
+  await setActiveSnapshot({
+    snapshotId: snapRow.id,
+    environment,
+    registryName: REGISTRY_NAME,
+  });
 
   await logRegistryEvent({
     environment,
     registryName: REGISTRY_NAME,
-    eventType: "registry.validation_failed",
-    severity: "SEV-2",
+    eventType: "registry.sync_success",
+    severity: "SEV-3",
     activeSnapshotId: snapRow.id,
-    lastKnownGoodSnapshotId: null,
-    validationRuleId: top[0]?.validationRuleId,
-    reason: top.map((f) => f.reason).join(" | "),
+    lastKnownGoodSnapshotId: snapRow.id,
     details: {
       contentHash,
-      failureCount: failures.length,
-      topFailures: top,
+      ruleCount: snapshot.rules.length,
     },
   });
 
-  return { ok: false, snapshotId: snapRow.id, promoted: false, failures };
+  return { ok: true, snapshotId: snapRow.id, promoted: true };
+}
+
+// If invalid, do not promote; log top failures
+const top = failures.slice(0, 5);
+
+  const environment = args.environment; // or however you already have it
+
+  const okToSend = await shouldSendAlert({
+  environment,
+  registryName: REGISTRY_NAME,
+  eventType: "registry.validation_failed",
+  withinMinutes: 15,
+});
+
+if (okToSend) {
+  await sendAlertEmail({
+    subject: `[SEV-2][LaneLogic Jobs][${environment}][${REGISTRY_NAME}] Fallback to last-known-good`,
+    text: [
+      `Severity: SEV-2`,
+      `Environment: ${environment}`,
+      `Registry: ${REGISTRY_NAME}`,
+      `Event type: registry.validation_failed`,
+      `Timestamp: ${new Date().toISOString()}`,
+      `Active snapshot id: ${snapRow.id}`,
+      `Top failure: ${top[0]?.validationRuleId ?? "unknown"}`,
+      `Reasons: ${top.map((f) => f.reason).join(" | ")}`,
+      `Recommended action: Fix invalid config and re-sync. System continues using last-known-good.`,
+    ].join("\n"),
+  });
+}
+
+await logRegistryEvent({
+  environment,
+  registryName: REGISTRY_NAME,
+  eventType: "registry.validation_failed",
+  severity: "SEV-2",
+  activeSnapshotId: snapRow.id,
+  lastKnownGoodSnapshotId: null,
+  validationRuleId: top[0]?.validationRuleId,
+  reason: top.map((f) => f.reason).join(" | "),
+  details: {
+    contentHash,
+    failureCount: failures.length,
+    topFailures: top,
+  },
+});
+
+return { ok: false, snapshotId: snapRow.id, promoted: false, failures };
 }

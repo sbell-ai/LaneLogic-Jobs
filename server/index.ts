@@ -10,10 +10,13 @@ import { logRegistryEvent } from "./eventLog";
 import { syncDesignSystemSecurity } from "./registry/syncDesignSystemSecurity.ts";
 import { requireAdminSecret } from "./middleware/requireAdminSecret.ts";
 import { adminRouter } from "./routes/admin.ts";
+import { sendAlertEmail } from "./alerts/sendAlertEmail.ts";
 
 const app = express();
 const httpServer = createServer(app);
-
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+app.use("/admin", requireAdminSecret);
 app.post(
   "/admin/registry-sync/design-system-security",
   requireAdminSecret,
@@ -28,6 +31,8 @@ app.post(
     }
   },
 );
+
+
 // Admin 404 handler (Express 5 requires named wildcards)
 app.all("/admin/*path", (req, res) => {
   res.status(404).json({ ok: false, error: "Admin route not found" });
