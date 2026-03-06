@@ -161,6 +161,6 @@ If anything above conflicts with this Notion SOT Contract, follow the Notion SOT
 
 6) Stripe mapping rules
 - Admin Override is not sold in Stripe.
-- Starter - Job Seeker is a free non-Stripe SKU; granted by default in-app.
+- Starter - Job Seeker exists in Notion with price 0 and is granted by default.
 - All Stripe-sold Active SKUs must have Stripe Product ID + Stripe Price ID.
 - Tier names and prices are driven by Notion Products & Pricing; do not hardcode.
