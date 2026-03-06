@@ -13,7 +13,7 @@ A full-stack job board platform specifically for the transportation industry, fe
 - **Build**: Vite (frontend), tsx (backend)
 
 ## Project Structure
-```
+
 client/src/
   pages/
     Home.tsx           - Landing page with job search + hero
@@ -50,30 +50,26 @@ server/
 shared/
   schema.ts            - Drizzle ORM schema (users, jobs, applications, resources, blogPosts, resumes)
   routes.ts            - API route contracts with Zod schemas
-```
+
+
 
 ## User Roles
-- **admin** - Full platform management (users, jobs, resources, blog)
-- **employer** - Post jobs, view applicants, CSV bulk upload
-- **job_seeker** - Browse jobs, apply, manage resumes
-
-## Membership Tiers
-- **free** - Basic access
-- **basic** - Mid-tier features ($19/mo seekers, $79/mo employers)
-- **premium** - Full access ($49/mo seekers, $199/mo employers)
+- **admin**: Full platform management (users, jobs, resources, blog)
+- **employer**: Post jobs, view applicants, CSV bulk upload
+- **job_seeker**: Browse jobs, apply, manage resumes
 
 ## Seed Accounts (for testing)
-- Admin: admin@transportjobs.com / password123
-- Employer: employer@trucking.com / password123  
-- Job Seeker: seeker@example.com / password123
+- Admin: `admin@transpojobs.com` / `password123`
+- Employer: `employer@trucking.com` / `password123`
+- Job Seeker: `seeker@example.com` / `password123`
 
 ## Stripe Integration (stripe-replit-sync)
 - Uses `stripe-replit-sync` package for automatic webhook management and DB sync
 - Stripe schema auto-created in PostgreSQL on startup via `runMigrations()`
-- Webhook endpoint: POST /api/stripe/webhook (managed automatically)
-- Checkout: POST /api/payments/create-checkout-session
-- Customer portal: POST /api/payments/portal
-- Publishable key: GET /api/payments/config
+- Webhook endpoint: `POST /api/stripe/webhook` (managed automatically)
+- Checkout: `POST /api/payments/create-checkout-session`
+- Customer portal: `POST /api/payments/portal`
+- Publishable key: `GET /api/payments/config`
 - Products seeded via `npx tsx server/seed-products.ts`
 
 ### Stripe Products Created (Sandbox)
@@ -83,9 +79,9 @@ shared/
 - TranspoJobs Premium - Employer: $199/mo
 
 ### Files
-- server/stripeClient.ts - Stripe client factory (reads credentials from Replit connectors API)
-- server/webhookHandlers.ts - Webhook processor
-- server/seed-products.ts - Script to create Stripe products
+- `server/stripeClient.ts` - Stripe client factory (reads credentials from Replit connectors API)
+- `server/webhookHandlers.ts` - Webhook processor
+- `server/seed-products.ts` - Script to create Stripe products
 
 ## Jobs Schema (key fields)
 - `title`, `companyName`, `jobType` (Full-time/Part-time/Contract/Seasonal/Owner-Operator/Lease Purchase/Temporary)
@@ -94,26 +90,77 @@ shared/
 - `isExternalApply`, `applyUrl`
 
 ## Database Tables
-- `users` - User accounts with role (admin/employer/job_seeker), membershipTier (free/basic/premium), employer profile fields (companyAddress, contactName, contactEmail, contactPhone, aboutCompany)
-- `jobs` - Job listings with category, industry, jobType fields
-- `applications` - Job applications linking seekers to jobs
-- `resources` - Member resource library with targetAudience and requiredTier gating
-- `blog_posts` - Blog posts with category field
-- `resumes` - Text-based resumes for job seekers
-- `site_settings` - Key-value site configuration (name, colors, fonts, login/signup page text)
-- `categories` - Labels for jobs, industries, blogs (id, name, type: job/industry/blog)
-- `coupons` - Promotional discount codes (code, discountType, discountValue, maxUses, currentUses, expiresAt, isActive, appliesTo)
+- `users` - role (admin/employer/job_seeker), membershipTier, employer profile fields
+- `jobs` - job listings
+- `applications` - job listings applications linking seekers to jobs
+- `resources` - member resource library gating
+- `blog_posts` - blog posts
+- `resumes` - text-based resumes for job seekers
+- `site_settings` - key-value site configuration
+- `categories` - labels for jobs, industries, blogs
+- `coupons` - promo codes
 
 ## Key Features
-- Job listings with external/internal apply flows, job type filter, category/industry filter, company name display
+- Job listings with external/internal apply flows
 - Resume creation (text-based)
-- CSV bulk upload for jobs (companyName, jobType, locationCity, locationState, locationCountry, benefits)
-- Membership gating on resource library (separate employer/seeker tabs)
+- CSV bulk upload for jobs
+- Membership gating on resource library
 - Blog with admin publishing and categories
 - Role-based dashboard routing
-- Design settings: brand colors, fonts, logo (with size control: small/medium/large/x-large), announcements, footer background color, footer copy, social media links (X/LinkedIn/Facebook/Instagram/YouTube/TikTok) (live CSS variable injection)
-- Admin Site Pages editor: customize login/signup page text, testimonials, background images, brand icon selection (truck/building/briefcase/mappin/shield/package/navigation/none)
-- Categories & Labels system: job categories, industries, blog categories (admin CRUD)
-- Coupon code system: create/edit/delete coupons with percent/fixed discount, max uses, expiry, tier targeting
-- Pricing page coupon input with live discount preview
-- Full CRUD for all admin entities: users (edit/view/delete with role/tier), jobs (edit/view/delete with categories), resources (edit/delete with audience/tier), blog posts (edit/delete with categories)
+- Site design settings (CSS variables, logo, announcements, footer, social links)
+- Admin site pages editor
+- Categories & labels system
+- Coupon code system
+
+---
+
+If anything above conflicts with this Notion SOT Contract, follow the Notion SOT Contract.
+
+# Notion SOT Contract (MVP) — must follow
+
+## Non-negotiable rules
+1) Notion is read-only
+- The app must never write to Notion.
+
+2) Run from validated snapshots (never live reads)
+- Implement a sync job that reads Notion registries and writes a validated snapshot to Postgres (or a snapshot table).
+- Runtime must read only from the latest valid snapshot.
+- If validation fails, keep using the last-known-good snapshot and alert.
+
+## Canonical docs (do not override)
+- LaneLogic Jobs: Master PRD & Registry 2026 (index + decision log)
+- Engineering Standards — Performance, Security, Integrations (LaneLogic Jobs)
+- PRD — Product Requirements (LaneLogic Jobs)
+
+## Canonical registries (source of truth)
+- Products & Pricing (LaneLogic Jobs)
+- Features & Entitlements (LaneLogic Jobs)
+- Product Entitlement Overrides (LaneLogic Jobs)
+- Compliance Rules (LaneLogic Jobs) (publish gating, as used)
+
+## Pricing + Entitlements enforcement contract (implement exactly)
+1) Inclusion semantics
+- Products include entitlements via Products & Pricing → Entitlements relation.
+- Entitlements relation means included entitlements.
+
+2) Fail-closed requirement
+- For every included entitlement, an Active override must exist for (Product/SKU, Entitlement).
+- Missing overrides fail closed.
+
+3) Override mapping
+- If entitlement Type = Limit: use override Value (number) OR Is Unlimited = true.
+- If entitlement Type = Flag: use override Enabled = true/false.
+
+4) Add-on semantics (decided)
+- Resume Access is additive to base quotas.
+- Featured Employer sets a 7-day window; repurchase while active extends expiry (no stacking).
+
+5) Not enforcement
+- Legacy quota columns on Products & Pricing are deprecated; do not use for enforcement.
+- Benefit Tags is marketing-only; do not use for enforcement.
+
+6) Stripe mapping rules
+- Admin Override is not sold in Stripe.
+- Starter - Job Seeker is a free non-Stripe SKU; granted by default in-app.
+- All Stripe-sold Active SKUs must have Stripe Product ID + Stripe Price ID.
+- Tier names and prices are driven by Notion Products & Pricing; do not hardcode.
