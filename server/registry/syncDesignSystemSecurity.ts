@@ -231,50 +231,48 @@ export async function syncDesignSystemSecurity(args: { environment: string }) {
   return { ok: true, snapshotId: snapRow.id, promoted: true };
 }
 
-// If invalid, do not promote; log top failures
-const top = failures.slice(0, 5);
-
-  const environment = args.environment; // or however you already have it
+  // If invalid, do not promote; log top failures
+  const top = failures.slice(0, 5);
 
   const okToSend = await shouldSendAlert({
-  environment,
-  registryName: REGISTRY_NAME,
-  eventType: "registry.validation_failed",
-  withinMinutes: 15,
-});
-
-if (okToSend) {
-  await sendAlertEmail({
-    subject: `[SEV-2][LaneLogic Jobs][${environment}][${REGISTRY_NAME}] Fallback to last-known-good`,
-    text: [
-      `Severity: SEV-2`,
-      `Environment: ${environment}`,
-      `Registry: ${REGISTRY_NAME}`,
-      `Event type: registry.validation_failed`,
-      `Timestamp: ${new Date().toISOString()}`,
-      `Active snapshot id: ${snapRow.id}`,
-      `Top failure: ${top[0]?.validationRuleId ?? "unknown"}`,
-      `Reasons: ${top.map((f) => f.reason).join(" | ")}`,
-      `Recommended action: Fix invalid config and re-sync. System continues using last-known-good.`,
-    ].join("\n"),
+    environment,
+    registryName: REGISTRY_NAME,
+    eventType: "registry.validation_failed",
+    withinMinutes: 15,
   });
-}
 
-await logRegistryEvent({
-  environment,
-  registryName: REGISTRY_NAME,
-  eventType: "registry.validation_failed",
-  severity: "SEV-2",
-  activeSnapshotId: snapRow.id,
-  lastKnownGoodSnapshotId: null,
-  validationRuleId: top[0]?.validationRuleId,
-  reason: top.map((f) => f.reason).join(" | "),
-  details: {
-    contentHash,
-    failureCount: failures.length,
-    topFailures: top,
-  },
-});
+  if (okToSend) {
+    await sendAlertEmail({
+      subject: `[SEV-2][LaneLogic Jobs][${environment}][${REGISTRY_NAME}] Fallback to last-known-good`,
+      text: [
+        `Severity: SEV-2`,
+        `Environment: ${environment}`,
+        `Registry: ${REGISTRY_NAME}`,
+        `Event type: registry.validation_failed`,
+        `Timestamp: ${new Date().toISOString()}`,
+        `Active snapshot id: ${snapRow.id}`,
+        `Top failure: ${top[0]?.validationRuleId ?? "unknown"}`,
+        `Reasons: ${top.map((f) => f.reason).join(" | ")}`,
+        `Recommended action: Fix invalid config and re-sync. System continues using last-known-good.`,
+      ].join("\n"),
+    });
+  }
 
-return { ok: false, snapshotId: snapRow.id, promoted: false, failures };
+  await logRegistryEvent({
+    environment,
+    registryName: REGISTRY_NAME,
+    eventType: "registry.validation_failed",
+    severity: "SEV-2",
+    activeSnapshotId: snapRow.id,
+    lastKnownGoodSnapshotId: null,
+    validationRuleId: top[0]?.validationRuleId,
+    reason: top.map((f) => f.reason).join(" | "),
+    details: {
+      contentHash,
+      failureCount: failures.length,
+      topFailures: top,
+    },
+  });
+
+  return { ok: false, snapshotId: snapRow.id, promoted: false, failures };
 }
