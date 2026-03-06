@@ -5,12 +5,11 @@ import { createServer } from "http";
 import path from "path";
 import fs from "fs";
 import { fileURLToPath } from "url";
-import { writeRegistrySnapshot, setActiveSnapshot, setLastKnownGoodSnapshot } from "./snapshotStore";
-import { logRegistryEvent } from "./eventLog";
 import { syncDesignSystemSecurity } from "./registry/syncDesignSystemSecurity.ts";
 import { requireAdminSecret } from "./middleware/requireAdminSecret.ts";
 import { adminRouter } from "./routes/admin.ts";
 import { sendAlertEmail } from "./alerts/sendAlertEmail.ts";
+import { syncAllRegistries } from "./registry/syncAll";
 
 const app = express();
 const httpServer = createServer(app);
@@ -38,8 +37,6 @@ app.all("/admin/*path", (req, res) => {
   res.status(404).json({ ok: false, error: "Admin route not found" });
 });
 import crypto from "node:crypto";
-import { writeRegistrySnapshot, setActiveSnapshot, setLastKnownGoodSnapshot } from "./registry/snapshotStore";
-import { logRegistryEvent } from "./registry/eventLog";
 
 declare module "http" {
   interface IncomingMessage {
@@ -175,6 +172,7 @@ async function startServer() {
   );
 
   initStripeBackground();
+  initRegistrySync();
 }
 
 async function seedDatabaseIfEmpty() {
@@ -290,6 +288,30 @@ async function initStripeBackground() {
   } catch (error) {
     console.error('Failed to initialize Stripe:', error);
   }
+}
+
+const SYNC_INTERVAL_MS = 15 * 60 * 1000;
+
+async function initRegistrySync() {
+  const environment = process.env.REPLIT_DOMAINS ? "prod" : "staging";
+  try {
+    console.log("[registry-sync] Running initial sync...");
+    const result = await syncAllRegistries({ environment });
+    console.log("[registry-sync] Initial sync result:", JSON.stringify(result));
+  } catch (err) {
+    console.error("[registry-sync] Initial sync error:", err);
+  }
+
+  setInterval(async () => {
+    try {
+      const result = await syncAllRegistries({ environment });
+      if (!result.ok) {
+        console.warn("[registry-sync] Periodic sync had issues:", result);
+      }
+    } catch (err) {
+      console.error("[registry-sync] Periodic sync error:", err);
+    }
+  }, SYNC_INTERVAL_MS);
 }
 
 startServer().catch((err) => {

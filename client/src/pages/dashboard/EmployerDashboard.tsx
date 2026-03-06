@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { DashboardLayout } from "./DashboardLayout";
 import { useAuth } from "@/hooks/use-auth";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -390,13 +390,90 @@ function CsvUploadTab() {
   );
 }
 
+type EntitlementData = {
+  entitlementKey: string;
+  type: "Limit" | "Flag";
+  value: number;
+  isUnlimited: boolean;
+  enabled: boolean;
+};
+
+function formatEntitlementDisplay(key: string, ent: EntitlementData): string {
+  if (ent.type === "Flag") {
+    return ent.enabled ? "Enabled" : "Disabled";
+  }
+  if (ent.isUnlimited) return "Unlimited";
+  return String(ent.value);
+}
+
+function formatEntitlementLabel(key: string): string {
+  return key.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+type PricingProduct = {
+  name: string;
+  audience: string;
+  billingCycle: string;
+  planType: string;
+  price: number;
+  trialDays: number;
+  stripePriceId: string;
+  logicKey: string;
+  features: { key: string; name: string; value: number; isUnlimited: boolean; enabled: boolean; type: string }[];
+};
+
 function EmployerMembershipTab({ user }: { user: NonNullable<ReturnType<typeof useAuth>["user"]> }) {
-  const tierDetails: Record<string, { color: string; perks: string[] }> = {
-    free: { color: "text-slate-500", perks: ["2 job postings/month", "View applications", "Basic employer profile"] },
-    basic: { color: "text-primary", perks: ["10 job postings/month", "Featured listings", "CSV bulk upload", "Applicant filtering"] },
-    premium: { color: "text-accent", perks: ["Unlimited job postings", "Priority placement", "Advanced analytics", "Candidate search", "Dedicated manager"] },
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const fulfilledRef = useRef(false);
+  const { data: entitlementData } = useQuery<{ entitlements: Record<string, EntitlementData> }>({
+    queryKey: ["/api/user/entitlements"],
+  });
+  const { data: pricingData } = useQuery<{ products: PricingProduct[] }>({
+    queryKey: ["/api/registry/pricing"],
+  });
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const sessionId = params.get("session_id");
+    const isAddon = params.get("addon") === "true";
+    if (sessionId && isAddon && !fulfilledRef.current) {
+      fulfilledRef.current = true;
+      apiRequest("POST", "/api/payments/fulfill-addon", { sessionId })
+        .then((r) => r.json())
+        .then((data) => {
+          toast({ title: "Add-on activated!", description: data.message });
+          queryClient.invalidateQueries({ queryKey: ["/api/user/entitlements"] });
+          queryClient.invalidateQueries({ queryKey: ["/api/me"] });
+          window.history.replaceState({}, "", window.location.pathname);
+        })
+        .catch(() => {
+          toast({ title: "Fulfillment issue", description: "Your payment was received. Add-on may take a moment to activate.", variant: "destructive" });
+        });
+    }
+  }, []);
+
+  const entitlements = entitlementData?.entitlements ?? {};
+  const entKeys = Object.keys(entitlements);
+
+  const addOns = (pricingData?.products ?? []).filter(
+    (p) => p.planType === "Top-up" && p.audience === "Employer" && p.stripePriceId
+  );
+
+  const purchaseAddon = async (addon: PricingProduct) => {
+    try {
+      const res = await apiRequest("POST", "/api/payments/create-checkout-session", {
+        stripePriceId: addon.stripePriceId,
+        planType: "Top-up",
+      });
+      const data = await res.json();
+      if (data.url) {
+        window.location.href = data.url;
+      }
+    } catch (err: any) {
+      toast({ title: "Error", description: err.message || "Could not start checkout", variant: "destructive" });
+    }
   };
-  const details = tierDetails[user.membershipTier] || tierDetails.free;
 
   return (
     <div>
@@ -408,23 +485,67 @@ function EmployerMembershipTab({ user }: { user: NonNullable<ReturnType<typeof u
           </div>
           <div>
             <p className="text-sm text-muted-foreground font-medium">Current Plan</p>
-            <h3 className={`text-3xl font-bold font-display capitalize ${details.color}`}>{user.membershipTier}</h3>
+            <h3 className="text-3xl font-bold font-display capitalize text-primary" data-testid="text-membership-tier">{user.membershipTier}</h3>
           </div>
         </div>
-        <ul className="space-y-2 mb-8">
-          {details.perks.map((perk) => (
-            <li key={perk} className="flex items-center gap-2 text-sm">
-              <CheckCircle2 size={15} className="text-primary shrink-0" />
-              <span className="text-muted-foreground">{perk}</span>
-            </li>
-          ))}
-        </ul>
-        {user.membershipTier !== "premium" && (
-          <Button asChild className="hover-elevate shadow-lg shadow-primary/20">
-            <Link href="/pricing?tab=employer">Upgrade Plan</Link>
-          </Button>
+
+        {entKeys.length > 0 && (
+          <div className="mb-8">
+            <h4 className="text-sm font-semibold mb-3 text-muted-foreground uppercase tracking-wide">Your Entitlements</h4>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {entKeys.map((key) => {
+                const ent = entitlements[key];
+                return (
+                  <div key={key} className="flex items-center justify-between bg-slate-50 dark:bg-slate-800 rounded-lg px-4 py-3 border border-border" data-testid={`entitlement-${key}`}>
+                    <span className="text-sm font-medium">{formatEntitlementLabel(key)}</span>
+                    <Badge variant={ent.isUnlimited || ent.enabled ? "default" : "secondary"}>
+                      {formatEntitlementDisplay(key, ent)}
+                    </Badge>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
         )}
+
+        <Button asChild className="hover-elevate shadow-lg shadow-primary/20">
+          <Link href="/pricing?tab=employer">Upgrade Plan</Link>
+        </Button>
       </div>
+
+      {addOns.length > 0 && (
+        <div>
+          <h2 className="text-2xl font-bold font-display mb-6">Add-Ons</h2>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {addOns.map((addon) => (
+              <Card key={addon.stripePriceId} className="p-6">
+                <h3 className="text-lg font-bold font-display mb-2" data-testid={`text-addon-name-${addon.stripePriceId}`}>{addon.name}</h3>
+                <p className="text-2xl font-bold text-primary mb-3" data-testid={`text-addon-price-${addon.stripePriceId}`}>
+                  ${(addon.price / 100).toFixed(2)}
+                  <span className="text-sm font-normal text-muted-foreground ml-1">one-time</span>
+                </p>
+                {addon.features.length > 0 && (
+                  <ul className="space-y-1 mb-4">
+                    {addon.features.map((f) => (
+                      <li key={f.key} className="flex items-center gap-2 text-sm text-muted-foreground">
+                        <CheckCircle2 size={14} className="text-primary shrink-0" />
+                        {f.name}: {f.isUnlimited ? "Unlimited" : f.type === "Flag" ? (f.enabled ? "Yes" : "No") : f.value}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                <Button
+                  onClick={() => purchaseAddon(addon)}
+                  className="w-full hover-elevate"
+                  data-testid={`button-purchase-addon-${addon.stripePriceId}`}
+                >
+                  Purchase
+                </Button>
+              </Card>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

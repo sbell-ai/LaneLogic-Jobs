@@ -24,6 +24,8 @@ export const users = pgTable("users", {
   showCurrentEmployer: boolean("show_current_employer").notNull().default(true),
   stripeCustomerId: text("stripe_customer_id"),
   stripeSubscriptionId: text("stripe_subscription_id"),
+  resumeAccessExpiresAt: timestamp("resume_access_expires_at"),
+  featuredEmployerExpiresAt: timestamp("featured_employer_expires_at"),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
@@ -114,45 +116,45 @@ export const session = pgTable("session", {
 
 // ---- Registry sync snapshots (source-of-truth for runtime config) ----
 export const registrySnapshots = pgTable("registry_snapshots", {
-	id: serial("id").primaryKey(),
-	// e.g. "prod" | "staging"
-	environment: text("environment").notNull(),
-	// e.g. "design_system_security" | "pricing_compliance"
-	registryName: text("registry_name").notNull(),
-	// Hash of normalized payload (dedupe/change detection)
-	contentHash: text("content_hash").notNull(),
-	// What the app reads at runtime (normalized config recommended)
-	payload: jsonb("payload").notNull(),
-	// Optional: list of Notion row URLs included (audit/debug)
-	rowUrls: jsonb("row_urls").notNull(), // string[]
-	// Validation summary
-	validRowCount: integer("valid_row_count").notNull().default(0),
-	invalidRowCount: integer("invalid_row_count").notNull().default(0),
-	// Precedence flags
-	isLastKnownGood: boolean("is_last_known_good").notNull().default(false),
-	isActive: boolean("is_active").notNull().default(false),
-	createdAt: timestamp("created_at").defaultNow(),
+        id: serial("id").primaryKey(),
+        // e.g. "prod" | "staging"
+        environment: text("environment").notNull(),
+        // e.g. "design_system_security" | "pricing_compliance"
+        registryName: text("registry_name").notNull(),
+        // Hash of normalized payload (dedupe/change detection)
+        contentHash: text("content_hash").notNull(),
+        // What the app reads at runtime (normalized config recommended)
+        payload: jsonb("payload").notNull(),
+        // Optional: list of Notion row URLs included (audit/debug)
+        rowUrls: jsonb("row_urls").notNull(), // string[]
+        // Validation summary
+        validRowCount: integer("valid_row_count").notNull().default(0),
+        invalidRowCount: integer("invalid_row_count").notNull().default(0),
+        // Precedence flags
+        isLastKnownGood: boolean("is_last_known_good").notNull().default(false),
+        isActive: boolean("is_active").notNull().default(false),
+        createdAt: timestamp("created_at").defaultNow(),
 });
 
 // ---- Registry events (audit log + alert source) ----
 export const registryEvents = pgTable("registry_events", {
-	id: serial("id").primaryKey(),
+        id: serial("id").primaryKey(),
 
-	environment: text("environment").notNull(),
-	registryName: text("registry_name").notNull(),
-	// e.g. "registry.validation_failed" | "registry.fallback_to_lkg" | "registry.no_lkg"
-	eventType: text("event_type").notNull(),
-	// "SEV-1" | "SEV-2" | "SEV-3"
-	severity: text("severity").notNull(),
-	// Stable identifier like "VAL-PLANS-STRIPE_PRODUCT_ID_REQUIRED"
-	validationRuleId: text("validation_rule_id"),
-	rowUrl: text("row_url"),
-	reason: text("reason"),
-	activeSnapshotId: integer("active_snapshot_id"),
-	lastKnownGoodSnapshotId: integer("last_known_good_snapshot_id"),
-	// Any extra structured info (counts, hashes, etc.)
-	details: jsonb("details").notNull().default({}),
-	createdAt: timestamp("created_at").defaultNow(),
+        environment: text("environment").notNull(),
+        registryName: text("registry_name").notNull(),
+        // e.g. "registry.validation_failed" | "registry.fallback_to_lkg" | "registry.no_lkg"
+        eventType: text("event_type").notNull(),
+        // "SEV-1" | "SEV-2" | "SEV-3"
+        severity: text("severity").notNull(),
+        // Stable identifier like "VAL-PLANS-STRIPE_PRODUCT_ID_REQUIRED"
+        validationRuleId: text("validation_rule_id"),
+        rowUrl: text("row_url"),
+        reason: text("reason"),
+        activeSnapshotId: integer("active_snapshot_id"),
+        lastKnownGoodSnapshotId: integer("last_known_good_snapshot_id"),
+        // Any extra structured info (counts, hashes, etc.)
+        details: jsonb("details").notNull().default({}),
+        createdAt: timestamp("created_at").defaultNow(),
 });
 
 export const insertUserSchema = createInsertSchema(users).omit({ id: true, createdAt: true });

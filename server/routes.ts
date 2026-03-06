@@ -10,6 +10,7 @@ import { Strategy as LocalStrategy } from "passport-local";
 import multer from "multer";
 import path from "path";
 import { randomUUID } from "crypto";
+import { getPricingData, resolveUserEntitlements, checkEntitlement } from "./registry/entitlementResolver";
 
 const uploadStorage = multer.diskStorage({
   destination: path.join(process.cwd(), "uploads"),
@@ -278,6 +279,15 @@ export async function registerRoutes(
 
   app.post(api.jobs.create.path, async (req, res) => {
     try {
+      if (req.isAuthenticated()) {
+        const user = req.user as any;
+        if (user.role === "employer") {
+          const ent = await checkEntitlement(user, "job_posts_per_month");
+          if (!ent.allowed) {
+            return res.status(403).json({ message: "You have reached your job posting limit for this month. Please upgrade your plan." });
+          }
+        }
+      }
       const body = { ...req.body };
       if (body.expiresAt && typeof body.expiresAt === "string") body.expiresAt = new Date(body.expiresAt);
       if (body.expiresAt === null || body.expiresAt === "") body.expiresAt = null;
@@ -334,6 +344,15 @@ export async function registerRoutes(
 
   app.post(api.applications.create.path, async (req, res) => {
     try {
+      if (req.isAuthenticated()) {
+        const user = req.user as any;
+        if (user.role === "job_seeker") {
+          const ent = await checkEntitlement(user, "applications_per_month");
+          if (!ent.allowed) {
+            return res.status(403).json({ message: "You have reached your application limit for this month. Please upgrade your plan." });
+          }
+        }
+      }
       const input = api.applications.create.input.parse(req.body);
       const appData = await storage.createApplication(input);
       res.status(201).json(appData);
@@ -559,57 +578,65 @@ export async function registerRoutes(
     }
   });
 
-  // Create Stripe checkout session using real price IDs from stripe.prices table
+  app.get("/api/user/entitlements", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.status(401).json({ message: "Not authenticated" });
+    }
+    try {
+      const user = req.user as any;
+      const entitlements = await resolveUserEntitlements(user);
+      res.json({ entitlements });
+    } catch (err: any) {
+      console.error("Entitlements error:", err);
+      res.status(500).json({ message: "Failed to load entitlements" });
+    }
+  });
+
+  app.get("/api/registry/pricing", async (_req, res) => {
+    try {
+      const data = await getPricingData();
+      if (!data) {
+        return res.status(503).json({ message: "Pricing data not available yet" });
+      }
+      res.json(data);
+    } catch (err: any) {
+      console.error("Pricing data error:", err);
+      res.status(500).json({ message: "Failed to load pricing data" });
+    }
+  });
+
+
+
   app.post("/api/payments/create-checkout-session", async (req, res) => {
     if (!req.isAuthenticated()) {
       return res.status(401).json({ message: "Not authenticated" });
     }
-    const { tier } = req.body;
-    if (!tier || !["basic", "premium"].includes(tier)) {
-      return res.status(400).json({ message: "Invalid tier" });
-    }
+
+    const { stripePriceId, tier, planType } = req.body;
 
     try {
       const { getUncachableStripeClient } = await import("./stripeClient");
       const stripe = await getUncachableStripeClient();
       const user = req.user as any;
 
-      // Look up the matching price from stripe.prices (synced by stripe-replit-sync)
-      // Products/prices are created by the seed-products script
-      const tierLabel = tier.charAt(0).toUpperCase() + tier.slice(1);
-      const roleLabel = user.role === "employer" ? "Employer" : "Job Seeker";
-      const productName = `TranspoJobs ${tierLabel} - ${roleLabel}`;
+      let resolvedPriceId = stripePriceId || null;
+      const isTopUp = planType === "Top-up";
 
-      // Search for the product in Stripe
-      const products = await stripe.products.search({ query: `name:'${productName}' AND active:'true'` });
-
-      let priceId: string | null = null;
-
-      if (products.data.length > 0) {
-        const prices = await stripe.prices.list({ product: products.data[0].id, active: true, limit: 1 });
-        if (prices.data.length > 0) priceId = prices.data[0].id;
+      if (!resolvedPriceId && tier && ["basic", "premium"].includes(tier)) {
+        const tierLabel = tier.charAt(0).toUpperCase() + tier.slice(1);
+        const roleLabel = user.role === "employer" ? "Employer" : "Job Seeker";
+        const productName = `TranspoJobs ${tierLabel} - ${roleLabel}`;
+        const products = await stripe.products.search({ query: `name:'${productName}' AND active:'true'` });
+        if (products.data.length > 0) {
+          const prices = await stripe.prices.list({ product: products.data[0].id, active: true, limit: 1 });
+          if (prices.data.length > 0) resolvedPriceId = prices.data[0].id;
+        }
       }
 
-      // Fallback: use price_data inline if no pre-created products found
-      const priceMap: Record<string, Record<string, number>> = {
-        job_seeker: { basic: 1900, premium: 4900 },
-        employer: { basic: 7900, premium: 19900 },
-      };
-      const unitAmount = priceMap[user.role]?.[tier] || 1900;
+      if (!resolvedPriceId) {
+        return res.status(400).json({ message: "No valid price found for this plan" });
+      }
 
-      const lineItems = priceId
-        ? [{ price: priceId, quantity: 1 }]
-        : [{
-            price_data: {
-              currency: "usd",
-              product_data: { name: productName },
-              unit_amount: unitAmount,
-              recurring: { interval: "month" as const },
-            },
-            quantity: 1,
-          }];
-
-      // Create or retrieve Stripe customer
       let customerId = user.stripeCustomerId;
       if (!customerId) {
         const customer = await stripe.customers.create({
@@ -620,20 +647,93 @@ export async function registerRoutes(
         await storage.updateUser(user.id, { stripeCustomerId: customerId } as any);
       }
 
-      const session = await stripe.checkout.sessions.create({
+      const sessionParams: any = {
         customer: customerId,
         payment_method_types: ["card"],
-        mode: "subscription",
-        line_items: lineItems,
-        success_url: `${req.protocol}://${req.get("host")}/dashboard/membership?success=true`,
+        mode: isTopUp ? "payment" : "subscription",
+        line_items: [{ price: resolvedPriceId, quantity: 1 }],
+        success_url: isTopUp
+          ? `${req.protocol}://${req.get("host")}/dashboard/membership?success=true&addon=true&session_id={CHECKOUT_SESSION_ID}`
+          : `${req.protocol}://${req.get("host")}/dashboard/membership?success=true`,
         cancel_url: `${req.protocol}://${req.get("host")}/pricing`,
-        metadata: { userId: String(user.id), tier },
-      });
+        metadata: { userId: String(user.id), tier: tier || "", planType: planType || "Subscription", stripePriceId: resolvedPriceId },
+      };
 
-      res.json({ url: session.url });
+      const session = await stripe.checkout.sessions.create(sessionParams);
+      res.json({ url: session.url, sessionId: session.id });
     } catch (err: any) {
       console.error("Stripe checkout error:", err);
       res.status(500).json({ message: err.message || "Payment error" });
+    }
+  });
+
+  const fulfilledSessions = new Set<string>();
+
+  app.post("/api/payments/fulfill-addon", async (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).json({ message: "Not authenticated" });
+    const { sessionId } = req.body;
+    if (!sessionId) return res.status(400).json({ message: "Missing sessionId" });
+
+    if (fulfilledSessions.has(sessionId)) {
+      return res.json({ message: "Already fulfilled", alreadyFulfilled: true });
+    }
+
+    try {
+      const { getUncachableStripeClient } = await import("./stripeClient");
+      const stripe = await getUncachableStripeClient();
+      const session = await stripe.checkout.sessions.retrieve(sessionId);
+
+      if (session.payment_status !== "paid") {
+        return res.status(400).json({ message: "Payment not completed" });
+      }
+
+      const userId = parseInt(session.metadata?.userId || "0", 10);
+      const user = req.user as any;
+      if (userId !== user.id) {
+        return res.status(403).json({ message: "Session does not belong to this user" });
+      }
+
+      const planType = session.metadata?.planType;
+      if (planType !== "Top-up") {
+        return res.status(400).json({ message: "Not a top-up purchase" });
+      }
+
+      const pricingData = await getPricingData();
+      const paidPriceId = session.metadata?.stripePriceId;
+      if (!pricingData || !paidPriceId) {
+        return res.status(400).json({ message: "Cannot resolve product" });
+      }
+
+      const product = pricingData.products.find((p) => p.stripePriceId === paidPriceId);
+      if (!product) {
+        return res.status(400).json({ message: "Product not found" });
+      }
+
+      const now = new Date();
+      const productNameLower = product.name.toLowerCase();
+
+      if (productNameLower.includes("resume")) {
+        const currentExpiry = user.resumeAccessExpiresAt ? new Date(user.resumeAccessExpiresAt) : null;
+        const baseDate = currentExpiry && currentExpiry > now ? currentExpiry : now;
+        const newExpiry = new Date(baseDate.getTime() + 365 * 24 * 60 * 60 * 1000);
+        await storage.updateUser(user.id, { resumeAccessExpiresAt: newExpiry } as any);
+        fulfilledSessions.add(sessionId);
+        return res.json({ message: "Resume Access activated", expiresAt: newExpiry.toISOString() });
+      }
+
+      if (productNameLower.includes("featured")) {
+        const currentExpiry = user.featuredEmployerExpiresAt ? new Date(user.featuredEmployerExpiresAt) : null;
+        const baseDate = currentExpiry && currentExpiry > now ? currentExpiry : now;
+        const newExpiry = new Date(baseDate.getTime() + 7 * 24 * 60 * 60 * 1000);
+        await storage.updateUser(user.id, { featuredEmployerExpiresAt: newExpiry } as any);
+        fulfilledSessions.add(sessionId);
+        return res.json({ message: "Featured Employer activated", expiresAt: newExpiry.toISOString() });
+      }
+
+      return res.status(400).json({ message: "Unknown add-on type" });
+    } catch (err: any) {
+      console.error("Add-on fulfillment error:", err);
+      res.status(500).json({ message: err.message || "Fulfillment error" });
     }
   });
 

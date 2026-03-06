@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { DashboardLayout } from "./DashboardLayout";
 import { useAuth } from "@/hooks/use-auth";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -173,23 +173,54 @@ function ResumeTab({ userId }: { userId: number }) {
   );
 }
 
-function MembershipTab({ user }: { user: NonNullable<ReturnType<typeof useAuth>["user"]> }) {
-  const tierDetails: Record<string, { color: string; perks: string[] }> = {
-    free: {
-      color: "text-slate-500",
-      perks: ["Browse job listings", "1 resume", "5 applications/month", "Free resources"],
-    },
-    basic: {
-      color: "text-primary",
-      perks: ["Unlimited applications", "3 resumes", "Priority status", "Basic resources", "Profile boost"],
-    },
-    premium: {
-      color: "text-accent",
-      perks: ["All Basic perks", "Unlimited resumes", "Featured badge", "All resources", "Direct messaging", "Career coaching"],
-    },
-  };
+type EntitlementData = {
+  entitlementKey: string;
+  type: "Limit" | "Flag";
+  value: number;
+  isUnlimited: boolean;
+  enabled: boolean;
+};
 
-  const details = tierDetails[user.membershipTier] || tierDetails.free;
+function formatEntitlementDisplay(ent: EntitlementData): string {
+  if (ent.type === "Flag") return ent.enabled ? "Enabled" : "Disabled";
+  if (ent.isUnlimited) return "Unlimited";
+  return String(ent.value);
+}
+
+function formatEntitlementLabel(key: string): string {
+  return key.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+function MembershipTab({ user }: { user: NonNullable<ReturnType<typeof useAuth>["user"]> }) {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const fulfilledRef = useRef(false);
+  const { data: entitlementData } = useQuery<{ entitlements: Record<string, EntitlementData> }>({
+    queryKey: ["/api/user/entitlements"],
+  });
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const sessionId = params.get("session_id");
+    const isAddon = params.get("addon") === "true";
+    if (sessionId && isAddon && !fulfilledRef.current) {
+      fulfilledRef.current = true;
+      apiRequest("POST", "/api/payments/fulfill-addon", { sessionId })
+        .then((r) => r.json())
+        .then((data) => {
+          toast({ title: "Add-on activated!", description: data.message });
+          queryClient.invalidateQueries({ queryKey: ["/api/user/entitlements"] });
+          queryClient.invalidateQueries({ queryKey: ["/api/me"] });
+          window.history.replaceState({}, "", window.location.pathname);
+        })
+        .catch(() => {
+          toast({ title: "Fulfillment issue", description: "Your payment was received. Add-on may take a moment to activate.", variant: "destructive" });
+        });
+    }
+  }, []);
+
+  const entitlements = entitlementData?.entitlements ?? {};
+  const entKeys = Object.keys(entitlements);
 
   return (
     <div>
@@ -201,22 +232,32 @@ function MembershipTab({ user }: { user: NonNullable<ReturnType<typeof useAuth>[
           </div>
           <div>
             <p className="text-sm text-muted-foreground font-medium">Current Plan</p>
-            <h3 className={`text-3xl font-bold font-display capitalize ${details.color}`}>{user.membershipTier}</h3>
+            <h3 className="text-3xl font-bold font-display capitalize text-primary" data-testid="text-membership-tier">{user.membershipTier}</h3>
           </div>
         </div>
-        <ul className="space-y-2 mb-8">
-          {details.perks.map((perk) => (
-            <li key={perk} className="flex items-center gap-2 text-sm">
-              <CheckCircle2 size={15} className="text-primary shrink-0" />
-              <span className="text-muted-foreground">{perk}</span>
-            </li>
-          ))}
-        </ul>
-        {user.membershipTier !== "premium" && (
-          <Button asChild className="hover-elevate shadow-lg shadow-primary/20">
-            <Link href="/pricing">Upgrade Plan</Link>
-          </Button>
+
+        {entKeys.length > 0 && (
+          <div className="mb-8">
+            <h4 className="text-sm font-semibold mb-3 text-muted-foreground uppercase tracking-wide">Your Entitlements</h4>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {entKeys.map((key) => {
+                const ent = entitlements[key];
+                return (
+                  <div key={key} className="flex items-center justify-between bg-slate-50 dark:bg-slate-800 rounded-lg px-4 py-3 border border-border" data-testid={`entitlement-${key}`}>
+                    <span className="text-sm font-medium">{formatEntitlementLabel(key)}</span>
+                    <Badge variant={ent.isUnlimited || ent.enabled ? "default" : "secondary"}>
+                      {formatEntitlementDisplay(ent)}
+                    </Badge>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
         )}
+
+        <Button asChild className="hover-elevate shadow-lg shadow-primary/20">
+          <Link href="/pricing">Upgrade Plan</Link>
+        </Button>
       </div>
     </div>
   );
