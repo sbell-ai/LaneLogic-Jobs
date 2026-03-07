@@ -78,7 +78,7 @@ function InlineJobFeed({ category, jobs }: { category: string; jobs: any[] | und
     if (!jobs) return [];
     if (category.toLowerCase() === "all") return jobs.slice(0, 6);
     return jobs
-      .filter((job: any) => job.jobCategory?.toLowerCase().includes(category.toLowerCase()))
+      .filter((job: any) => job.category?.toLowerCase().includes(category.toLowerCase()))
       .slice(0, 6);
   }, [jobs, category]);
 
