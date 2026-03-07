@@ -1,7 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api, buildUrl, type Job, type InsertJob } from "@shared/routes";
 
-export function useJobs() {
+export function useJobs(enabled = true) {
   return useQuery({
     queryKey: [api.jobs.list.path],
     queryFn: async () => {
@@ -9,6 +9,7 @@ export function useJobs() {
       if (!res.ok) throw new Error("Failed to fetch jobs");
       return api.jobs.list.responses[200].parse(await res.json());
     },
+    enabled,
   });
 }
 

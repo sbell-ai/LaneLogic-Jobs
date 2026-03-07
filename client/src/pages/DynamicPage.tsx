@@ -1,9 +1,20 @@
 import { useEffect } from "react";
 import { useParams } from "wouter";
 import { useQuery } from "@tanstack/react-query";
+import { Link } from "wouter";
+import { MapPin } from "lucide-react";
 import { Navbar } from "@/components/layout/Navbar";
 import { Footer } from "@/components/layout/Footer";
+import { useJobs } from "@/hooks/use-jobs";
 import type { Page } from "@shared/schema";
+
+const jobTypeMap: Record<string, string> = {
+  "tanker-driver-jobs": "tanker",
+  "flatbed-driver-jobs": "flatbed",
+  "owner-operator-jobs": "owner_operator",
+  "local-cdl-jobs": "local",
+  "cdl-driver-jobs": "cdl",
+};
 
 function PageMeta({ title, description }: { title: string; description?: string | null }) {
   useEffect(() => {
@@ -44,6 +55,12 @@ export default function DynamicPage({ slug: slugProp }: { slug?: string }) {
     },
     enabled: !!slug,
   });
+
+  const jobFilter = slug ? jobTypeMap[slug] : undefined;
+  const { data: jobs } = useJobs(!!jobFilter);
+  const filteredJobs = jobFilter
+    ? jobs?.filter((job: any) => job.jobType?.toLowerCase().includes(jobFilter)).slice(0, 6)
+    : undefined;
 
   if (isLoading) {
     return (
@@ -111,6 +128,55 @@ export default function DynamicPage({ slug: slugProp }: { slug?: string }) {
               dangerouslySetInnerHTML={renderContent(page.content)}
             />
           </div>
+          {filteredJobs && filteredJobs.length > 0 && (
+            <div className="max-w-5xl mx-auto mt-16" data-testid="section-latest-jobs">
+              <h2 className="text-2xl md:text-3xl font-bold font-display mb-6 text-foreground" data-testid="text-latest-jobs-heading">
+                Latest Jobs
+              </h2>
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
+                {filteredJobs.map((job: any) => (
+                  <Link key={job.id} href={`/jobs/${job.id}`} data-testid={`card-job-${job.id}`}>
+                    <div className="bg-card rounded-2xl p-5 border border-border shadow-sm hover:shadow-lg hover:border-primary/40 transition-all duration-300 h-full flex flex-col group cursor-pointer">
+                      <div className="flex items-start justify-between mb-3">
+                        {job.employerLogo ? (
+                          <img src={job.employerLogo} alt={job.companyName || ""} className="w-10 h-10 rounded-xl object-contain bg-white dark:bg-slate-800 border border-border shrink-0" data-testid={`img-company-logo-${job.id}`} />
+                        ) : (
+                          <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center text-lg font-bold text-primary shrink-0" data-testid={`placeholder-company-logo-${job.id}`}>
+                            {(job.companyName || job.title).charAt(0).toUpperCase()}
+                          </div>
+                        )}
+                        {job.jobType && (
+                          <span className="px-2.5 py-0.5 bg-primary/10 text-primary text-xs font-semibold rounded-full">
+                            {job.jobType}
+                          </span>
+                        )}
+                      </div>
+                      <h3 className="text-base font-bold font-display mb-1 group-hover:text-primary transition-colors line-clamp-1" data-testid={`text-job-title-${job.id}`}>{job.title}</h3>
+                      {job.companyName && (
+                        <p className="text-sm text-muted-foreground mb-2">{job.companyName}</p>
+                      )}
+                      <div className="flex items-center text-muted-foreground text-xs mb-3">
+                        <MapPin size={14} className="mr-1 shrink-0" />
+                        <span className="line-clamp-1">{[job.locationCity, job.locationState].filter(Boolean).join(", ") || "Remote / TBD"}</span>
+                      </div>
+                      <div className="flex items-center gap-2 mt-auto">
+                        {job.salary && (
+                          <span className="text-sm font-semibold text-green-600 dark:text-green-400" data-testid={`text-job-salary-${job.id}`}>
+                            {job.salary}
+                          </span>
+                        )}
+                        {job.expiresAt && (
+                          <span className="ml-auto px-2 py-0.5 bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300 text-[10px] font-semibold rounded-full whitespace-nowrap" data-testid={`badge-actively-interviewing-${job.id}`}>
+                            Actively Interviewing: Apply Soon
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </Link>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       </main>
       <Footer />
