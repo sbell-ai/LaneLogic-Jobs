@@ -1,6 +1,6 @@
-import { Switch, Route } from "wouter";
+import { Switch, Route, useLocation } from "wouter";
 import { queryClient } from "./lib/queryClient";
-import { QueryClientProvider } from "@tanstack/react-query";
+import { QueryClientProvider, useQuery } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/not-found";
@@ -19,6 +19,7 @@ import Pricing from "@/pages/Pricing";
 import Employers from "@/pages/Employers";
 import Contact from "@/pages/Contact";
 import DynamicPage from "@/pages/DynamicPage";
+import type { Page } from "@shared/schema";
 
 import Overview from "@/pages/dashboard/Overview";
 import JobSeekerDashboard from "@/pages/dashboard/JobSeekerDashboard";
@@ -55,6 +56,33 @@ function AdminSectionRouter({ params }: { params: { section: string } }) {
   return <AdminDashboard section={params.section} />;
 }
 
+function CmsOrNotFound() {
+  const [location] = useLocation();
+  const slug = location.replace(/^\//, "").replace(/\/$/, "");
+
+  const { data: page, isLoading, error } = useQuery<Page>({
+    queryKey: ["/api/pages/slug", slug],
+    queryFn: async () => {
+      const res = await fetch(`/api/pages/slug/${slug}`);
+      if (!res.ok) throw new Error("not found");
+      return res.json();
+    },
+    enabled: !!slug && !slug.includes("/"),
+    retry: false,
+  });
+
+  if (!slug || slug.includes("/")) return <NotFound />;
+  if (isLoading) {
+    return (
+      <div className="h-screen flex items-center justify-center">
+        <div className="animate-spin w-6 h-6 border-2 border-primary border-t-transparent rounded-full" />
+      </div>
+    );
+  }
+  if (error || !page) return <NotFound />;
+  return <DynamicPage slug={slug} />;
+}
+
 function Router() {
   return (
     <Switch>
@@ -77,7 +105,7 @@ function Router() {
       <Route path="/dashboard/:section" component={DashboardSectionRouter} />
       <Route path="/dashboard/admin/:section" component={AdminSectionRouter} />
 
-      <Route component={NotFound} />
+      <Route component={CmsOrNotFound} />
     </Switch>
   );
 }

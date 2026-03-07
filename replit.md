@@ -32,7 +32,7 @@ client/src/
       JobSeekerDashboard.tsx    - Applications, Resume, Membership tabs (Notion-driven entitlements), Profile with privacy toggles
       EmployerDashboard.tsx     - Post Job, My Jobs, Applicants, CSV Upload, Membership (Notion-driven entitlements + Add-on purchase)
       AdminDashboard.tsx        - Users, Jobs, Resources, Blog, Custom Pages management
-    DynamicPage.tsx            - Public renderer for admin-created custom pages (/pages/:slug)
+    DynamicPage.tsx            - Public renderer for admin-created custom pages (renders at /<slug> root level, also /pages/:slug for legacy)
   components/
     layout/Navbar.tsx  - Top navigation bar
     layout/Footer.tsx  - Footer component

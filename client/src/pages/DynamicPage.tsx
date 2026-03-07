@@ -31,8 +31,9 @@ function renderContent(html: string) {
   return { __html: html };
 }
 
-export default function DynamicPage() {
-  const { slug } = useParams<{ slug: string }>();
+export default function DynamicPage({ slug: slugProp }: { slug?: string }) {
+  const params = useParams<{ slug: string }>();
+  const slug = slugProp || params.slug;
 
   const { data: page, isLoading, error } = useQuery<Page>({
     queryKey: ["/api/pages/slug", slug],

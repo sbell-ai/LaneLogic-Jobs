@@ -1932,7 +1932,7 @@ function CustomPagesTab() {
             <div>
               <Label className="text-sm font-semibold mb-1 block">URL Slug *</Label>
               <p className="text-xs text-muted-foreground mb-2">
-                Your page will be available at: <span className="font-mono text-primary">/pages/{formData.slug || "your-slug"}</span>
+                Your page will be available at: <span className="font-mono text-primary">/{formData.slug || "your-slug"}</span>
               </p>
               <Input
                 value={formData.slug}
@@ -2008,7 +2008,7 @@ function CustomPagesTab() {
           <div className="flex items-center justify-between p-4 bg-white dark:bg-slate-900 rounded-2xl border border-border">
             {editingPage && (
               <Button variant="outline" size="sm" className="gap-1.5 text-xs" asChild>
-                <a href={`/pages/${editingPage.slug}`} target="_blank" rel="noopener noreferrer" data-testid="button-preview-page">
+                <a href={`/${editingPage.slug}`} target="_blank" rel="noopener noreferrer" data-testid="button-preview-page">
                   <ExternalLink size={14} /> Preview Live Page
                 </a>
               </Button>
@@ -2069,7 +2069,7 @@ function CustomPagesTab() {
                 <div className="flex items-center gap-3 text-xs text-muted-foreground">
                   <span className="flex items-center gap-1">
                     <Globe size={12} />
-                    <span className="font-mono">/pages/{page.slug}</span>
+                    <span className="font-mono">/{page.slug}</span>
                   </span>
                   {page.updatedAt && (
                     <span>Updated {formatDistanceToNow(new Date(page.updatedAt), { addSuffix: true })}</span>
@@ -2078,7 +2078,7 @@ function CustomPagesTab() {
               </div>
               <div className="flex items-center gap-2 shrink-0">
                 <Button variant="outline" size="sm" className="gap-1 text-xs" asChild>
-                  <a href={`/pages/${page.slug}`} target="_blank" rel="noopener noreferrer" data-testid={`button-view-page-${page.id}`}>
+                  <a href={`/${page.slug}`} target="_blank" rel="noopener noreferrer" data-testid={`button-view-page-${page.id}`}>
                     <Eye size={14} />
                   </a>
                 </Button>
