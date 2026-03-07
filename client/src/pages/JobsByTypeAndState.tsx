@@ -1,5 +1,4 @@
 import { useEffect, useMemo } from "react";
-import { useParams } from "wouter";
 import { Link } from "wouter";
 import { Navbar } from "@/components/layout/Navbar";
 import { Footer } from "@/components/layout/Footer";
@@ -13,36 +12,10 @@ import type { Job } from "@shared/schema";
 import { formatDistanceToNow } from "date-fns";
 import { motion } from "framer-motion";
 import { fmtLoc } from "@/components/JobFilterSidebar";
-
-const US_STATES: Record<string, string> = {
-  al: "Alabama", ak: "Alaska", az: "Arizona", ar: "Arkansas", ca: "California",
-  co: "Colorado", ct: "Connecticut", de: "Delaware", fl: "Florida", ga: "Georgia",
-  hi: "Hawaii", id: "Idaho", il: "Illinois", in: "Indiana", ia: "Iowa",
-  ks: "Kansas", ky: "Kentucky", la: "Louisiana", me: "Maine", md: "Maryland",
-  ma: "Massachusetts", mi: "Michigan", mn: "Minnesota", ms: "Mississippi", mo: "Missouri",
-  mt: "Montana", ne: "Nebraska", nv: "Nevada", nh: "New Hampshire", nj: "New Jersey",
-  nm: "New Mexico", ny: "New York", nc: "North Carolina", nd: "North Dakota", oh: "Ohio",
-  ok: "Oklahoma", or: "Oregon", pa: "Pennsylvania", ri: "Rhode Island", sc: "South Carolina",
-  sd: "South Dakota", tn: "Tennessee", tx: "Texas", ut: "Utah", vt: "Vermont",
-  va: "Virginia", wa: "Washington", wv: "West Virginia", wi: "Wisconsin", wy: "Wyoming",
-  dc: "District of Columbia",
-};
-
-const STATE_ABBREV: Record<string, string> = {
-  alabama: "AL", alaska: "AK", arizona: "AZ", arkansas: "AR", california: "CA",
-  colorado: "CO", connecticut: "CT", delaware: "DE", florida: "FL", georgia: "GA",
-  hawaii: "HI", idaho: "ID", illinois: "IL", indiana: "IN", iowa: "IA",
-  kansas: "KS", kentucky: "KY", louisiana: "LA", maine: "ME", maryland: "MD",
-  massachusetts: "MA", michigan: "MI", minnesota: "MN", mississippi: "MS", missouri: "MO",
-  montana: "MT", nebraska: "NE", nevada: "NV", "new-hampshire": "NH", "new-jersey": "NJ",
-  "new-mexico": "NM", "new-york": "NY", "north-carolina": "NC", "north-dakota": "ND", ohio: "OH",
-  oklahoma: "OK", oregon: "OR", pennsylvania: "PA", "rhode-island": "RI", "south-carolina": "SC",
-  "south-dakota": "SD", tennessee: "TN", texas: "TX", utah: "UT", vermont: "VT",
-  virginia: "VA", washington: "WA", "west-virginia": "WV", wisconsin: "WI", wyoming: "WY",
-  dc: "DC", "district-of-columbia": "DC",
-};
-
-const RELATED_JOB_TYPES = ["tanker", "cdl", "flatbed", "owner-operator", "local", "hazmat", "otr", "dispatcher", "mechanic", "warehouse"];
+import {
+  JOB_CATEGORIES, findCategoryBySlug, US_STATES, STATE_ABBREV,
+} from "@/config/jobCategories";
+import type { JobCategory } from "@/config/jobCategories";
 
 const MAJOR_CITIES: Record<string, string[]> = {
   texas: ["Houston", "Dallas", "San Antonio", "Austin", "Fort Worth", "El Paso"],
@@ -79,13 +52,6 @@ const MAJOR_CITIES: Record<string, string[]> = {
   oregon: ["Portland", "Salem", "Eugene", "Gresham", "Hillsboro", "Bend"],
 };
 
-function slugToDisplay(slug: string): string {
-  return slug
-    .split("-")
-    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
-    .join(" ");
-}
-
 function matchesState(job: Job, stateSlug: string): boolean {
   const locState = job.locationState || "";
   const parts = locState.split(/[,\s]+/).map((p) => p.replace(/[^a-zA-Z]/g, "").toLowerCase()).filter(Boolean);
@@ -93,7 +59,7 @@ function matchesState(job: Job, stateSlug: string): boolean {
   const abbrev = STATE_ABBREV[stateSlug];
   if (abbrev && parts.some((p) => p === abbrev.toLowerCase())) return true;
 
-  const fullName = (US_STATES[stateSlug] || slugToDisplay(stateSlug)).toLowerCase();
+  const fullName = (US_STATES[stateSlug] || stateSlug).toLowerCase();
   if (parts.some((p) => p === fullName)) return true;
 
   const fullNameParts = fullName.split(" ");
@@ -106,18 +72,42 @@ function matchesState(job: Job, stateSlug: string): boolean {
   return false;
 }
 
-function matchesJobType(job: Job, jobTypeSlug: string): boolean {
-  const slug = jobTypeSlug.toLowerCase().replace(/-/g, " ");
-  const title = job.title?.toLowerCase() || "";
-  const category = (job as any).category?.toLowerCase() || "";
-  const jobType = job.jobType?.toLowerCase() || "";
-  const desc = job.description?.toLowerCase() || "";
-  return (
-    title.includes(slug) ||
-    category.includes(slug) ||
-    jobType.includes(slug) ||
-    desc.includes(slug)
-  );
+function matchesKeywords(keywords: string[], text: string): boolean {
+  const lower = text.toLowerCase();
+  return keywords.some((kw) => lower.includes(kw.toLowerCase()));
+}
+
+function tieredFilter(
+  allJobs: Job[],
+  category: JobCategory,
+  stateSlug: string
+): { jobs: Job[]; isFallback: boolean } {
+  const stateJobs = allJobs.filter((job) => matchesState(job, stateSlug));
+
+  const primaryMatches = stateJobs.filter((job) => {
+    const primaryText = `${job.title || ""} ${(job as any).category || ""}`;
+    return matchesKeywords(category.match, primaryText);
+  });
+
+  if (primaryMatches.length >= 3) {
+    return { jobs: primaryMatches, isFallback: false };
+  }
+
+  const expandedMatches = stateJobs.filter((job) => {
+    const fullText = `${job.title || ""} ${(job as any).category || ""} ${job.description || ""}`;
+    return matchesKeywords(category.match, fullText);
+  });
+
+  if (expandedMatches.length >= 3) {
+    return { jobs: expandedMatches, isFallback: false };
+  }
+
+  const driverFallback = stateJobs.filter((job) => {
+    const fullText = `${job.title || ""} ${(job as any).category || ""} ${job.description || ""}`;
+    return matchesKeywords(["driver"], fullText);
+  });
+
+  return { jobs: driverFallback, isFallback: true };
 }
 
 function PageMeta({ title, description }: { title: string; description: string }) {
@@ -162,31 +152,36 @@ function PageMeta({ title, description }: { title: string; description: string }
   return null;
 }
 
-export default function JobsByTypeAndState() {
-  const params = useParams<{ jobType: string; state: string }>();
-  const jobTypeSlug = params.jobType || "";
-  const stateSlug = params.state || "";
+interface JobsByTypeAndStateProps {
+  seoSlug: string;
+}
+
+export default function JobsByTypeAndState({ seoSlug }: JobsByTypeAndStateProps) {
+  const parts = seoSlug.split("-jobs-");
+  const categorySlug = parts[0] || "";
+  const stateSlug = parts[1] || "";
+
+  const category = findCategoryBySlug(categorySlug);
+  const stateLabel = US_STATES[stateSlug] || stateSlug;
+  const stateAbbrev = STATE_ABBREV[stateSlug] || stateSlug.toUpperCase();
+  const categoryLabel = category?.label || "Jobs";
 
   const { data: jobs, isLoading } = useQuery<Job[]>({
     queryKey: ["/api/jobs"],
   });
 
-  const filtered = useMemo(() => {
-    if (!jobs) return [];
-    return jobs.filter(
-      (job) => matchesJobType(job, jobTypeSlug) && matchesState(job, stateSlug)
-    );
-  }, [jobs, jobTypeSlug, stateSlug]);
+  const { filtered, isFallback } = useMemo(() => {
+    if (!jobs || !category) return { filtered: [] as Job[], isFallback: false };
+    const result = tieredFilter(jobs, category, stateSlug);
+    return { filtered: result.jobs, isFallback: result.isFallback };
+  }, [jobs, category, stateSlug]);
 
   const displayedJobs = filtered.slice(0, 12);
 
-  const jobTypeLabel = slugToDisplay(jobTypeSlug);
-  const stateLabel = US_STATES[stateSlug] || slugToDisplay(stateSlug);
-  const stateAbbrev = STATE_ABBREV[stateSlug] || stateSlug.toUpperCase();
-  const pageTitle = `${jobTypeLabel} Jobs in ${stateLabel} | LaneLogic Jobs`;
-  const metaDescription = `Browse the latest ${jobTypeLabel.toLowerCase()} jobs in ${stateLabel} from top transportation companies hiring CDL drivers. Find ${filtered.length} open positions now.`;
+  const pageTitle = `${categoryLabel} in ${stateLabel} | LaneLogic Jobs`;
+  const metaDescription = `Browse the latest ${categoryLabel} in ${stateLabel}. Find trucking and transportation jobs from companies hiring now.`;
 
-  const relatedJobTypes = RELATED_JOB_TYPES.filter((t) => t !== jobTypeSlug).slice(0, 5);
+  const relatedCategories = JOB_CATEGORIES.filter((c) => c.slug !== categorySlug).slice(0, 5);
   const cities = MAJOR_CITIES[stateSlug] || [];
 
   return (
@@ -199,7 +194,7 @@ export default function JobsByTypeAndState() {
             <div className="flex items-center gap-3 mb-4">
               <Truck size={28} className="text-primary" />
               <h1 className="text-2xl md:text-3xl font-bold font-display" data-testid="text-jobs-type-state-heading">
-                {jobTypeLabel} Jobs in {stateLabel}
+                {categoryLabel} in {stateLabel}
               </h1>
             </div>
             <p className="text-sm text-muted-foreground">
@@ -214,19 +209,28 @@ export default function JobsByTypeAndState() {
           <div className="max-w-4xl mx-auto">
             <div className="prose prose-slate dark:prose-invert max-w-none mb-8 bg-white dark:bg-slate-900 rounded-2xl border border-border p-6 md:p-8" data-testid="section-seo-content">
               <h2 className="text-xl font-bold font-display mt-0">
-                Find {jobTypeLabel} Jobs in {stateLabel}
+                {categoryLabel} in {stateLabel}
               </h2>
               <p>
-                Looking for {jobTypeLabel.toLowerCase()} driving opportunities in {stateLabel}? LaneLogic Jobs connects
-                CDL drivers and transportation professionals with top employers across {stateLabel}. Whether you're
-                an experienced {jobTypeLabel.toLowerCase()} driver or looking to start your career in transportation,
-                we have positions available from leading carriers and logistics companies.
+                Browse the latest {categoryLabel.toLowerCase()} in {stateLabel}.
+                Transportation companies across {stateLabel} are hiring qualified
+                professionals for open positions now.
               </p>
               <p>
-                {stateLabel} offers competitive pay, benefits, and routes for {jobTypeLabel.toLowerCase()} drivers.
+                {stateLabel} offers competitive pay and benefits for {categoryLabel.toLowerCase().replace(" jobs", "")} roles.
                 Browse our current openings below and apply directly to employers hiring now.
               </p>
             </div>
+
+            {isFallback && !isLoading && displayedJobs.length > 0 && (
+              <div className="mb-6 p-4 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-xl text-sm text-amber-800 dark:text-amber-200" data-testid="text-fallback-notice">
+                Showing driver jobs in {stateLabel}. More {categoryLabel.toLowerCase()} will be listed as they become available.
+              </div>
+            )}
+
+            <h2 className="text-xl font-bold font-display mb-4" data-testid="text-latest-jobs-heading">
+              Latest {categoryLabel} in {stateLabel}
+            </h2>
 
             {isLoading ? (
               <div className="space-y-4">
@@ -239,7 +243,7 @@ export default function JobsByTypeAndState() {
                 <Briefcase className="mx-auto mb-4 text-muted-foreground" size={40} />
                 <h2 className="text-xl font-bold font-display mb-2" data-testid="text-no-jobs-found">No jobs found</h2>
                 <p className="text-muted-foreground mb-4">
-                  No {jobTypeLabel.toLowerCase()} jobs are currently available in {stateLabel}.
+                  No {categoryLabel.toLowerCase()} are currently available in {stateLabel}.
                   Check back soon or browse all available positions.
                 </p>
                 <Link href="/jobs">
@@ -324,7 +328,7 @@ export default function JobsByTypeAndState() {
                 ))}
                 {filtered.length > 12 && (
                   <div className="text-center pt-4">
-                    <Link href={`/jobs?q=${encodeURIComponent(slugToDisplay(jobTypeSlug))}&loc=${encodeURIComponent(stateAbbrev)}`}>
+                    <Link href={`/jobs?q=${encodeURIComponent(categoryLabel)}&loc=${encodeURIComponent(stateAbbrev)}`}>
                       <Button variant="outline" data-testid="button-view-more-jobs">
                         View All {filtered.length} Jobs
                       </Button>
@@ -345,13 +349,13 @@ export default function JobsByTypeAndState() {
                     Other Job Types in {stateLabel}
                   </h3>
                   <div className="flex flex-wrap gap-2">
-                    {relatedJobTypes.map((type) => (
-                      <Link key={type} href={`/jobs/${type}/${stateSlug}`}>
+                    {relatedCategories.map((cat) => (
+                      <Link key={cat.slug} href={`/${cat.slug}-jobs-${stateSlug}`}>
                         <span
                           className="inline-block px-3 py-1.5 bg-slate-100 dark:bg-slate-800 text-sm rounded-full hover:bg-primary/10 hover:text-primary transition-colors cursor-pointer"
-                          data-testid={`link-related-type-${type}`}
+                          data-testid={`link-related-type-${cat.slug}`}
                         >
-                          {slugToDisplay(type)} Jobs in {stateLabel}
+                          {cat.label} in {stateLabel}
                         </span>
                       </Link>
                     ))}
@@ -360,18 +364,18 @@ export default function JobsByTypeAndState() {
                 {cities.length > 0 && (
                   <div>
                     <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3">
-                      {jobTypeLabel} Jobs in {stateLabel} Cities
+                      {categoryLabel} in {stateLabel} Cities
                     </h3>
                     <div className="flex flex-wrap gap-2">
                       {cities.slice(0, 6).map((city) => {
                         const citySlug = city.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/-+$/, "");
                         return (
-                          <Link key={city} href={`/jobs?q=${encodeURIComponent(slugToDisplay(jobTypeSlug))}&loc=${encodeURIComponent(city)}`}>
+                          <Link key={city} href={`/jobs?q=${encodeURIComponent(categoryLabel)}&loc=${encodeURIComponent(city)}`}>
                             <span
                               className="inline-block px-3 py-1.5 bg-slate-100 dark:bg-slate-800 text-sm rounded-full hover:bg-primary/10 hover:text-primary transition-colors cursor-pointer"
                               data-testid={`link-related-city-${citySlug}`}
                             >
-                              {jobTypeLabel} Jobs in {city}
+                              {categoryLabel} in {city}
                             </span>
                           </Link>
                         );

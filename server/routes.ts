@@ -12,6 +12,7 @@ import multer from "multer";
 import path from "path";
 import { randomUUID } from "crypto";
 import { getPricingData, resolveUserEntitlements, checkEntitlement } from "./registry/entitlementResolver";
+import { JOB_CATEGORIES, US_STATES as SEO_STATES } from "@shared/seoConfig";
 
 const uploadStorage = multer.diskStorage({
   destination: path.join(process.cwd(), "uploads"),
@@ -970,6 +971,30 @@ export async function registerRoutes(
       console.error("Mailgun error:", error?.message || error);
       res.status(500).json({ success: false, message: "Failed to send message. Please try again later." });
     }
+  });
+
+  // Sitemap
+  app.get("/sitemap.xml", (_req, res) => {
+    const canonicalHost = process.env.CANONICAL_HOST || `${_req.protocol}://${_req.get("host")}`;
+    const staticPages = ["/", "/jobs", "/blog", "/resources", "/pricing", "/contact", "/employers"];
+
+    let urls = staticPages.map(
+      (p) => `  <url><loc>${canonicalHost}${p}</loc><changefreq>weekly</changefreq><priority>${p === "/" ? "1.0" : "0.8"}</priority></url>`
+    );
+
+    for (const cat of JOB_CATEGORIES) {
+      for (const state of Object.keys(SEO_STATES)) {
+        urls.push(`  <url><loc>${canonicalHost}/${cat.slug}-jobs-${state}</loc><changefreq>daily</changefreq><priority>0.7</priority></url>`);
+      }
+    }
+
+    const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+${urls.join("\n")}
+</urlset>`;
+
+    res.set("Content-Type", "application/xml");
+    res.send(xml);
   });
 
   // Seed database

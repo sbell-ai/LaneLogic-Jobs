@@ -1,4 +1,4 @@
-import { Switch, Route, useLocation } from "wouter";
+import { Switch, Route, useLocation, useParams, Redirect } from "wouter";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider, useQuery } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
@@ -21,6 +21,7 @@ import Contact from "@/pages/Contact";
 import JobsByTypeAndState from "@/pages/JobsByTypeAndState";
 import DynamicPage from "@/pages/DynamicPage";
 import type { Page } from "@shared/schema";
+import { findCategoryBySlug, US_STATES } from "@/config/jobCategories";
 
 import Overview from "@/pages/dashboard/Overview";
 import JobSeekerDashboard from "@/pages/dashboard/JobSeekerDashboard";
@@ -55,6 +56,35 @@ function DashboardSectionRouter({ params }: { params: { section: string } }) {
 function AdminSectionRouter({ params }: { params: { section: string } }) {
   if (params.section === "design") return <DesignSettings />;
   return <AdminDashboard section={params.section} />;
+}
+
+function SeoJobPageOrFallthrough() {
+  const routeParams = useParams<{ seoSlug: string }>();
+  const rawSlug = routeParams.seoSlug || "";
+  const slug = rawSlug.toLowerCase().replace(/\/+$/, "");
+
+  if (slug !== rawSlug) {
+    return <Redirect to={`/${slug}`} />;
+  }
+
+  if (!slug.includes("-jobs-")) {
+    return <CmsOrNotFound />;
+  }
+
+  const parts = slug.split("-jobs-");
+  if (parts.length !== 2) {
+    return <CmsOrNotFound />;
+  }
+
+  const [categorySlug, stateSlug] = parts;
+  const category = findCategoryBySlug(categorySlug);
+  const stateExists = Object.prototype.hasOwnProperty.call(US_STATES, stateSlug);
+
+  if (!category || !stateExists) {
+    return <CmsOrNotFound />;
+  }
+
+  return <JobsByTypeAndState seoSlug={slug} />;
 }
 
 function CmsOrNotFound() {
@@ -92,7 +122,6 @@ function Router() {
       <Route path="/register" component={Register} />
 
       <Route path="/jobs" component={Jobs} />
-      <Route path="/jobs/:jobType/:state" component={JobsByTypeAndState} />
       <Route path="/jobs/:id" component={JobDetail} />
       <Route path="/employers" component={Employers} />
       <Route path="/blog" component={Blog} />
@@ -107,6 +136,7 @@ function Router() {
       <Route path="/dashboard/:section" component={DashboardSectionRouter} />
       <Route path="/dashboard/admin/:section" component={AdminSectionRouter} />
 
+      <Route path="/:seoSlug" component={SeoJobPageOrFallthrough} />
       <Route component={CmsOrNotFound} />
     </Switch>
   );

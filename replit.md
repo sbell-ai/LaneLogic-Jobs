@@ -19,7 +19,7 @@ client/src/
     Home.tsx           - Landing page with job search + hero
     Jobs.tsx           - Searchable/filterable job board
     JobDetail.tsx      - Individual job page with apply button
-    JobsByTypeAndState.tsx - Programmatic SEO pages at /jobs/:jobType/:state with dynamic meta tags, templated SEO content, and related searches
+    JobsByTypeAndState.tsx - Programmatic SEO pages at /{category}-jobs-{state} (e.g., /cdl-jobs-texas) with tiered keyword matching, dynamic meta tags, templated SEO content, related searches, and Driver fallback
     Blog.tsx           - Blog listing
     BlogPost.tsx       - Individual blog post
     Resources.tsx      - Member-gated resource library
@@ -57,6 +57,11 @@ server/
 shared/
   schema.ts            - Drizzle ORM schema (users, jobs, applications, resources, blogPosts, resumes, registry_snapshots)
   routes.ts            - API route contracts with Zod schemas
+  seoConfig.ts         - Shared SEO config: JOB_CATEGORIES (with keyword match arrays), US_STATES, STATE_ABBREV
+
+client/src/
+  config/
+    jobCategories.ts   - Re-exports from shared/seoConfig.ts for client-side use
 
 
 
@@ -107,6 +112,19 @@ shared/
 - `categories` - labels for jobs, industries, blogs
 - `coupons` - promo codes
 - `registry_snapshots` - Notion registry sync snapshots (products_pricing, features_entitlements, product_entitlement_overrides, compliance_rules)
+
+## Programmatic SEO Pages
+- **URL Pattern**: `/{category}-jobs-{state}` (e.g., `/cdl-jobs-texas`, `/tanker-jobs-ohio`, `/flatbed-jobs-florida`)
+- **Config**: `shared/seoConfig.ts` — defines `JOB_CATEGORIES` (slug, label, match keywords), `US_STATES`, `STATE_ABBREV`
+- **Routing**: `/:seoSlug` route in App.tsx with `SeoJobPageOrFallthrough` wrapper that validates slug contains `-jobs-`, category exists in JOB_CATEGORIES, and state exists in US_STATES; falls through to CMS/404 otherwise
+- **Slug Normalization**: Lowercase + strip trailing slashes; redirects to canonical if URL differs
+- **Tiered Keyword Matching**:
+  1. Primary: keywords matched against `job.title + job.category`
+  2. If < 3 results: expand to include `job.description`
+  3. If still < 3: fallback to "Driver" jobs in that state
+- **SEO Metadata**: Dynamic title (`"{Label} in {State} | LaneLogic Jobs"`) and description via PageMeta component with `__pageTitleOverride` flag
+- **Sitemap**: `GET /sitemap.xml` generates all category × state combinations + static pages
+- **Display**: Max 12 job cards, "View All" link for overflow, related searches (other categories in same state + major cities)
 
 ## Key Features
 - Job listings with external/internal apply flows
