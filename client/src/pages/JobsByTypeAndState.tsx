@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
 import { useParams } from "wouter";
 import { Link } from "wouter";
 import { Navbar } from "@/components/layout/Navbar";
@@ -6,7 +6,7 @@ import { Footer } from "@/components/layout/Footer";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
-  MapPin, Briefcase, DollarSign, ExternalLink, Clock, Building2, Truck,
+  MapPin, Briefcase, DollarSign, ExternalLink, Clock, Building2, Truck, Search,
 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import type { Job } from "@shared/schema";
@@ -40,6 +40,43 @@ const STATE_ABBREV: Record<string, string> = {
   "south-dakota": "SD", tennessee: "TN", texas: "TX", utah: "UT", vermont: "VT",
   virginia: "VA", washington: "WA", "west-virginia": "WV", wisconsin: "WI", wyoming: "WY",
   dc: "DC", "district-of-columbia": "DC",
+};
+
+const RELATED_JOB_TYPES = ["tanker", "cdl", "flatbed", "owner-operator", "local", "hazmat", "otr", "dispatcher", "mechanic", "warehouse"];
+
+const MAJOR_CITIES: Record<string, string[]> = {
+  texas: ["Houston", "Dallas", "San Antonio", "Austin", "Fort Worth", "El Paso"],
+  california: ["Los Angeles", "San Francisco", "San Diego", "Sacramento", "San Jose", "Fresno"],
+  florida: ["Miami", "Tampa", "Orlando", "Jacksonville", "Fort Lauderdale", "St. Petersburg"],
+  illinois: ["Chicago", "Aurora", "Naperville", "Joliet", "Rockford", "Springfield"],
+  ohio: ["Columbus", "Cleveland", "Cincinnati", "Toledo", "Akron", "Dayton"],
+  pennsylvania: ["Philadelphia", "Pittsburgh", "Allentown", "Erie", "Reading", "Scranton"],
+  "new-york": ["New York City", "Buffalo", "Rochester", "Syracuse", "Albany", "Yonkers"],
+  georgia: ["Atlanta", "Augusta", "Savannah", "Columbus", "Macon", "Athens"],
+  michigan: ["Detroit", "Grand Rapids", "Warren", "Sterling Heights", "Lansing", "Ann Arbor"],
+  "north-carolina": ["Charlotte", "Raleigh", "Greensboro", "Durham", "Winston-Salem", "Fayetteville"],
+  tennessee: ["Nashville", "Memphis", "Knoxville", "Chattanooga", "Clarksville", "Murfreesboro"],
+  indiana: ["Indianapolis", "Fort Wayne", "Evansville", "South Bend", "Carmel", "Fishers"],
+  missouri: ["Kansas City", "St. Louis", "Springfield", "Columbia", "Independence", "Lee's Summit"],
+  virginia: ["Virginia Beach", "Norfolk", "Chesapeake", "Richmond", "Newport News", "Alexandria"],
+  washington: ["Seattle", "Spokane", "Tacoma", "Vancouver", "Bellevue", "Kent"],
+  arizona: ["Phoenix", "Tucson", "Mesa", "Chandler", "Scottsdale", "Glendale"],
+  colorado: ["Denver", "Colorado Springs", "Aurora", "Fort Collins", "Lakewood", "Thornton"],
+  minnesota: ["Minneapolis", "St. Paul", "Rochester", "Duluth", "Bloomington", "Brooklyn Park"],
+  wisconsin: ["Milwaukee", "Madison", "Green Bay", "Kenosha", "Racine", "Appleton"],
+  kentucky: ["Louisville", "Lexington", "Bowling Green", "Owensboro", "Covington", "Richmond"],
+  alabama: ["Birmingham", "Montgomery", "Huntsville", "Mobile", "Tuscaloosa", "Hoover"],
+  "south-carolina": ["Charleston", "Columbia", "Greenville", "Rock Hill", "Mount Pleasant", "Summerville"],
+  louisiana: ["New Orleans", "Baton Rouge", "Shreveport", "Lafayette", "Lake Charles", "Kenner"],
+  maryland: ["Baltimore", "Columbia", "Germantown", "Silver Spring", "Waldorf", "Glen Burnie"],
+  "new-jersey": ["Newark", "Jersey City", "Paterson", "Elizabeth", "Edison", "Woodbridge"],
+  arkansas: ["Little Rock", "Fort Smith", "Fayetteville", "Springdale", "Jonesboro", "Conway"],
+  iowa: ["Des Moines", "Cedar Rapids", "Davenport", "Sioux City", "Iowa City", "Waterloo"],
+  kansas: ["Wichita", "Overland Park", "Kansas City", "Olathe", "Topeka", "Lawrence"],
+  mississippi: ["Jackson", "Gulfport", "Southaven", "Hattiesburg", "Biloxi", "Meridian"],
+  nevada: ["Las Vegas", "Henderson", "Reno", "North Las Vegas", "Sparks", "Carson City"],
+  oklahoma: ["Oklahoma City", "Tulsa", "Norman", "Broken Arrow", "Lawton", "Edmond"],
+  oregon: ["Portland", "Salem", "Eugene", "Gresham", "Hillsboro", "Bend"],
 };
 
 function slugToDisplay(slug: string): string {
@@ -83,6 +120,48 @@ function matchesJobType(job: Job, jobTypeSlug: string): boolean {
   );
 }
 
+function PageMeta({ title, description }: { title: string; description: string }) {
+  useEffect(() => {
+    const prevTitle = document.title;
+    (window as any).__pageTitleOverride = true;
+    document.title = title;
+
+    let metaDesc = document.querySelector('meta[name="description"]');
+    const prevDesc = metaDesc?.getAttribute("content") || "";
+    if (!metaDesc) {
+      metaDesc = document.createElement("meta");
+      metaDesc.setAttribute("name", "description");
+      document.head.appendChild(metaDesc);
+    }
+    metaDesc.setAttribute("content", description);
+
+    let ogTitle = document.querySelector('meta[property="og:title"]');
+    if (!ogTitle) {
+      ogTitle = document.createElement("meta");
+      ogTitle.setAttribute("property", "og:title");
+      document.head.appendChild(ogTitle);
+    }
+    ogTitle.setAttribute("content", title);
+
+    let ogDesc = document.querySelector('meta[property="og:description"]');
+    if (!ogDesc) {
+      ogDesc = document.createElement("meta");
+      ogDesc.setAttribute("property", "og:description");
+      document.head.appendChild(ogDesc);
+    }
+    ogDesc.setAttribute("content", description);
+
+    return () => {
+      (window as any).__pageTitleOverride = false;
+      document.title = prevTitle;
+      if (metaDesc) metaDesc.setAttribute("content", prevDesc);
+      if (ogTitle) ogTitle.setAttribute("content", prevTitle);
+      if (ogDesc) ogDesc.setAttribute("content", prevDesc);
+    };
+  }, [title, description]);
+  return null;
+}
+
 export default function JobsByTypeAndState() {
   const params = useParams<{ jobType: string; state: string }>();
   const jobTypeSlug = params.jobType || "";
@@ -99,46 +178,69 @@ export default function JobsByTypeAndState() {
     );
   }, [jobs, jobTypeSlug, stateSlug]);
 
+  const displayedJobs = filtered.slice(0, 12);
+
   const jobTypeLabel = slugToDisplay(jobTypeSlug);
   const stateLabel = US_STATES[stateSlug] || slugToDisplay(stateSlug);
-  const pageTitle = `${jobTypeLabel} Jobs in ${stateLabel}`;
+  const stateAbbrev = STATE_ABBREV[stateSlug] || stateSlug.toUpperCase();
+  const pageTitle = `${jobTypeLabel} Jobs in ${stateLabel} | LaneLogic Jobs`;
+  const metaDescription = `Browse the latest ${jobTypeLabel.toLowerCase()} jobs in ${stateLabel} from top transportation companies hiring CDL drivers. Find ${filtered.length} open positions now.`;
+
+  const relatedJobTypes = RELATED_JOB_TYPES.filter((t) => t !== jobTypeSlug).slice(0, 5);
+  const cities = MAJOR_CITIES[stateSlug] || [];
 
   return (
     <div className="min-h-screen flex flex-col font-sans">
       <Navbar />
+      <PageMeta title={pageTitle} description={metaDescription} />
       <main className="flex-grow bg-slate-50 dark:bg-slate-950">
-        <div className="bg-white dark:bg-slate-900 border-b border-border py-6">
+        <div className="bg-white dark:bg-slate-900 border-b border-border py-8">
           <div className="container mx-auto px-4 md:px-6">
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3 mb-4">
               <Truck size={28} className="text-primary" />
-              <div>
-                <h1 className="text-2xl md:text-3xl font-bold font-display" data-testid="text-jobs-type-state-heading">
-                  {pageTitle}
-                </h1>
-                <p className="text-sm text-muted-foreground mt-0.5">
-                  {isLoading
-                    ? "Loading..."
-                    : `${filtered.length} job${filtered.length !== 1 ? "s" : ""} found`}
-                </p>
-              </div>
+              <h1 className="text-2xl md:text-3xl font-bold font-display" data-testid="text-jobs-type-state-heading">
+                {jobTypeLabel} Jobs in {stateLabel}
+              </h1>
             </div>
+            <p className="text-sm text-muted-foreground">
+              {isLoading
+                ? "Loading..."
+                : `${filtered.length} job${filtered.length !== 1 ? "s" : ""} found`}
+            </p>
           </div>
         </div>
 
-        <div className="container mx-auto px-4 md:px-6 py-6">
+        <div className="container mx-auto px-4 md:px-6 py-8">
           <div className="max-w-4xl mx-auto">
+            <div className="prose prose-slate dark:prose-invert max-w-none mb-8 bg-white dark:bg-slate-900 rounded-2xl border border-border p-6 md:p-8" data-testid="section-seo-content">
+              <h2 className="text-xl font-bold font-display mt-0">
+                Find {jobTypeLabel} Jobs in {stateLabel}
+              </h2>
+              <p>
+                Looking for {jobTypeLabel.toLowerCase()} driving opportunities in {stateLabel}? LaneLogic Jobs connects
+                CDL drivers and transportation professionals with top employers across {stateLabel}. Whether you're
+                an experienced {jobTypeLabel.toLowerCase()} driver or looking to start your career in transportation,
+                we have positions available from leading carriers and logistics companies.
+              </p>
+              <p>
+                {stateLabel} offers competitive pay, benefits, and routes for {jobTypeLabel.toLowerCase()} drivers.
+                Browse our current openings below and apply directly to employers hiring now.
+              </p>
+            </div>
+
             {isLoading ? (
               <div className="space-y-4">
                 {Array.from({ length: 5 }).map((_, i) => (
                   <div key={i} className="bg-white dark:bg-slate-900 rounded-2xl p-6 border border-border h-36 animate-pulse" />
                 ))}
               </div>
-            ) : filtered.length === 0 ? (
+            ) : displayedJobs.length === 0 ? (
               <div className="text-center py-20 bg-white dark:bg-slate-900 rounded-2xl border border-dashed border-border">
                 <Briefcase className="mx-auto mb-4 text-muted-foreground" size={40} />
                 <h2 className="text-xl font-bold font-display mb-2" data-testid="text-no-jobs-found">No jobs found</h2>
                 <p className="text-muted-foreground mb-4">
                   No {jobTypeLabel.toLowerCase()} jobs are currently available in {stateLabel}.
+                  Check back soon or browse all available positions.
                 </p>
                 <Link href="/jobs">
                   <Button variant="outline" data-testid="button-browse-all-jobs">
@@ -148,7 +250,7 @@ export default function JobsByTypeAndState() {
               </div>
             ) : (
               <div className="space-y-4">
-                {filtered.map((job, i) => (
+                {displayedJobs.map((job, i) => (
                   <motion.div
                     key={job.id}
                     initial={{ opacity: 0, y: 12 }}
@@ -220,8 +322,65 @@ export default function JobsByTypeAndState() {
                     </Link>
                   </motion.div>
                 ))}
+                {filtered.length > 12 && (
+                  <div className="text-center pt-4">
+                    <Link href={`/jobs?q=${encodeURIComponent(slugToDisplay(jobTypeSlug))}&loc=${encodeURIComponent(stateAbbrev)}`}>
+                      <Button variant="outline" data-testid="button-view-more-jobs">
+                        View All {filtered.length} Jobs
+                      </Button>
+                    </Link>
+                  </div>
+                )}
               </div>
             )}
+
+            <div className="mt-12 bg-white dark:bg-slate-900 rounded-2xl border border-border p-6 md:p-8" data-testid="section-related-searches">
+              <h2 className="text-xl font-bold font-display mb-5 flex items-center gap-2">
+                <Search size={20} className="text-primary" />
+                Related Searches
+              </h2>
+              <div className="space-y-6">
+                <div>
+                  <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3">
+                    Other Job Types in {stateLabel}
+                  </h3>
+                  <div className="flex flex-wrap gap-2">
+                    {relatedJobTypes.map((type) => (
+                      <Link key={type} href={`/jobs/${type}/${stateSlug}`}>
+                        <span
+                          className="inline-block px-3 py-1.5 bg-slate-100 dark:bg-slate-800 text-sm rounded-full hover:bg-primary/10 hover:text-primary transition-colors cursor-pointer"
+                          data-testid={`link-related-type-${type}`}
+                        >
+                          {slugToDisplay(type)} Jobs in {stateLabel}
+                        </span>
+                      </Link>
+                    ))}
+                  </div>
+                </div>
+                {cities.length > 0 && (
+                  <div>
+                    <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3">
+                      {jobTypeLabel} Jobs in {stateLabel} Cities
+                    </h3>
+                    <div className="flex flex-wrap gap-2">
+                      {cities.slice(0, 6).map((city) => {
+                        const citySlug = city.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/-+$/, "");
+                        return (
+                          <Link key={city} href={`/jobs?q=${encodeURIComponent(slugToDisplay(jobTypeSlug))}&loc=${encodeURIComponent(city)}`}>
+                            <span
+                              className="inline-block px-3 py-1.5 bg-slate-100 dark:bg-slate-800 text-sm rounded-full hover:bg-primary/10 hover:text-primary transition-colors cursor-pointer"
+                              data-testid={`link-related-city-${citySlug}`}
+                            >
+                              {jobTypeLabel} Jobs in {city}
+                            </span>
+                          </Link>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
         </div>
       </main>

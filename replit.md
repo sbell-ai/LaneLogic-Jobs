@@ -19,6 +19,7 @@ client/src/
     Home.tsx           - Landing page with job search + hero
     Jobs.tsx           - Searchable/filterable job board
     JobDetail.tsx      - Individual job page with apply button
+    JobsByTypeAndState.tsx - Programmatic SEO pages at /jobs/:jobType/:state with dynamic meta tags, templated SEO content, and related searches
     Blog.tsx           - Blog listing
     BlogPost.tsx       - Individual blog post
     Resources.tsx      - Member-gated resource library

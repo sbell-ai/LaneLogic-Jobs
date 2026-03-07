@@ -36,6 +36,7 @@ function injectGoogleFonts(fonts: string[]) {
 }
 
 function updateMetaTags(settings: SiteSettingsData) {
+  if ((window as any).__pageTitleOverride) return;
   if (settings.siteTitle) {
     document.title = settings.siteTitle;
   }
