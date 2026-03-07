@@ -1,0 +1,98 @@
+Please proceed with the implementation plan for programmatic SEO job pages, but apply the following adjustments to ensure filtering accuracy and safe routing.
+
+GENERAL GOAL
+Implement programmatic SEO pages using the URL format:
+
+/[category]-jobs-[state]
+
+Examples:
+
+* /cdl-jobs-texas
+* /tanker-jobs-ohio
+* /flatbed-jobs-florida
+
+The pages should filter jobs using keyword matching and fall back to Driver jobs if fewer than 3 matches exist.
+
+ADJUSTMENTS TO THE CURRENT PLAN
+
+1. Improve keyword matching logic (T002)
+
+Do NOT match against the full job description first because it can cause inaccurate results.
+
+Filtering priority should be:
+
+Primary fields:
+
+* job.title
+* job.category
+
+Secondary field:
+
+* job.description (only used if primary matches are fewer than 3)
+
+Implementation logic:
+
+1. Build a lowercase string using job.title + job.category.
+2. Check if any keyword from category.match[] appears in that string.
+3. If fewer than 3 results are found, allow matches from job.description as well.
+4. If still fewer than 3 results, fall back to Driver jobs in that state.
+
+Example fallback keyword:
+"driver"
+
+2. Add slug validation before rendering SEO pages (T003)
+
+The router will catch all /:seoSlug paths, so validate before rendering.
+
+Rules:
+
+* Only process the page if the slug contains "-jobs-"
+* Split the slug on "-jobs-" to get categorySlug and stateSlug
+* Confirm categorySlug exists in JOB_CATEGORIES
+* Confirm stateSlug exists in US_STATES
+
+If any of these fail, fall through to the CMS or NotFound handler.
+
+Example logic:
+
+if (!slug.includes("-jobs-")) return null;
+
+3. Generate dynamic SEO metadata
+
+Each SEO page should automatically generate:
+
+Title:
+"{Category Label} in {State Name} | LaneLogic Jobs"
+
+Example:
+"CDL Driver Jobs in Texas | LaneLogic Jobs"
+
+Description:
+"Browse the latest {Category Label} in {State Name}. Find trucking and transportation jobs from companies hiring now."
+
+Ensure PageMeta receives these dynamic values.
+
+4. Keep all existing functionality
+
+Maintain:
+
+* existing state matching logic
+* 12 job card limit
+* related searches section
+* major cities section
+* "View All Jobs" link
+* Tailwind prose styling
+* existing job card component
+
+5. Routing order requirement
+
+The new SEO route must be placed BEFORE the CmsOrNotFound catch-all route in App.tsx so CMS pages continue to work.
+
+6. Documentation
+
+Update replit.md to document:
+
+* the new URL pattern
+* JOB_CATEGORIES config
+* keyword matching logic
+* fallback behavior
