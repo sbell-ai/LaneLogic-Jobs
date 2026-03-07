@@ -19,10 +19,11 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import {
   Users, Briefcase, BookOpen, FileText, Plus, Trash2,
   Upload, CheckCircle2, Copy, Eye, EyeOff, UserPlus,
-  AlertCircle, Download, Pencil, X, Tag, Ticket, ExternalLink
+  AlertCircle, Download, Pencil, X, Tag, Ticket, ExternalLink,
+  FilePlus2, Globe, Search as SearchIcon
 } from "lucide-react";
 import { ImageUpload } from "@/components/ui/image-upload";
-import type { User, Job, Resource, BlogPost, Category, Coupon, SiteSettingsData } from "@shared/schema";
+import type { User, Job, Resource, BlogPost, Category, Coupon, SiteSettingsData, Page } from "@shared/schema";
 import { insertResourceSchema, insertBlogPostSchema, insertJobSchema } from "@shared/schema";
 import { z } from "zod";
 import { formatDistanceToNow, format } from "date-fns";
@@ -1788,6 +1789,327 @@ function CouponsTab() {
 
 // ─── SITE PAGES TAB ──────────────────────────────────────────────────────────
 
+// ─── CUSTOM PAGES TAB ─────────────────────────────────────────────────────────
+
+function slugify(text: string): string {
+  return text
+    .toLowerCase()
+    .replace(/[^\w\s-]/g, "")
+    .replace(/\s+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "");
+}
+
+function CustomPagesTab() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  const [editingPage, setEditingPage] = useState<Page | null>(null);
+  const [isCreating, setIsCreating] = useState(false);
+  const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null);
+
+  const { data: allPages, isLoading } = useQuery<Page[]>({ queryKey: ["/api/pages"] });
+
+  const [formData, setFormData] = useState({
+    title: "",
+    slug: "",
+    content: "",
+    seoTitle: "",
+    metaDescription: "",
+    isPublished: true,
+  });
+
+  const [autoSlug, setAutoSlug] = useState(true);
+
+  const resetForm = () => {
+    setFormData({ title: "", slug: "", content: "", seoTitle: "", metaDescription: "", isPublished: true });
+    setAutoSlug(true);
+    setEditingPage(null);
+    setIsCreating(false);
+  };
+
+  const openEditor = (page?: Page) => {
+    if (page) {
+      setFormData({
+        title: page.title,
+        slug: page.slug,
+        content: page.content,
+        seoTitle: page.seoTitle || "",
+        metaDescription: page.metaDescription || "",
+        isPublished: page.isPublished,
+      });
+      setAutoSlug(false);
+      setEditingPage(page);
+      setIsCreating(false);
+    } else {
+      resetForm();
+      setIsCreating(true);
+    }
+  };
+
+  const handleTitleChange = (title: string) => {
+    setFormData(prev => ({
+      ...prev,
+      title,
+      slug: autoSlug ? slugify(title) : prev.slug,
+    }));
+  };
+
+  const createMutation = useMutation({
+    mutationFn: (data: typeof formData) =>
+      apiRequest("POST", "/api/pages", data).then(r => r.json()),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/pages"] });
+      toast({ title: "Page created!", description: "Your new page is now live." });
+      resetForm();
+    },
+    onError: (err: any) => {
+      toast({ title: "Error", description: err.message || "Could not create page.", variant: "destructive" });
+    },
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: ({ id, data }: { id: number; data: typeof formData }) =>
+      apiRequest("PUT", `/api/pages/${id}`, data).then(r => r.json()),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/pages"] });
+      toast({ title: "Page updated!", description: "Changes are now live." });
+      resetForm();
+    },
+    onError: (err: any) => {
+      toast({ title: "Error", description: err.message || "Could not update page.", variant: "destructive" });
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: number) => apiRequest("DELETE", `/api/pages/${id}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/pages"] });
+      toast({ title: "Page deleted" });
+      setDeleteConfirm(null);
+    },
+  });
+
+  const handleSave = () => {
+    if (!formData.title.trim() || !formData.slug.trim()) {
+      toast({ title: "Missing fields", description: "Title and slug are required.", variant: "destructive" });
+      return;
+    }
+    if (editingPage) {
+      updateMutation.mutate({ id: editingPage.id, data: formData });
+    } else {
+      createMutation.mutate(formData);
+    }
+  };
+
+  const isSaving = createMutation.isPending || updateMutation.isPending;
+
+  if (isCreating || editingPage) {
+    return (
+      <div className="max-w-3xl">
+        <div className="flex items-center justify-between mb-6">
+          <div>
+            <h2 className="text-2xl font-bold font-display">{editingPage ? "Edit Page" : "Create New Page"}</h2>
+            <p className="text-muted-foreground text-sm mt-1">
+              {editingPage ? "Update this page's content and settings." : "Create a new SEO page for your site."}
+            </p>
+          </div>
+          <Button variant="outline" onClick={resetForm} data-testid="button-back-to-pages">
+            <X size={16} className="mr-2" /> Cancel
+          </Button>
+        </div>
+
+        <div className="space-y-5">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-border p-6 space-y-5">
+            <div>
+              <Label className="text-sm font-semibold mb-1 block">Page Title *</Label>
+              <Input
+                value={formData.title}
+                onChange={e => handleTitleChange(e.target.value)}
+                placeholder="About Us"
+                data-testid="input-page-title"
+              />
+            </div>
+            <div>
+              <Label className="text-sm font-semibold mb-1 block">URL Slug *</Label>
+              <p className="text-xs text-muted-foreground mb-2">
+                Your page will be available at: <span className="font-mono text-primary">/pages/{formData.slug || "your-slug"}</span>
+              </p>
+              <Input
+                value={formData.slug}
+                onChange={e => {
+                  setAutoSlug(false);
+                  setFormData(prev => ({ ...prev, slug: slugify(e.target.value) }));
+                }}
+                placeholder="about-us"
+                data-testid="input-page-slug"
+              />
+            </div>
+            <div>
+              <Label className="text-sm font-semibold mb-1 block">Page Content</Label>
+              <p className="text-xs text-muted-foreground mb-2">
+                Supports HTML formatting: use &lt;h2&gt;, &lt;h3&gt; for headers, &lt;p&gt; for paragraphs, &lt;a href="..."&gt; for links, &lt;ul&gt;/&lt;ol&gt; for lists, &lt;strong&gt; for bold, &lt;em&gt; for italic.
+              </p>
+              <Textarea
+                value={formData.content}
+                onChange={e => setFormData(prev => ({ ...prev, content: e.target.value }))}
+                placeholder="<h2>Welcome</h2>
+<p>This is your page content. Use HTML tags for formatting.</p>
+<ul>
+  <li>Feature one</li>
+  <li>Feature two</li>
+</ul>"
+                className="min-h-[300px] font-mono text-sm resize-y"
+                data-testid="textarea-page-content"
+              />
+            </div>
+          </div>
+
+          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-border p-6 space-y-5">
+            <h3 className="font-bold font-display text-lg flex items-center gap-2">
+              <SearchIcon size={18} /> SEO Settings
+            </h3>
+            <div>
+              <Label className="text-sm font-semibold mb-1 block">SEO Title</Label>
+              <p className="text-xs text-muted-foreground mb-2">The title shown in search engine results. Defaults to the page title if empty.</p>
+              <Input
+                value={formData.seoTitle}
+                onChange={e => setFormData(prev => ({ ...prev, seoTitle: e.target.value }))}
+                placeholder="About Us | LaneLogic Jobs"
+                data-testid="input-page-seo-title"
+              />
+            </div>
+            <div>
+              <Label className="text-sm font-semibold mb-1 block">Meta Description</Label>
+              <p className="text-xs text-muted-foreground mb-2">A brief description for search engine results (150-160 characters ideal).</p>
+              <Textarea
+                value={formData.metaDescription}
+                onChange={e => setFormData(prev => ({ ...prev, metaDescription: e.target.value }))}
+                placeholder="Learn more about LaneLogic Jobs..."
+                className="min-h-[80px] resize-none"
+                data-testid="textarea-page-meta-description"
+              />
+            </div>
+          </div>
+
+          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-border p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <Label className="text-sm font-semibold block">Published</Label>
+                <p className="text-xs text-muted-foreground mt-1">When off, the page is only visible to admins.</p>
+              </div>
+              <Switch
+                checked={formData.isPublished}
+                onCheckedChange={v => setFormData(prev => ({ ...prev, isPublished: v }))}
+                data-testid="switch-page-published"
+              />
+            </div>
+          </div>
+
+          <div className="flex items-center justify-between p-4 bg-white dark:bg-slate-900 rounded-2xl border border-border">
+            {editingPage && (
+              <Button variant="outline" size="sm" className="gap-1.5 text-xs" asChild>
+                <a href={`/pages/${editingPage.slug}`} target="_blank" rel="noopener noreferrer" data-testid="button-preview-page">
+                  <ExternalLink size={14} /> Preview Live Page
+                </a>
+              </Button>
+            )}
+            <div className="ml-auto">
+              <Button onClick={handleSave} disabled={isSaving} className="gap-2" data-testid="button-save-page">
+                {isSaving ? "Saving..." : editingPage ? "Update Page" : "Create Page"}
+              </Button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="max-w-3xl">
+      <div className="flex items-center justify-between mb-6">
+        <div>
+          <h2 className="text-2xl font-bold font-display">Custom Pages</h2>
+          <p className="text-muted-foreground text-sm mt-1">Create and manage unlimited SEO pages for your site.</p>
+        </div>
+        <Button onClick={() => openEditor()} className="gap-2" data-testid="button-create-new-page">
+          <Plus size={16} /> Create New Page
+        </Button>
+      </div>
+
+      {isLoading ? (
+        <div className="space-y-3">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <div key={i} className="bg-white dark:bg-slate-900 rounded-2xl border border-border p-5 h-20 animate-pulse" />
+          ))}
+        </div>
+      ) : !allPages || allPages.length === 0 ? (
+        <div className="text-center py-16 bg-white dark:bg-slate-900 rounded-2xl border border-dashed border-border">
+          <FilePlus2 className="mx-auto mb-4 text-muted-foreground" size={40} />
+          <h3 className="text-lg font-bold font-display mb-2">No pages yet</h3>
+          <p className="text-muted-foreground mb-4">Create your first custom page to get started.</p>
+          <Button onClick={() => openEditor()} className="gap-2" data-testid="button-create-first-page">
+            <Plus size={16} /> Create New Page
+          </Button>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {allPages.map(page => (
+            <div
+              key={page.id}
+              className="bg-white dark:bg-slate-900 rounded-2xl border border-border p-5 flex items-center justify-between gap-4"
+              data-testid={`page-row-${page.id}`}
+            >
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2 mb-1">
+                  <h3 className="font-bold font-display text-base truncate">{page.title}</h3>
+                  {!page.isPublished && (
+                    <Badge variant="outline" className="text-xs text-amber-600 border-amber-300">Draft</Badge>
+                  )}
+                </div>
+                <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                  <span className="flex items-center gap-1">
+                    <Globe size={12} />
+                    <span className="font-mono">/pages/{page.slug}</span>
+                  </span>
+                  {page.updatedAt && (
+                    <span>Updated {formatDistanceToNow(new Date(page.updatedAt), { addSuffix: true })}</span>
+                  )}
+                </div>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <Button variant="outline" size="sm" className="gap-1 text-xs" asChild>
+                  <a href={`/pages/${page.slug}`} target="_blank" rel="noopener noreferrer" data-testid={`button-view-page-${page.id}`}>
+                    <Eye size={14} />
+                  </a>
+                </Button>
+                <Button variant="outline" size="sm" className="gap-1 text-xs" onClick={() => openEditor(page)} data-testid={`button-edit-page-${page.id}`}>
+                  <Pencil size={14} />
+                </Button>
+                {deleteConfirm === page.id ? (
+                  <div className="flex items-center gap-1">
+                    <Button variant="destructive" size="sm" className="text-xs" onClick={() => deleteMutation.mutate(page.id)} data-testid={`button-confirm-delete-page-${page.id}`}>
+                      Confirm
+                    </Button>
+                    <Button variant="outline" size="sm" className="text-xs" onClick={() => setDeleteConfirm(null)}>
+                      Cancel
+                    </Button>
+                  </div>
+                ) : (
+                  <Button variant="outline" size="sm" className="gap-1 text-xs text-red-500 hover:text-red-600" onClick={() => setDeleteConfirm(page.id)} data-testid={`button-delete-page-${page.id}`}>
+                    <Trash2 size={14} />
+                  </Button>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── SITE PAGES TAB (Homepage / Login / Signup settings) ─────────────────────
+
 function SitePagesTab() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -2152,6 +2474,7 @@ export default function AdminDashboard({ section }: { section?: string }) {
       case "categories": return <CategoriesTab />;
       case "coupons": return <CouponsTab />;
       case "site-pages": return <SitePagesTab />;
+      case "custom-pages": return <CustomPagesTab />;
       default: return <UsersTab />;
     }
   };

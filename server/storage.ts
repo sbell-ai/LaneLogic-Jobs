@@ -1,6 +1,6 @@
 import { db } from "./db";
 import {
-  users, jobs, applications, resources, blogPosts, resumes, siteSettings, categories, coupons,
+  users, jobs, applications, resources, blogPosts, resumes, siteSettings, categories, coupons, pages,
   type User, type InsertUser, type Job, type InsertJob,
   type Application, type InsertApplication,
   type Resource, type InsertResource,
@@ -8,6 +8,7 @@ import {
   type Resume, type InsertResume,
   type Category, type InsertCategory,
   type Coupon, type InsertCoupon,
+  type Page, type InsertPage,
   type SiteSettingsData, DEFAULT_SETTINGS
 } from "@shared/schema";
 import { eq, sql, desc } from "drizzle-orm";
@@ -64,6 +65,14 @@ export interface IStorage {
   updateCoupon(id: number, updates: Partial<InsertCoupon>): Promise<Coupon>;
   deleteCoupon(id: number): Promise<void>;
   incrementCouponUses(id: number): Promise<void>;
+
+  // Pages
+  getPages(): Promise<Page[]>;
+  getPage(id: number): Promise<Page | undefined>;
+  getPageBySlug(slug: string): Promise<Page | undefined>;
+  createPage(page: InsertPage): Promise<Page>;
+  updatePage(id: number, updates: Partial<InsertPage>): Promise<Page>;
+  deletePage(id: number): Promise<void>;
 
   // Site Settings
   getSiteSettings(): Promise<SiteSettingsData>;
@@ -216,6 +225,30 @@ export class DatabaseStorage implements IStorage {
     await db.update(coupons)
       .set({ currentUses: sql`${coupons.currentUses} + 1` })
       .where(eq(coupons.id, id));
+  }
+
+  // Pages
+  async getPages(): Promise<Page[]> {
+    return await db.select().from(pages).orderBy(desc(pages.createdAt));
+  }
+  async getPage(id: number): Promise<Page | undefined> {
+    const [page] = await db.select().from(pages).where(eq(pages.id, id));
+    return page;
+  }
+  async getPageBySlug(slug: string): Promise<Page | undefined> {
+    const [page] = await db.select().from(pages).where(eq(pages.slug, slug));
+    return page;
+  }
+  async createPage(page: InsertPage): Promise<Page> {
+    const [p] = await db.insert(pages).values(page).returning();
+    return p;
+  }
+  async updatePage(id: number, updates: Partial<InsertPage>): Promise<Page> {
+    const [p] = await db.update(pages).set({ ...updates, updatedAt: new Date() }).where(eq(pages.id, id)).returning();
+    return p;
+  }
+  async deletePage(id: number): Promise<void> {
+    await db.delete(pages).where(eq(pages.id, id));
   }
 
   // Site Settings

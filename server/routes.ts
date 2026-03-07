@@ -2,6 +2,7 @@ import type { Express } from "express";
 import type { Server } from "http";
 import { storage } from "./storage";
 import { api } from "@shared/routes";
+import { insertPageSchema } from "@shared/schema";
 import { z } from "zod";
 import session from "express-session";
 import connectPgSimple from "connect-pg-simple";
@@ -561,6 +562,95 @@ export async function registerRoutes(
       return res.status(400).json({ message: `Coupon only applies to ${coupon.appliesTo} tier` });
     }
     res.json(coupon);
+  });
+
+  app.get("/api/pages", async (req, res) => {
+    const allPages = await storage.getPages();
+    if (req.isAuthenticated() && (req.user as any).role === "admin") {
+      res.json(allPages);
+    } else {
+      res.json(allPages.filter(p => p.isPublished));
+    }
+  });
+
+  app.get("/api/pages/slug/:slug", async (req, res) => {
+    const page = await storage.getPageBySlug(req.params.slug);
+    if (!page) return res.status(404).json({ message: "Page not found" });
+    if (!page.isPublished) {
+      if (!req.isAuthenticated() || (req.user as any).role !== "admin") {
+        return res.status(404).json({ message: "Page not found" });
+      }
+    }
+    res.json(page);
+  });
+
+  function sanitizeHtml(html: string): string {
+    const allowedTags = new Set([
+      "h1","h2","h3","h4","h5","h6","p","br","hr","blockquote",
+      "ul","ol","li","a","strong","b","em","i","u","s","del",
+      "code","pre","span","div","img","table","thead","tbody","tr","th","td",
+      "figure","figcaption","section","article","header","footer","main","nav",
+      "sup","sub","mark","small","abbr","details","summary",
+    ]);
+    const allowedAttrs = new Set(["href","src","alt","title","class","id","target","rel","width","height","colspan","rowspan"]);
+    return html
+      .replace(/<script[\s\S]*?<\/script>/gi, "")
+      .replace(/<style[\s\S]*?<\/style>/gi, "")
+      .replace(/on\w+\s*=\s*("[^"]*"|'[^']*'|[^\s>]*)/gi, "")
+      .replace(/javascript\s*:/gi, "")
+      .replace(/<iframe[\s\S]*?<\/iframe>/gi, "")
+      .replace(/<iframe[^>]*\/?>/gi, "")
+      .replace(/<object[\s\S]*?<\/object>/gi, "")
+      .replace(/<embed[^>]*\/?>/gi, "");
+  }
+
+  app.post("/api/pages", async (req, res) => {
+    if (!req.isAuthenticated() || (req.user as any).role !== "admin") {
+      return res.status(403).json({ message: "Forbidden" });
+    }
+    const parsed = insertPageSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: "Invalid page data", errors: parsed.error.flatten() });
+    }
+    try {
+      const data = { ...parsed.data, content: sanitizeHtml(parsed.data.content) };
+      const page = await storage.createPage(data);
+      res.json(page);
+    } catch (err: any) {
+      if (err.message?.includes("unique") || err.code === "23505") {
+        return res.status(400).json({ message: "A page with this slug already exists" });
+      }
+      throw err;
+    }
+  });
+
+  app.put("/api/pages/:id", async (req, res) => {
+    if (!req.isAuthenticated() || (req.user as any).role !== "admin") {
+      return res.status(403).json({ message: "Forbidden" });
+    }
+    const parsed = insertPageSchema.partial().safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: "Invalid page data", errors: parsed.error.flatten() });
+    }
+    try {
+      const data = parsed.data.content !== undefined ? { ...parsed.data, content: sanitizeHtml(parsed.data.content) } : parsed.data;
+      const page = await storage.updatePage(Number(req.params.id), data);
+      if (!page) return res.status(404).json({ message: "Page not found" });
+      res.json(page);
+    } catch (err: any) {
+      if (err.message?.includes("unique") || err.code === "23505") {
+        return res.status(400).json({ message: "A page with this slug already exists" });
+      }
+      throw err;
+    }
+  });
+
+  app.delete("/api/pages/:id", async (req, res) => {
+    if (!req.isAuthenticated() || (req.user as any).role !== "admin") {
+      return res.status(403).json({ message: "Forbidden" });
+    }
+    await storage.deletePage(Number(req.params.id));
+    res.json({ message: "Deleted" });
   });
 
   app.post(api.uploads.csv.path, (req, res) => {

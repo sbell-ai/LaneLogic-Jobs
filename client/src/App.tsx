@@ -18,6 +18,7 @@ import Resources from "@/pages/Resources";
 import Pricing from "@/pages/Pricing";
 import Employers from "@/pages/Employers";
 import Contact from "@/pages/Contact";
+import DynamicPage from "@/pages/DynamicPage";
 
 import Overview from "@/pages/dashboard/Overview";
 import JobSeekerDashboard from "@/pages/dashboard/JobSeekerDashboard";
@@ -69,6 +70,8 @@ function Router() {
       <Route path="/resources" component={Resources} />
       <Route path="/pricing" component={Pricing} />
       <Route path="/contact" component={Contact} />
+
+      <Route path="/pages/:slug" component={DynamicPage} />
 
       <Route path="/dashboard" component={DashboardRouter} />
       <Route path="/dashboard/:section" component={DashboardSectionRouter} />

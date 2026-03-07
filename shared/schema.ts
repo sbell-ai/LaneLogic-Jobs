@@ -157,6 +157,18 @@ export const registryEvents = pgTable("registry_events", {
         createdAt: timestamp("created_at").defaultNow(),
 });
 
+export const pages = pgTable("pages", {
+  id: serial("id").primaryKey(),
+  title: text("title").notNull(),
+  slug: text("slug").notNull().unique(),
+  content: text("content").notNull().default(""),
+  seoTitle: text("seo_title"),
+  metaDescription: text("meta_description"),
+  isPublished: boolean("is_published").notNull().default(true),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
 export const insertUserSchema = createInsertSchema(users).omit({ id: true, createdAt: true });
 export const insertJobSchema = createInsertSchema(jobs).omit({ id: true, createdAt: true });
 export const insertApplicationSchema = createInsertSchema(applications).omit({ id: true, createdAt: true });
@@ -165,6 +177,7 @@ export const insertBlogPostSchema = createInsertSchema(blogPosts).omit({ id: tru
 export const insertResumeSchema = createInsertSchema(resumes).omit({ id: true, createdAt: true });
 export const insertCategorySchema = createInsertSchema(categories).omit({ id: true, createdAt: true });
 export const insertCouponSchema = createInsertSchema(coupons).omit({ id: true, createdAt: true, currentUses: true });
+export const insertPageSchema = createInsertSchema(pages).omit({ id: true, createdAt: true, updatedAt: true });
 
 export type User = typeof users.$inferSelect;
 export type InsertUser = z.infer<typeof insertUserSchema>;
@@ -182,6 +195,8 @@ export type Category = typeof categories.$inferSelect;
 export type InsertCategory = z.infer<typeof insertCategorySchema>;
 export type Coupon = typeof coupons.$inferSelect;
 export type InsertCoupon = z.infer<typeof insertCouponSchema>;
+export type Page = typeof pages.$inferSelect;
+export type InsertPage = z.infer<typeof insertPageSchema>;
 
 // Site Settings
 export interface SiteSettingsData {
