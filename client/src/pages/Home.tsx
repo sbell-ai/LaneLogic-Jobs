@@ -1,21 +1,37 @@
 import { Link, useLocation } from "wouter";
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
 import { Navbar } from "@/components/layout/Navbar";
 import { Footer } from "@/components/layout/Footer";
-import { Search, MapPin, Briefcase, ArrowRight, ShieldCheck, Users, ChevronDown } from "lucide-react";
-import { useState } from "react";
+import { Search, MapPin, Briefcase, ArrowRight, ShieldCheck, Users, ChevronDown, Filter, RotateCcw } from "lucide-react";
 import { motion } from "framer-motion";
 import { useJobs } from "@/hooks/use-jobs";
 import { useSiteSettings } from "@/hooks/use-settings";
+import { useQuery } from "@tanstack/react-query";
+import type { Category } from "@shared/schema";
+import {
+  JobFilterSidebar, MobileFilterButton, useJobFilters, filterJobs, getActiveFilterCount, clearAllFilters,
+} from "@/components/JobFilterSidebar";
 
 export default function Home() {
   const [, setLocation] = useLocation();
   const [searchQuery, setSearchQuery] = useState("");
   const [locationQuery, setLocationQuery] = useState("");
   const [visibleJobCount, setVisibleJobCount] = useState(12);
+  const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
   const settings = useSiteSettings();
   const { data: jobs, isLoading } = useJobs();
+  const filters = useJobFilters();
+
+  const { data: categories } = useQuery<Category[]>({
+    queryKey: ["/api/categories"],
+  });
+
+  const industries = (categories || []).filter((c) => c.type === "industry");
+  const filtered = filterJobs(jobs || [], filters);
+  const activeFilterCount = getActiveFilterCount(filters);
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
@@ -30,7 +46,6 @@ export default function Home() {
       <Navbar />
       
       <main className="flex-grow">
-        {/* HERO SECTION */}
         <section
           className={`relative overflow-hidden ${!settings.heroBgColor ? 'bg-slate-50 dark:bg-slate-950' : ''} ${
             (() => {
@@ -128,99 +143,119 @@ export default function Home() {
           </div>
         </section>
 
-        {/* ALL JOBS SECTION */}
         <section className="py-16 bg-white dark:bg-slate-900">
           <div className="container mx-auto px-4 md:px-6">
-            <div className="flex justify-between items-end mb-10">
+            <div className="flex flex-col md:flex-row md:justify-between md:items-end mb-10 gap-4">
               <div>
                 <h2 className="text-3xl md:text-4xl font-bold font-display tracking-tight text-foreground mb-2" data-testid="text-all-jobs-heading">All Jobs</h2>
-                <p className="text-muted-foreground text-lg">Browse the latest openings in transportation and logistics.</p>
+                <p className="text-muted-foreground text-lg">
+                  {isLoading ? "Loading..." : `${filtered.length} openings in transportation and logistics.`}
+                </p>
               </div>
-              <Button asChild variant="ghost" className="hidden md:flex hover-elevate">
-                <Link href="/jobs" className="group">
-                  View all <ArrowRight className="ml-2 w-4 h-4 group-hover:translate-x-1 transition-transform" />
-                </Link>
-              </Button>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-              {isLoading ? (
-                Array.from({ length: 12 }).map((_, i) => (
-                  <div key={i} className="bg-card rounded-2xl p-5 border border-border h-48 animate-pulse" />
-                ))
-              ) : (jobs && jobs.length > 0) ? (
-                jobs.slice(0, visibleJobCount).map(job => (
-                  <Link key={job.id} href={`/jobs/${job.id}`} data-testid={`card-job-${job.id}`}>
-                    <div className="bg-card rounded-2xl p-5 border border-border shadow-sm hover:shadow-lg hover:border-primary/40 transition-all duration-300 h-full flex flex-col group cursor-pointer">
-                      <div className="flex items-start justify-between mb-3">
-                        {(job as any).employerLogo ? (
-                          <img src={(job as any).employerLogo} alt={job.companyName || ""} className="w-10 h-10 rounded-xl object-contain bg-white dark:bg-slate-800 border border-border shrink-0" data-testid={`img-company-logo-${job.id}`} />
-                        ) : (
-                          <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center text-lg font-bold text-primary shrink-0" data-testid={`placeholder-company-logo-${job.id}`}>
-                            {(job.companyName || job.title).charAt(0).toUpperCase()}
-                          </div>
-                        )}
-                        {job.jobType && (
-                          <span className="px-2.5 py-0.5 bg-primary/10 text-primary text-xs font-semibold rounded-full">
-                            {job.jobType}
-                          </span>
-                        )}
-                      </div>
-                      <h3 className="text-base font-bold font-display mb-1 group-hover:text-primary transition-colors line-clamp-1" data-testid={`text-job-title-${job.id}`}>{job.title}</h3>
-                      {job.companyName && (
-                        <p className="text-sm text-muted-foreground mb-2">{job.companyName}</p>
-                      )}
-                      <div className="flex items-center text-muted-foreground text-xs mb-3">
-                        <MapPin size={14} className="mr-1 shrink-0" />
-                        <span className="line-clamp-1">{[job.locationCity, job.locationState].filter(Boolean).join(", ") || "Remote / TBD"}</span>
-                      </div>
-                      <div className="flex items-center gap-2 mt-auto">
-                        {job.salary && (
-                          <span className="text-sm font-semibold text-green-600 dark:text-green-400" data-testid={`text-job-salary-${job.id}`}>
-                            {job.salary}
-                          </span>
-                        )}
-                        {job.expiresAt && (
-                          <span className="ml-auto px-2 py-0.5 bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300 text-[10px] font-semibold rounded-full whitespace-nowrap" data-testid={`badge-actively-interviewing-${job.id}`}>
-                            Actively Interviewing: Apply Soon
-                          </span>
-                        )}
-                      </div>
-                    </div>
+              <div className="flex items-center gap-3">
+                <MobileFilterButton filters={filters} onClick={() => setMobileFiltersOpen(!mobileFiltersOpen)} />
+                <Button asChild variant="ghost" className="hidden md:flex hover-elevate">
+                  <Link href="/jobs" className="group">
+                    View all <ArrowRight className="ml-2 w-4 h-4 group-hover:translate-x-1 transition-transform" />
                   </Link>
-                ))
-              ) : (
-                <div className="col-span-full text-center py-12 bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-dashed border-border">
-                  <Briefcase className="mx-auto mb-3 text-muted-foreground" size={32} />
-                  <p className="text-muted-foreground">No jobs posted yet. Check back soon!</p>
-                </div>
-              )}
-            </div>
-
-            {!isLoading && jobs && jobs.length > visibleJobCount && (
-              <div className="mt-8 text-center">
-                <Button
-                  variant="outline"
-                  size="lg"
-                  className="gap-2 rounded-xl hover-elevate"
-                  onClick={() => setVisibleJobCount(prev => prev + 12)}
-                  data-testid="button-show-more-jobs"
-                >
-                  <ChevronDown size={18} />
-                  Show More Jobs
                 </Button>
               </div>
-            )}
+            </div>
 
-            <div className="mt-8 text-center md:hidden">
-              <Button asChild variant="outline" className="w-full">
-                <Link href="/jobs">View all jobs</Link>
-              </Button>
+            <div className="flex gap-6">
+              <JobFilterSidebar
+                filters={filters}
+                filteredCount={filtered.length}
+                industries={industries}
+                mobileOpen={mobileFiltersOpen}
+                onMobileClose={() => setMobileFiltersOpen(false)}
+              />
+
+              <div className="flex-1 min-w-0">
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
+                  {isLoading ? (
+                    Array.from({ length: 12 }).map((_, i) => (
+                      <div key={i} className="bg-card rounded-2xl p-5 border border-border h-48 animate-pulse" />
+                    ))
+                  ) : filtered.length > 0 ? (
+                    filtered.slice(0, visibleJobCount).map(job => (
+                      <Link key={job.id} href={`/jobs/${job.id}`} data-testid={`card-job-${job.id}`}>
+                        <div className="bg-card rounded-2xl p-5 border border-border shadow-sm hover:shadow-lg hover:border-primary/40 transition-all duration-300 h-full flex flex-col group cursor-pointer">
+                          <div className="flex items-start justify-between mb-3">
+                            {(job as any).employerLogo ? (
+                              <img src={(job as any).employerLogo} alt={job.companyName || ""} className="w-10 h-10 rounded-xl object-contain bg-white dark:bg-slate-800 border border-border shrink-0" data-testid={`img-company-logo-${job.id}`} />
+                            ) : (
+                              <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center text-lg font-bold text-primary shrink-0" data-testid={`placeholder-company-logo-${job.id}`}>
+                                {(job.companyName || job.title).charAt(0).toUpperCase()}
+                              </div>
+                            )}
+                            {job.jobType && (
+                              <span className="px-2.5 py-0.5 bg-primary/10 text-primary text-xs font-semibold rounded-full">
+                                {job.jobType}
+                              </span>
+                            )}
+                          </div>
+                          <h3 className="text-base font-bold font-display mb-1 group-hover:text-primary transition-colors line-clamp-1" data-testid={`text-job-title-${job.id}`}>{job.title}</h3>
+                          {job.companyName && (
+                            <p className="text-sm text-muted-foreground mb-2">{job.companyName}</p>
+                          )}
+                          <div className="flex items-center text-muted-foreground text-xs mb-3">
+                            <MapPin size={14} className="mr-1 shrink-0" />
+                            <span className="line-clamp-1">{[job.locationCity, job.locationState].filter(Boolean).join(", ") || "Remote / TBD"}</span>
+                          </div>
+                          <div className="flex items-center gap-2 mt-auto">
+                            {job.salary && (
+                              <span className="text-sm font-semibold text-green-600 dark:text-green-400" data-testid={`text-job-salary-${job.id}`}>
+                                {job.salary}
+                              </span>
+                            )}
+                            {job.expiresAt && (
+                              <span className="ml-auto px-2 py-0.5 bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300 text-[10px] font-semibold rounded-full whitespace-nowrap" data-testid={`badge-actively-interviewing-${job.id}`}>
+                                Actively Interviewing: Apply Soon
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </Link>
+                    ))
+                  ) : (
+                    <div className="col-span-full text-center py-12 bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-dashed border-border">
+                      <Briefcase className="mx-auto mb-3 text-muted-foreground" size={32} />
+                      <p className="text-muted-foreground mb-3">No jobs match your filters.</p>
+                      {activeFilterCount > 0 && (
+                        <Button variant="outline" size="sm" onClick={() => clearAllFilters(filters)} data-testid="button-clear-filters-home-empty">
+                          <RotateCcw size={14} className="mr-2" /> Clear all filters
+                        </Button>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                {!isLoading && filtered.length > visibleJobCount && (
+                  <div className="mt-8 text-center">
+                    <Button
+                      variant="outline"
+                      size="lg"
+                      className="gap-2 rounded-xl hover-elevate"
+                      onClick={() => setVisibleJobCount(prev => prev + 12)}
+                      data-testid="button-show-more-jobs"
+                    >
+                      <ChevronDown size={18} />
+                      Show More Jobs
+                    </Button>
+                  </div>
+                )}
+
+                <div className="mt-8 text-center md:hidden">
+                  <Button asChild variant="outline" className="w-full">
+                    <Link href="/jobs">View all jobs</Link>
+                  </Button>
+                </div>
+              </div>
             </div>
           </div>
         </section>
 
-        {/* STATS/FEATURES SECTION */}
         {(() => {
           const features = [
             { title: settings.feature1Title, desc: settings.feature1Description, icon: <Briefcase size={32} />, bg: "bg-blue-100 dark:bg-blue-900/30", color: "text-primary", tid: "1" },
@@ -247,7 +282,6 @@ export default function Home() {
         })()}
 
         
-        {/* CTA SECTION */}
         <section className="py-24 relative overflow-hidden">
           <div className="absolute inset-0 z-0">
             <img 
