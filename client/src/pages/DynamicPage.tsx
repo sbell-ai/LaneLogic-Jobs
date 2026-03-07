@@ -59,7 +59,7 @@ export default function DynamicPage({ slug: slugProp }: { slug?: string }) {
   const jobFilter = slug ? jobTypeMap[slug] : undefined;
   const { data: jobs } = useJobs(!!jobFilter);
   const filteredJobs = jobFilter
-    ? jobs?.filter((job: any) => job.jobType?.toLowerCase().includes(jobFilter)).slice(0, 6)
+    ? jobs?.filter((job: any) => job.jobCategory?.toLowerCase().includes(jobFilter)).slice(0, 6)
     : undefined;
 
   if (isLoading) {
