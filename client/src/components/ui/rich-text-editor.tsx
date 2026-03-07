@@ -1,5 +1,7 @@
 import { useState, useCallback, useEffect } from "react";
-import { useEditor, EditorContent } from "@tiptap/react";
+import { useEditor, EditorContent, NodeViewWrapper, ReactNodeViewRenderer } from "@tiptap/react";
+import type { NodeViewProps } from "@tiptap/react";
+import { Node, mergeAttributes } from "@tiptap/core";
 import StarterKit from "@tiptap/starter-kit";
 import Link from "@tiptap/extension-link";
 import { Button } from "@/components/ui/button";
@@ -14,12 +16,73 @@ import {
   Link as LinkIcon,
   Code,
   Eye,
+  Briefcase,
+  X,
 } from "lucide-react";
 
 interface RichTextEditorProps {
   value: string;
   onChange: (html: string) => void;
 }
+
+function JobFeedNodeView({ node, deleteNode }: NodeViewProps) {
+  const category = node.attrs.category || "all";
+  return (
+    <NodeViewWrapper className="not-prose my-4" contentEditable={false}>
+      <div
+        className="flex items-center gap-2 px-4 py-3 rounded-lg border-2 border-dashed border-primary/40 bg-primary/5 select-none"
+        data-testid={`block-job-feed-${category}`}
+      >
+        <Briefcase size={16} className="text-primary shrink-0" />
+        <span className="text-sm font-semibold text-primary">
+          Job Feed: {category}
+        </span>
+        <button
+          type="button"
+          onClick={deleteNode}
+          className="ml-auto p-0.5 rounded hover:bg-primary/10 text-muted-foreground hover:text-destructive transition-colors"
+          data-testid={`button-delete-job-feed-${category}`}
+        >
+          <X size={14} />
+        </button>
+      </div>
+    </NodeViewWrapper>
+  );
+}
+
+const JobFeedBlock = Node.create({
+  name: "jobFeedBlock",
+  group: "block",
+  atom: true,
+
+  addAttributes() {
+    return {
+      category: {
+        default: "all",
+      },
+    };
+  },
+
+  parseHTML() {
+    return [
+      {
+        tag: 'div[data-job-feed]',
+        getAttrs: (el) => {
+          const element = el as HTMLElement;
+          return { category: element.getAttribute("data-job-feed") || "all" };
+        },
+      },
+    ];
+  },
+
+  renderHTML({ HTMLAttributes }) {
+    return ["div", mergeAttributes({ "data-job-feed": HTMLAttributes.category })];
+  },
+
+  addNodeView() {
+    return ReactNodeViewRenderer(JobFeedNodeView);
+  },
+});
 
 function MenuBar({ editor }: { editor: ReturnType<typeof useEditor> }) {
   const setLink = useCallback(() => {
@@ -32,6 +95,22 @@ function MenuBar({ editor }: { editor: ReturnType<typeof useEditor> }) {
       return;
     }
     editor.chain().focus().extendMarkRange("link").setLink({ href: url }).run();
+  }, [editor]);
+
+  const insertJobFeed = useCallback(() => {
+    if (!editor) return;
+    const category = window.prompt(
+      "Enter job category (e.g. tanker, cdl, flatbed, dispatcher, local, owner_operator):"
+    );
+    if (!category) return;
+    editor
+      .chain()
+      .focus()
+      .insertContent({
+        type: "jobFeedBlock",
+        attrs: { category: category.trim().toLowerCase() },
+      })
+      .run();
   }, [editor]);
 
   if (!editor) return null;
@@ -86,6 +165,13 @@ function MenuBar({ editor }: { editor: ReturnType<typeof useEditor> }) {
       label: "Link",
       testId: "button-toolbar-link",
     },
+    {
+      icon: <Briefcase size={16} />,
+      action: insertJobFeed,
+      active: false,
+      label: "Job Feed",
+      testId: "button-toolbar-job-feed",
+    },
   ];
 
   return (
@@ -118,6 +204,7 @@ export function RichTextEditor({ value, onChange }: RichTextEditorProps) {
         openOnClick: false,
         HTMLAttributes: { class: "text-primary underline" },
       }),
+      JobFeedBlock,
     ],
     content: value,
     onUpdate: ({ editor }) => {
