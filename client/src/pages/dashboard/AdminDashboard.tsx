@@ -23,6 +23,7 @@ import {
   FilePlus2, Globe, Search as SearchIcon
 } from "lucide-react";
 import { ImageUpload } from "@/components/ui/image-upload";
+import { RichTextEditor } from "@/components/ui/rich-text-editor";
 import type { User, Job, Resource, BlogPost, Category, Coupon, SiteSettingsData, Page } from "@shared/schema";
 import { insertResourceSchema, insertBlogPostSchema, insertJobSchema } from "@shared/schema";
 import { z } from "zod";
@@ -1947,19 +1948,11 @@ function CustomPagesTab() {
             <div>
               <Label className="text-sm font-semibold mb-1 block">Page Content</Label>
               <p className="text-xs text-muted-foreground mb-2">
-                Supports HTML formatting: use &lt;h2&gt;, &lt;h3&gt; for headers, &lt;p&gt; for paragraphs, &lt;a href="..."&gt; for links, &lt;ul&gt;/&lt;ol&gt; for lists, &lt;strong&gt; for bold, &lt;em&gt; for italic.
+                Use the visual editor to format your content, or switch to HTML mode for direct editing.
               </p>
-              <Textarea
+              <RichTextEditor
                 value={formData.content}
-                onChange={e => setFormData(prev => ({ ...prev, content: e.target.value }))}
-                placeholder="<h2>Welcome</h2>
-<p>This is your page content. Use HTML tags for formatting.</p>
-<ul>
-  <li>Feature one</li>
-  <li>Feature two</li>
-</ul>"
-                className="min-h-[300px] font-mono text-sm resize-y"
-                data-testid="textarea-page-content"
+                onChange={(html) => setFormData(prev => ({ ...prev, content: html }))}
               />
             </div>
           </div>
