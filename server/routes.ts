@@ -984,7 +984,7 @@ export async function registerRoutes(
 
     for (const cat of JOB_CATEGORIES) {
       for (const state of Object.keys(SEO_STATES)) {
-        urls.push(`  <url><loc>${canonicalHost}/${cat.slug}-jobs-${state}</loc><changefreq>daily</changefreq><priority>0.7</priority></url>`);
+        urls.push(`  <url><loc>${canonicalHost}/jobs/${cat.slug}-jobs-${state}</loc><changefreq>daily</changefreq><priority>0.7</priority></url>`);
       }
     }
 
@@ -995,6 +995,17 @@ ${urls.join("\n")}
 
     res.set("Content-Type", "application/xml");
     res.send(xml);
+  });
+
+  app.get("/:seoSlug", (req, res, next) => {
+    const slug = req.params.seoSlug.toLowerCase();
+    if (!slug.includes("-jobs-")) return next();
+    const parts = slug.split("-jobs-");
+    if (parts.length !== 2) return next();
+    const [catSlug, stateSlug] = parts;
+    const cat = JOB_CATEGORIES.find((c) => c.slug === catSlug);
+    if (!cat || !Object.prototype.hasOwnProperty.call(SEO_STATES, stateSlug)) return next();
+    res.redirect(301, `/jobs/${slug}`);
   });
 
   // Seed database

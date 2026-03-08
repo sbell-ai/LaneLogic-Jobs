@@ -114,10 +114,11 @@ client/src/
 - `registry_snapshots` - Notion registry sync snapshots (products_pricing, features_entitlements, product_entitlement_overrides, compliance_rules)
 
 ## Programmatic SEO Pages
-- **URL Pattern**: `/{category}-jobs-{state}` (e.g., `/cdl-jobs-texas`, `/tanker-jobs-ohio`, `/flatbed-jobs-florida`)
+- **URL Pattern**: `/jobs/{category}-jobs-{state}` (e.g., `/jobs/cdl-jobs-texas`, `/jobs/tanker-jobs-ohio`, `/jobs/flatbed-jobs-florida`)
+- **Legacy Redirect**: Old flat URLs (`/{category}-jobs-{state}`) automatically redirect to `/jobs/{category}-jobs-{state}` via `LegacySeoRedirect` component
 - **Config**: `shared/seoConfig.ts` — defines `JOB_CATEGORIES` (slug, label, match keywords), `US_STATES`, `STATE_ABBREV`
-- **Routing**: `/:seoSlug` route in App.tsx with `SeoJobPageOrFallthrough` wrapper that validates slug contains `-jobs-`, category exists in JOB_CATEGORIES, and state exists in US_STATES; falls through to CMS/404 otherwise
-- **Slug Normalization**: Lowercase + strip trailing slashes; redirects to canonical if URL differs
+- **Routing**: `/jobs/:id` route dispatches via `JobDetailOrSeoPage` — numeric IDs → `JobDetail`, non-numeric → `SeoJobPageOrFallthrough` which validates slug contains `-jobs-`, category exists in JOB_CATEGORIES, and state exists in US_STATES; falls through to CMS/404 otherwise
+- **Slug Normalization**: Lowercase + strip trailing slashes; redirects to canonical `/jobs/` path if URL differs
 - **Tiered Keyword Matching**:
   1. Primary: keywords matched against `job.title + job.category`
   2. If < 3 results: expand to include `job.description`

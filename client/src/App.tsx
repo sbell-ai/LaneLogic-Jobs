@@ -58,13 +58,24 @@ function AdminSectionRouter({ params }: { params: { section: string } }) {
   return <AdminDashboard section={params.section} />;
 }
 
+function JobDetailOrSeoPage() {
+  const routeParams = useParams<{ id: string }>();
+  const param = routeParams.id || "";
+
+  if (/^\d+$/.test(param)) {
+    return <JobDetail />;
+  }
+
+  return <SeoJobPageOrFallthrough />;
+}
+
 function SeoJobPageOrFallthrough() {
-  const routeParams = useParams<{ seoSlug: string }>();
-  const rawSlug = routeParams.seoSlug || "";
+  const routeParams = useParams<{ id?: string; seoSlug?: string }>();
+  const rawSlug = routeParams.id || routeParams.seoSlug || "";
   const slug = rawSlug.toLowerCase().replace(/\/+$/, "");
 
   if (slug !== rawSlug) {
-    return <Redirect to={`/${slug}`} />;
+    return <Redirect to={`/jobs/${slug}`} />;
   }
 
   if (!slug.includes("-jobs-")) {
@@ -85,6 +96,31 @@ function SeoJobPageOrFallthrough() {
   }
 
   return <JobsByTypeAndState seoSlug={slug} />;
+}
+
+function LegacySeoRedirect() {
+  const routeParams = useParams<{ seoSlug: string }>();
+  const rawSlug = routeParams.seoSlug || "";
+  const slug = rawSlug.toLowerCase().replace(/\/+$/, "");
+
+  if (!slug.includes("-jobs-")) {
+    return <CmsOrNotFound />;
+  }
+
+  const parts = slug.split("-jobs-");
+  if (parts.length !== 2) {
+    return <CmsOrNotFound />;
+  }
+
+  const [categorySlug, stateSlug] = parts;
+  const category = findCategoryBySlug(categorySlug);
+  const stateExists = Object.prototype.hasOwnProperty.call(US_STATES, stateSlug);
+
+  if (!category || !stateExists) {
+    return <CmsOrNotFound />;
+  }
+
+  return <Redirect to={`/jobs/${slug}`} />;
 }
 
 function CmsOrNotFound() {
@@ -122,7 +158,7 @@ function Router() {
       <Route path="/register" component={Register} />
 
       <Route path="/jobs" component={Jobs} />
-      <Route path="/jobs/:id" component={JobDetail} />
+      <Route path="/jobs/:id" component={JobDetailOrSeoPage} />
       <Route path="/employers" component={Employers} />
       <Route path="/blog" component={Blog} />
       <Route path="/blog/:id" component={BlogPost} />
@@ -136,7 +172,7 @@ function Router() {
       <Route path="/dashboard/:section" component={DashboardSectionRouter} />
       <Route path="/dashboard/admin/:section" component={AdminSectionRouter} />
 
-      <Route path="/:seoSlug" component={SeoJobPageOrFallthrough} />
+      <Route path="/:seoSlug" component={LegacySeoRedirect} />
       <Route component={CmsOrNotFound} />
     </Switch>
   );

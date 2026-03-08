@@ -350,7 +350,7 @@ export default function JobsByTypeAndState({ seoSlug }: JobsByTypeAndStateProps)
                   </h3>
                   <div className="flex flex-wrap gap-2">
                     {relatedCategories.map((cat) => (
-                      <Link key={cat.slug} href={`/${cat.slug}-jobs-${stateSlug}`}>
+                      <Link key={cat.slug} href={`/jobs/${cat.slug}-jobs-${stateSlug}`}>
                         <span
                           className="inline-block px-3 py-1.5 bg-slate-100 dark:bg-slate-800 text-sm rounded-full hover:bg-primary/10 hover:text-primary transition-colors cursor-pointer"
                           data-testid={`link-related-type-${cat.slug}`}
