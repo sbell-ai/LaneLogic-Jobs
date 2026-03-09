@@ -246,6 +246,11 @@ export interface SiteSettingsData {
   headerAnnouncement: string;
   headerAnnouncementLink: string;
   footerBgColor: string;
+  footerBgOpacity: number;
+  footerTextColor: string;
+  footerLinkColor: string;
+  footerLinkHoverColor: string;
+  pageBackgroundColor: string;
   footerTagline: string;
   footerCopyright: string;
   socialTwitter: string;
@@ -296,7 +301,12 @@ export const DEFAULT_SETTINGS: SiteSettingsData = {
   siteDescription: "Find the best transportation, trucking, and logistics jobs. Browse thousands of CDL and freight roles across the country.",
   headerAnnouncement: "",
   headerAnnouncementLink: "",
-  footerBgColor: "#020617",
+  footerBgColor: "#0b1220",
+  footerBgOpacity: 1,
+  footerTextColor: "#e5e7eb",
+  footerLinkColor: "#93c5fd",
+  footerLinkHoverColor: "#bfdbfe",
+  pageBackgroundColor: "#ffffff",
   footerTagline: "The premier destination for transportation and logistics professionals to advance their careers.",
   footerCopyright: "© LaneLogic Jobs. All rights reserved.",
   socialTwitter: "",

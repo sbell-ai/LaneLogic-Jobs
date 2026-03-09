@@ -1,0 +1,169 @@
+**Goal**  
+
+Add a theme editor feature that lets an admin edit **footer font colors** with separate controls for **text**, **link**, and **link hover**, plus an **editable footer background with opacity**. Changes must persist, apply to the live site, and meet accessibility contrast requirements.
+
+---
+
+## Scope
+
+Footer includes:
+
+- Copyright line
+- Footer nav links
+- Any small-print text
+- Link hover and focus-visible states
+
+Must **not** affect typography or colors outside the footer.
+
+---
+
+## Theme tokens (data model)
+
+### Required page token (backdrop)
+
+- `pageBackgroundColor` = solid color, stored as `#RRGGBB` only (no alpha)
+
+### Footer tokens
+
+Footer background must support opacity. Use one of these storage approaches:
+
+**Option A (recommended): store RGBA channels**
+
+- `footerBackgroundR` (0–255)
+- `footerBackgroundG` (0–255)
+- `footerBackgroundB` (0–255)
+- `footerBackgroundA` (0–1)
+
+Footer foreground colors (solid):
+
+- `footerTextColor` = `#RRGGBB`
+- `footerLinkColor` = `#RRGGBB`
+- `footerLinkHoverColor` = `#RRGGBB`
+
+**Option B: store canonical CSS string**
+
+- `footerBackgroundColor` supports `rgba(r,g,b,a)` (validate strictly and normalize to `rgba()` on save)
+- Keep the three foreground colors as `#RRGGBB`
+
+### Defaults (safe examples)
+
+- `pageBackgroundColor: #FFFFFF`
+- Footer background: `rgba(11,18,32,1)` (or RGBA channels)
+- `footerTextColor: #E5E7EB`
+- `footerLinkColor: #93C5FD`
+- `footerLinkHoverColor: #BFDBFE`
+
+### Validation
+
+- Foreground colors: accept `#RGB` or `#RRGGBB`, normalize to `#RRGGBB`
+- Background: enforce valid RGBA ranges (or strict `rgba()` parsing if Option B)
+- Reject invalid values with clear errors
+
+---
+
+## API
+
+Extend existing theme endpoints (or create them):
+
+- `GET /theme` returns `pageBackgroundColor` + all footer tokens
+- `PATCH /theme` updates any subset of these tokens
+
+Server-side validation on `PATCH`:
+
+- Validate color formats
+- Compute contrast (see Accessibility) and **block save** if any fail
+- Return `400` with specific messages, including measured ratio, for example:
+    - `"footerTextColor fails contrast against effective footer background (3.2:1, needs 4.5:1)"`
+
+---
+
+## Frontend application (CSS variables)
+
+On theme load, set CSS variables on `:root` (or a theme wrapper):
+
+- `--page-bg: <pageBackgroundColor>`
+- `--footer-bg: rgba(r,g,b,a)` (or normalized `rgba()` string)
+- `--footer-text: <footerTextColor>`
+- `--footer-link: <footerLinkColor>`
+- `--footer-link-hover: <footerLinkHoverColor>`
+
+Footer styling must use variables only:
+
+- Footer container: `background-color: var(--footer-bg)`
+- Footer text: `color: var(--footer-text)`
+- Footer links:
+    - default: `color: var(--footer-link)`
+    - `:hover, :focus-visible`: `color: var(--footer-link-hover)`
+
+Focus visibility requirement:
+
+- Add `:focus-visible` underline and or outline that remains clearly visible on the footer background.
+
+---
+
+## Admin UI (Theme → Footer)
+
+Add a “Footer” section with:
+
+- Background color picker **with alpha slider**
+- Text color picker (solid)
+- Link color picker (solid)
+- Link hover color picker (solid)
+
+UI requirements:
+
+- Live preview block showing sample footer text and a sample link
+- Show both swatches:
+    - Footer background (with alpha)
+    - **Effective background** (post-blend; see below)
+- Show pass/fail contrast indicators for:
+    - Text vs effective background
+    - Link vs effective background
+    - Link hover vs effective background
+- Disable Save or show blocking inline errors when contrast fails
+
+---
+
+## Accessibility (WCAG AA) with opacity (must implement)
+
+Contrast must be checked against the **effective** footer background after blending footer background opacity over the page background.
+
+Backdrop assumption (confirmed):
+
+- Footer always sits on top of `pageBackgroundColor`
+
+Algorithm:
+
+1. Parse footer BG as RGBA: `footerBgRGBA`
+2. Parse page BG as RGB: `pageBgRGB`
+3. Compute effective background via alpha blending:
+    - `effectiveBg = blend(footerBgRGBA over pageBgRGB)`
+4. Enforce contrast ratio ≥ 4.5:1:
+    - `contrast(footerTextColor, effectiveBg) >= 4.5`
+    - `contrast(footerLinkColor, effectiveBg) >= 4.5`
+    - `contrast(footerLinkHoverColor, effectiveBg) >= 4.5`
+5. **Blocking policy:** prevent saving and return which field(s) failed and the measured ratio
+
+---
+
+## Testing
+
+- Unit tests:
+    - Color parsing and normalization
+    - Alpha blending function
+    - Contrast ratio function
+- Integration/UI tests:
+    - Update footer colors, verify preview updates
+    - Save, refresh, confirm persisted values and CSS variables are applied
+- Regression:
+    - Footer theming does not affect header/body styles
+
+---
+
+## Definition of Done
+
+- Admin can edit footer background (with opacity) and footer text/link/hover colors
+- Changes persist after refresh and affect the live site
+- Footer uses CSS variables (no hardcoded footer colors)
+- WCAG AA contrast checks enforced using effective blended background
+- Focus-visible states are clearly visible and included in preview/testing

@@ -13,6 +13,7 @@ import { Palette, Type, ImageIcon, Eye, EyeOff, Save, RotateCcw, CheckCircle2, G
 import type { SiteSettingsData } from "@shared/schema";
 import { DEFAULT_SETTINGS } from "@shared/schema";
 import { applySettingsToDOM, hexToHsl } from "@/hooks/use-settings";
+import { parseHex, checkFooterContrast, computeEffectiveBg } from "@shared/colorUtils";
 
 const HEADING_FONTS = [
   "Plus Jakarta Sans", "Montserrat", "Poppins", "Raleway",
@@ -29,6 +30,212 @@ function ColorSwatch({ color }: { color: string }) {
       className="w-8 h-8 rounded-lg border border-gray-300 shrink-0 shadow-sm"
       style={{ backgroundColor: color }}
     />
+  );
+}
+
+function FooterColorRow({
+  label,
+  description,
+  colorKey,
+  draft,
+  update,
+  testIdPrefix,
+}: {
+  label: string;
+  description: string;
+  colorKey: keyof SiteSettingsData;
+  draft: SiteSettingsData;
+  update: (key: keyof SiteSettingsData, val: any) => void;
+  testIdPrefix: string;
+}) {
+  const value = (draft[colorKey] as string) || "#000000";
+  return (
+    <div>
+      <Label className="text-sm font-medium mb-1 block">{label}</Label>
+      <p className="text-xs text-muted-foreground mb-2">{description}</p>
+      <div className="flex items-center gap-3">
+        <ColorSwatch color={value} />
+        <div className="flex items-center gap-2 border border-border rounded-lg px-3 py-2 flex-1">
+          <input
+            type="color"
+            value={value}
+            onChange={e => update(colorKey, e.target.value)}
+            className="w-8 h-8 rounded cursor-pointer border-0 bg-transparent"
+            data-testid={`${testIdPrefix}-picker`}
+          />
+          <Input
+            value={value}
+            onChange={e => update(colorKey, e.target.value)}
+            className="border-0 shadow-none p-0 h-auto font-mono text-sm focus-visible:ring-0"
+            data-testid={`${testIdPrefix}-hex`}
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function FooterThemeEditor({
+  draft,
+  update,
+}: {
+  draft: SiteSettingsData;
+  update: (key: keyof SiteSettingsData, val: any) => void;
+}) {
+  const bgColor = draft.footerBgColor || "#0b1220";
+  const bgOpacity = draft.footerBgOpacity ?? 1;
+  const textColor = draft.footerTextColor || "#e5e7eb";
+  const linkColor = draft.footerLinkColor || "#93c5fd";
+  const linkHoverColor = draft.footerLinkHoverColor || "#bfdbfe";
+  const pageBg = draft.pageBackgroundColor || "#ffffff";
+
+  const checks = checkFooterContrast(bgColor, bgOpacity, pageBg, textColor, linkColor, linkHoverColor);
+  const allPass = checks.every(c => c.passes);
+
+  const effectiveBg = computeEffectiveBg(bgColor, bgOpacity, pageBg);
+  const effectiveBgHex = effectiveBg
+    ? `#${effectiveBg.map(c => c.toString(16).padStart(2, "0")).join("")}`
+    : bgColor;
+
+  const hexToRgb = (hex: string) => {
+    const m = hex.replace("#", "").match(/.{2}/g);
+    if (!m) return "0,0,0";
+    return m.map(c => parseInt(c, 16)).join(",");
+  };
+
+  return (
+    <div className="space-y-5">
+      <Label className="text-sm font-semibold block">Footer Colors</Label>
+
+      <FooterColorRow
+        label="Page Background"
+        description="Used as the backdrop behind the footer for contrast calculation."
+        colorKey="pageBackgroundColor"
+        draft={draft}
+        update={update}
+        testIdPrefix="input-page-bg"
+      />
+
+      <div>
+        <Label className="text-sm font-medium mb-1 block">Footer Background</Label>
+        <p className="text-xs text-muted-foreground mb-2">Background color and opacity of the footer.</p>
+        <div className="flex items-center gap-3 mb-3">
+          <ColorSwatch color={bgColor} />
+          <div className="flex items-center gap-2 border border-border rounded-lg px-3 py-2 flex-1">
+            <input
+              type="color"
+              value={bgColor}
+              onChange={e => update("footerBgColor", e.target.value)}
+              className="w-8 h-8 rounded cursor-pointer border-0 bg-transparent"
+              data-testid="input-footer-bg-color"
+            />
+            <Input
+              value={bgColor}
+              onChange={e => update("footerBgColor", e.target.value)}
+              className="border-0 shadow-none p-0 h-auto font-mono text-sm focus-visible:ring-0"
+              data-testid="input-footer-bg-color-hex"
+            />
+          </div>
+        </div>
+        <div>
+          <Label className="text-xs text-muted-foreground mb-1 block">Opacity: {Math.round(bgOpacity * 100)}%</Label>
+          <input
+            type="range"
+            min="0"
+            max="1"
+            step="0.01"
+            value={bgOpacity}
+            onChange={e => update("footerBgOpacity", parseFloat(e.target.value))}
+            className="w-full"
+            data-testid="input-footer-bg-opacity"
+          />
+        </div>
+        {bgOpacity < 1 && (
+          <div className="flex items-center gap-2 mt-2 text-xs text-muted-foreground">
+            <span>Effective background:</span>
+            <div className="w-5 h-5 rounded border border-gray-300" style={{ backgroundColor: effectiveBgHex }} />
+            <span className="font-mono">{effectiveBgHex}</span>
+          </div>
+        )}
+      </div>
+
+      <FooterColorRow
+        label="Text Color"
+        description="Color of footer text, headings, and copyright."
+        colorKey="footerTextColor"
+        draft={draft}
+        update={update}
+        testIdPrefix="input-footer-text"
+      />
+
+      <FooterColorRow
+        label="Link Color"
+        description="Default color for footer links."
+        colorKey="footerLinkColor"
+        draft={draft}
+        update={update}
+        testIdPrefix="input-footer-link"
+      />
+
+      <FooterColorRow
+        label="Link Hover Color"
+        description="Color when hovering over footer links."
+        colorKey="footerLinkHoverColor"
+        draft={draft}
+        update={update}
+        testIdPrefix="input-footer-link-hover"
+      />
+
+      <div className="rounded-xl border border-border overflow-hidden" data-testid="footer-preview">
+        <div className="px-4 py-2 bg-muted text-xs font-semibold">Live Preview</div>
+        <div style={{ backgroundColor: pageBg }}>
+          <div
+            className="p-6"
+            style={{ backgroundColor: `rgba(${hexToRgb(bgColor)},${bgOpacity})` }}
+          >
+          <p className="text-sm mb-2" style={{ color: textColor }}>
+            Sample footer text — copyright and tagline use this color.
+          </p>
+          <p className="text-sm">
+            <a
+              href="#"
+              onClick={e => e.preventDefault()}
+              className="underline transition-colors focus-visible:outline-2 focus-visible:outline-offset-2"
+              style={{ color: linkColor }}
+              onMouseEnter={e => (e.currentTarget.style.color = linkHoverColor)}
+              onMouseLeave={e => (e.currentTarget.style.color = linkColor)}
+              data-testid="footer-preview-link"
+            >
+              Sample link (hover me)
+            </a>
+          </p>
+          </div>
+        </div>
+      </div>
+
+      <div className="space-y-2" data-testid="footer-contrast-checks">
+        {checks.map(c => (
+          <div
+            key={c.field}
+            className={`flex items-center gap-2 text-xs rounded-lg px-3 py-2 ${
+              c.passes
+                ? "bg-green-50 dark:bg-green-950/30 text-green-700 dark:text-green-400"
+                : "bg-red-50 dark:bg-red-950/30 text-red-700 dark:text-red-400"
+            }`}
+            data-testid={`contrast-${c.field}`}
+          >
+            <span>{c.passes ? "✓" : "✕"}</span>
+            <span>{c.message}</span>
+          </div>
+        ))}
+      </div>
+
+      {!allPass && (
+        <p className="text-xs text-red-600 dark:text-red-400 font-medium">
+          Fix contrast issues above before saving. All colors must meet WCAG AA (4.5:1 ratio).
+        </p>
+      )}
+    </div>
   );
 }
 
@@ -504,28 +711,7 @@ export default function DesignSettings() {
               )}
             </div>
 
-            <div>
-              <Label className="text-sm font-semibold mb-3 block">Footer Background Color</Label>
-              <p className="text-xs text-muted-foreground mb-3">The background color of the site footer.</p>
-              <div className="flex items-center gap-3">
-                <ColorSwatch color={draft.footerBgColor || "#020617"} />
-                <div className="flex items-center gap-2 border border-border rounded-lg px-3 py-2 flex-1">
-                  <input
-                    type="color"
-                    value={draft.footerBgColor || "#020617"}
-                    onChange={e => update("footerBgColor", e.target.value)}
-                    className="w-8 h-8 rounded cursor-pointer border-0 bg-transparent"
-                    data-testid="input-footer-bg-color"
-                  />
-                  <Input
-                    value={draft.footerBgColor || "#020617"}
-                    onChange={e => update("footerBgColor", e.target.value)}
-                    className="border-0 shadow-none p-0 h-auto font-mono text-sm focus-visible:ring-0"
-                    data-testid="input-footer-bg-color-hex"
-                  />
-                </div>
-              </div>
-            </div>
+            <FooterThemeEditor draft={draft} update={update} />
 
             <div>
               <Label className="text-sm font-semibold mb-1 block">Footer Tagline</Label>

@@ -28,7 +28,7 @@ The platform utilizes React with TypeScript, Wouter for routing, and a combinati
 - **Stripe Integration**: Handles subscription-based memberships and one-time add-on purchases (Resume Access, Featured Employer). The system uses `stripe-replit-sync` for webhook management and database synchronization.
 - **Resume Management**: Job seekers can create text-based resumes.
 - **Blog and Resources**: Content management for blog posts and a member-gated resource library.
-- **Site Management**: Admin tools for managing site settings, custom pages, categories, and coupons.
+- **Site Management**: Admin tools for managing site settings, custom pages, categories, and coupons. Includes a **footer theme editor** (`DesignSettings.tsx`) with color pickers for footer background (+ opacity slider), text, link, and link-hover colors, plus page background. Live preview panel shows real-time appearance. All footer colors validated against WCAG AA contrast ratio (4.5:1) both client-side (inline badges) and server-side (PUT `/api/settings` returns 400 with `errors[]` on failure). Color utilities in `shared/colorUtils.ts`: `parseHex`, `normalizeHex`, `alphaBlend`, `contrastRatio`, `computeEffectiveBg`, `checkFooterContrast`. Footer component (`Footer.tsx`) applies colors via CSS custom properties set from settings.
 - **Add-on Purchase Flow**: One-time payments for features like "Resume Access" (additive views, 365-day expiry) and "Featured Employer" (7-day window, extends on repurchase).
 
 ## External Dependencies

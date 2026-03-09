@@ -1257,7 +1257,54 @@ export async function registerRoutes(
       return res.status(403).json({ message: "Forbidden" });
     }
     try {
-      const settings = await storage.updateSiteSettings(req.body);
+      const body = req.body;
+      const footerFields = ["footerTextColor", "footerLinkColor", "footerLinkHoverColor", "footerBgColor", "pageBackgroundColor"];
+      const hasFooterChange = footerFields.some(f => body[f] !== undefined) || body.footerBgOpacity !== undefined;
+
+      if (hasFooterChange) {
+        const { normalizeHex, checkFooterContrast } = await import("@shared/colorUtils");
+        const current = await storage.getSiteSettings();
+        const merged = { ...current, ...body };
+
+        for (const f of ["footerTextColor", "footerLinkColor", "footerLinkHoverColor", "footerBgColor", "pageBackgroundColor"] as const) {
+          if (body[f] !== undefined) {
+            if (typeof body[f] !== "string" || body[f].trim() === "") {
+              return res.status(400).json({ message: `${f} must be a non-empty hex color string` });
+            }
+            const normalized = normalizeHex(body[f]);
+            if (!normalized) {
+              return res.status(400).json({ message: `${f} is not a valid hex color` });
+            }
+            body[f] = normalized;
+            merged[f] = normalized;
+          }
+        }
+
+        if (merged.footerBgOpacity !== undefined) {
+          const op = Number(merged.footerBgOpacity);
+          if (isNaN(op) || op < 0 || op > 1) {
+            return res.status(400).json({ message: "footerBgOpacity must be between 0 and 1" });
+          }
+        }
+
+        const checks = checkFooterContrast(
+          merged.footerBgColor || "#0b1220",
+          merged.footerBgOpacity ?? 1,
+          merged.pageBackgroundColor || "#ffffff",
+          merged.footerTextColor || "#e5e7eb",
+          merged.footerLinkColor || "#93c5fd",
+          merged.footerLinkHoverColor || "#bfdbfe",
+        );
+        const failures = checks.filter(c => !c.passes);
+        if (failures.length > 0) {
+          return res.status(400).json({
+            message: "Contrast check failed",
+            errors: failures.map(f => f.message),
+          });
+        }
+      }
+
+      const settings = await storage.updateSiteSettings(body);
       res.json(settings);
     } catch (err) {
       res.status(500).json({ message: "Could not save settings" });
