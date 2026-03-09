@@ -14,6 +14,7 @@ import { randomUUID } from "crypto";
 import { createHash } from "crypto";
 import { getPricingData, resolveUserEntitlements, checkEntitlement } from "./registry/entitlementResolver";
 import { JOB_CATEGORIES, US_STATES as SEO_STATES } from "@shared/seoConfig";
+import { validateKeywords } from "./taggingValidator";
 
 const LANELOGIC_OWNED_DOMAINS: string[] = (process.env.LANELOGIC_OWNED_DOMAINS || "lanelogicjobs.com,lanelogic.com")
   .split(",").map(d => d.trim().toLowerCase()).filter(Boolean);
@@ -88,16 +89,23 @@ function validateAndMapCsvRow(
 
   const externalJobKey = get("externalJobKey");
   if (!externalJobKey) {
-    errors.push({ rowNumber, field: "externalJobKey", errorCode: "REQUIRED", errorMessage: "externalJobKey is required" });
+    errors.push({ rowNumber, field: "externalJobKey", errorCode: "MISSING_REQUIRED_FIELD", errorMessage: "externalJobKey is required" });
   }
 
   const title = get("title");
   if (!title) {
-    errors.push({ rowNumber, field: "title", errorCode: "REQUIRED", errorMessage: "title is required" });
+    errors.push({ rowNumber, field: "title", errorCode: "MISSING_REQUIRED_FIELD", errorMessage: "title is required" });
   }
 
-  const description = get("description") || "No description provided";
-  const requirements = get("requirements") || "See description";
+  const description = get("description");
+  if (!description) {
+    errors.push({ rowNumber, field: "description", errorCode: "MISSING_REQUIRED_FIELD", errorMessage: "description is required" });
+  }
+
+  const requirements = get("requirements");
+  if (!requirements) {
+    errors.push({ rowNumber, field: "requirements", errorCode: "MISSING_REQUIRED_FIELD", errorMessage: "requirements is required" });
+  }
 
   const cats = [get("category"), get("category2"), get("category3")].filter(Boolean);
   const category = cats.join(" | ") || null;
@@ -116,7 +124,7 @@ function validateAndMapCsvRow(
     if (salaryMin && salaryMax && !isNaN(Number(salaryMin)) && !isNaN(Number(salaryMax)) && Number(salaryMin) > Number(salaryMax)) {
       errors.push({ rowNumber, field: "salaryMin", errorCode: "MIN_GT_MAX", errorMessage: `salaryMin (${salaryMin}) is greater than salaryMax (${salaryMax})` });
     }
-    if (errors.length === 0 || !errors.some(e => e.field === "salaryMin" || e.field === "salaryMax")) {
+    if (!errors.some(e => e.field === "salaryMin" || e.field === "salaryMax")) {
       const parts = [];
       if (salaryMin) parts.push(salaryMin);
       if (salaryMax) parts.push(salaryMax);
@@ -139,14 +147,32 @@ function validateAndMapCsvRow(
   const experienceLevel = get("experienceLevel") || null;
   const skillsRaw = get("skills");
   const keywordsRaw = get("keywords");
-  const skills = skillsRaw ? skillsRaw.split(",").map(s => s.trim()).filter(Boolean) : null;
-  const keywords = keywordsRaw ? keywordsRaw.split(",").map(s => s.trim()).filter(Boolean) : null;
+  const rawSkills = skillsRaw ? skillsRaw.split(",").map(s => s.trim()).filter(Boolean) : [];
+  const rawKeywords = keywordsRaw ? keywordsRaw.split(",").map(s => s.trim()).filter(Boolean) : [];
+
+  if (rawSkills.length > 0) {
+    const skillsResult = validateKeywords(rawSkills);
+    if (!skillsResult.valid) {
+      for (const err of skillsResult.errors) {
+        errors.push({ rowNumber, field: "skills", errorCode: err.errorCode, errorMessage: err.errorMessage });
+      }
+    }
+  }
+
+  if (rawKeywords.length > 0) {
+    const keywordsResult = validateKeywords(rawKeywords);
+    if (!keywordsResult.valid) {
+      for (const err of keywordsResult.errors) {
+        errors.push({ rowNumber, field: "keywords", errorCode: err.errorCode, errorMessage: err.errorMessage });
+      }
+    }
+  }
 
   const jobMetadata: Record<string, any> = {};
   if (coreResponsibilities) jobMetadata.coreResponsibilities = coreResponsibilities;
   if (experienceLevel) jobMetadata.experienceLevel = experienceLevel;
-  if (skills) jobMetadata.skills = skills;
-  if (keywords) jobMetadata.keywords = keywords;
+  if (rawSkills.length > 0) jobMetadata.rawSkills = rawSkills;
+  if (rawKeywords.length > 0) jobMetadata.rawKeywords = rawKeywords;
 
   const job = {
     employerId,
@@ -156,8 +182,8 @@ function validateAndMapCsvRow(
     jobType: get("jobType") || null,
     category,
     industry: get("industry") || null,
-    description,
-    requirements,
+    description: description || "",
+    requirements: requirements || "",
     benefits: get("benefits") || null,
     locationCity: get("locationCity") || null,
     locationState: get("locationState") || null,

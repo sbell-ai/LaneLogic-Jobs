@@ -1,0 +1,11 @@
+externalJobKey,title,companyName,jobType,category,category2,category3,industry,locationCity,locationState,locationCountry,description,coreResponsibilities,requirements,benefits,salaryMin,salaryMax,salaryUnit,experienceLevel,skills,keywords,applyUrl
+NEWJOB-001,CDL Class A Driver,Fast Trucking,Full-time,Driving,Transport,,Trucking,Chicago,IL,USA,Long haul driver needed,Drive routes,CDL required,Health ins,70000,90000,year,Mid-level,"CDL,freight","trucking,driver",
+NEWJOB-002,Fleet Dispatcher,Metro Logistics,Contract,Dispatch,,,Logistics,Atlanta,GA,USA,Manage schedules,Schedule routes,2+ years dispatch,PTO,55000,65000,year,Entry,"dispatch,routing","logistics",https://example.com/apply
+NEWJOB-003,Warehouse Associate,Big Storage,Full-time,Warehouse,,,Warehousing,Dallas,TX,USA,Warehouse ops,Pack and ship,Forklift cert,Benefits,35000,45000,year,Entry,"forklift,packing","warehouse",https://lanelogicjobs.com/apply
+,Missing Key,SomeCo,Full-time,Driving,,,Trucking,Denver,CO,USA,Job desc,,CDL required,,50000,60000,year,,,
+NEWJOB-005,,SomeCo,Full-time,Driving,,,Trucking,Denver,CO,USA,Job desc,,CDL required,,50000,60000,year,,,
+NEWJOB-006,No Description,SomeCo,Full-time,Driving,,,Trucking,Denver,CO,USA,,,CDL required,,50000,60000,year,,,
+NEWJOB-007,No Requirements,SomeCo,Full-time,Driving,,,Trucking,Denver,CO,USA,Has description,,,,,,,,,
+NEWJOB-008,Bad Salary,SomeCo,Full-time,Driving,,,Trucking,Denver,CO,USA,Job desc,,Requirements,,abc,60000,year,,,
+NEWJOB-009,Bad URL,SomeCo,Full-time,Driving,,,Trucking,Denver,CO,USA,Job desc,,Requirements,,50000,60000,year,,,,not-a-url
+NEWJOB-010,Good Job,LastCo,Part-time,Mechanic,,,Auto,Miami,FL,USA,Mechanic needed,Fix trucks,ASE cert,Dental,40000,55000,year,Mid,"ASE,mechanic","auto repair",https://external-jobs.com/apply
