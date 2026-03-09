@@ -13,7 +13,7 @@ import { Palette, Type, ImageIcon, Eye, EyeOff, Save, RotateCcw, CheckCircle2, G
 import type { SiteSettingsData } from "@shared/schema";
 import { DEFAULT_SETTINGS } from "@shared/schema";
 import { applySettingsToDOM, hexToHsl } from "@/hooks/use-settings";
-import { parseHex, checkFooterContrast, computeEffectiveBg } from "@shared/colorUtils";
+import { parseHex, normalizeHex, checkFooterContrast, computeEffectiveBg } from "@shared/colorUtils";
 
 const HEADING_FONTS = [
   "Plus Jakarta Sans", "Montserrat", "Poppins", "Raleway",
@@ -98,9 +98,26 @@ function FooterThemeEditor({
     : bgColor;
 
   const hexToRgb = (hex: string) => {
-    const m = hex.replace("#", "").match(/.{2}/g);
-    if (!m) return "0,0,0";
-    return m.map(c => parseInt(c, 16)).join(",");
+    const n = normalizeHex(hex);
+    if (!n) return "0,0,0";
+    return [parseInt(n.slice(1,3),16), parseInt(n.slice(3,5),16), parseInt(n.slice(5,7),16)].join(",");
+  };
+
+  const handleBgColorInput = (raw: string) => {
+    const rgbaMatch = raw.match(/^rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*(?:,\s*([\d.]+)\s*)?\)$/i);
+    if (rgbaMatch) {
+      const r = Math.min(255, parseInt(rgbaMatch[1]));
+      const g = Math.min(255, parseInt(rgbaMatch[2]));
+      const b = Math.min(255, parseInt(rgbaMatch[3]));
+      const hex = `#${r.toString(16).padStart(2,"0")}${g.toString(16).padStart(2,"0")}${b.toString(16).padStart(2,"0")}`;
+      update("footerBgColor", hex);
+      if (rgbaMatch[4] !== undefined) {
+        const a = Math.min(1, Math.max(0, parseFloat(rgbaMatch[4])));
+        update("footerBgOpacity", a as any);
+      }
+      return;
+    }
+    update("footerBgColor", raw);
   };
 
   return (
@@ -131,7 +148,8 @@ function FooterThemeEditor({
             />
             <Input
               value={bgColor}
-              onChange={e => update("footerBgColor", e.target.value)}
+              onChange={e => handleBgColorInput(e.target.value)}
+              placeholder="#000000 or rgba(0,0,0,0.4)"
               className="border-0 shadow-none p-0 h-auto font-mono text-sm focus-visible:ring-0"
               data-testid="input-footer-bg-color-hex"
             />
@@ -279,14 +297,32 @@ export default function DesignSettings() {
   }, [draft, livePreview]);
 
   const updateMutation = useMutation({
-    mutationFn: (settings: SiteSettingsData) =>
-      apiRequest("PUT", "/api/settings", settings).then(r => r.json()),
+    mutationFn: async (settings: SiteSettingsData) => {
+      const res = await fetch("/api/settings", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(settings),
+        credentials: "include",
+      });
+      const json = await res.json();
+      if (!res.ok) throw json;
+      return json as SiteSettingsData;
+    },
     onSuccess: (data: SiteSettingsData) => {
       queryClient.setQueryData(["/api/settings"], data);
       applySettingsToDOM(data);
       toast({ title: "Design settings saved!", description: "Changes are now live across the site." });
     },
-    onError: () => toast({ title: "Error", description: "Could not save settings.", variant: "destructive" }),
+    onError: (err: any) => {
+      const msg = err?.message || "Could not save settings.";
+      const rawErrors: any[] = err?.errors || [];
+      const errorMessages = rawErrors.map(e => typeof e === "string" ? e : e?.message || JSON.stringify(e));
+      toast({
+        title: "Error",
+        description: errorMessages.length > 0 ? `${msg}: ${errorMessages.join("; ")}` : msg,
+        variant: "destructive",
+      });
+    },
   });
 
   const update = (key: keyof SiteSettingsData, value: string | null) => {

@@ -1299,7 +1299,13 @@ export async function registerRoutes(
         if (failures.length > 0) {
           return res.status(400).json({
             message: "Contrast check failed",
-            errors: failures.map(f => f.message),
+            errors: failures.map(f => ({
+              field: f.field,
+              reason: "contrast_failed",
+              ratio: f.ratio,
+              min: 4.5,
+              message: f.message,
+            })),
           });
         }
       }

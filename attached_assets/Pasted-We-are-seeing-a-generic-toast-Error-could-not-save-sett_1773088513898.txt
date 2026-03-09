@@ -1,0 +1,68 @@
+We are seeing a generic toast: **“Error: could not save settings”** when setting `footerBackground` to `rgba(0,0,0,0.4)` and saving. Please debug by instrumenting both client and server and report back with concrete evidence.
+
+## 1) Reproduce
+
+- In Design Settings → Footer, set footer background to `rgba(0,0,0,0.4)` (alpha 0.4).
+- Click Save.
+- Confirm the error toast appears.
+
+## 2) Client-side debugging (must provide screenshots/logs)
+
+Add temporary logging around the Save handler:
+
+- Log the exact payload being sent to the server (the JSON body).
+- Log whether the Save button is being blocked by client validation.
+- If using `fetch`/axios, log:
+    - request URL
+    - method
+    - request body
+    - response status code
+    - response body text/JSON
+- If the request fails due to an exception (network/CORS/JSON parse), log the full error stack.
+
+Also: ensure the UI surfaces the server error message instead of a generic toast. If server returns JSON like `{ errors: [...] }`, display it.
+
+## 3) Network inspection (must provide details)
+
+In the browser DevTools → Network, capture the failing request:
+
+- endpoint (likely `PATCH /theme` or similar)
+- status code
+- response body
+- request payload
+
+Include those details in your response.
+
+## 4) Server-side debugging (must provide logs)
+
+On the server handling theme updates:
+
+- Log the incoming body fields for footer theme (background + text/link/hover + page background).
+- Log validation decisions:
+    - parsed footer BG RGBA values
+    - page background RGB used for blending
+    - computed effective background RGB after blending
+    - contrast ratios computed for text/link/hover
+- If returning 400, return a structured payload like:
+
+```json
+{
+  "message": "Theme validation failed",
+  "errors": [
+    {"field": "footerBackground", "reason": "invalid_format"},
+    {"field": "footerTextColor", "reason": "contrast_failed", "ratio": 3.2, "min": 4.5}
+  ]
+}
+```
+
+## 5) Most likely causes to check first
+
+- Server still expects hex for footer background while UI sends `rgba()` or channels.
+- Alpha value is being sent as a string or percentage and fails schema validation.
+- Client is accidentally sending empty strings for one of the colors.
+- Client and server contrast math differ (server not blending against `pageBackgroundColor`).
+
+## 6) Definition of fixed
+
+- Saving `rgba(0,0,0,0.4)` succeeds when contrast passes.
+- If it fails, UI shows the exact field + reason (not a generic toast).
