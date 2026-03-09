@@ -1,0 +1,4 @@
+externalJobKey,title,companyName,jobType,category,industry,locationCity,locationState,locationCountry,description,requirements,experienceLevelYears,skills,keywords,applyUrl
+EXPV-001,Valid Experience Driver,QuickHaul,Full-time,Driving,Trucking,Chicago,IL,USA,CDL driving role for new drivers,CDL Class A license,0-2,"CDL","trucking",
+EXPV-002,Invalid Experience Driver,BadCo,Full-time,Driving,Trucking,Denver,CO,USA,Some driving position,CDL required,Entry Level,"CDL","trucking",
+EXPV-003,Blank Experience Worker,NoCo,Part-time,Warehouse,Warehousing,Miami,FL,USA,Warehouse receiving duties,Ability to lift 50 lbs,,"warehouse","receiving",
