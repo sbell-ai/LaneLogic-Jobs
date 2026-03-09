@@ -1,0 +1,73 @@
+## Bulk Job Import (Admin) — Verification + Remaining Requirements
+
+You have implemented T002+ changes. Before moving on, run and paste results for this end-to-end verification.
+
+### 1) Confirm runtime behavior matches PRD (non-negotiable)
+
+- Import continues on row errors: valid rows import, invalid rows are skipped.
+- Import run status rules:
+    - `Completed` if `rowsSkipped = 0`
+    - `Completed with errors` if `rowsSkipped > 0`
+    - `Failed` only for system-level failures (file unreadable, server crash, DB down)
+
+### 2) Run this test import
+
+Create a CSV with **10 rows**:
+
+- 8 valid rows
+- 1 row missing `description`
+- 1 row missing `requirements`
+
+Then:
+
+1. Upload the CSV via `POST /api/admin/jobs/import`
+2. Paste the JSON response: `{ runId, status, rowsTotal, rowsImported, rowsSkipped }`
+3. Download the stored error report via `GET /api/admin/jobs/import/:runId/error-report`
+4. Paste the first ~10 lines of `error_report.csv` (header + first skipped row)
+
+Expected:
+
+- `rowsTotal = 10`
+- `rowsImported = 8`
+- `rowsSkipped = 2`
+- `status = "Completed with errors"`
+- The error report includes `MISSING_REQUIRED_FIELD` for `description` and `requirements`.
+
+### 3) Verify artifact storage (must be stored, not regenerated)
+
+Confirm `import_artifacts` contains a row for:
+
+- `runId = <runId>`
+- `filename = "error_report.csv"`
+- `data` contains the CSV text
+
+Then confirm the download endpoint returns exactly that stored artifact.
+
+### 4) Verify idempotency (no duplicates)
+
+Re-upload the exact same CSV:
+
+- No duplicate jobs created.
+- The same 8 jobs are upserted by `(employer_id, external_job_key)`.
+- Paste the second run’s `{ status, rowsImported, rowsSkipped }` output.
+
+### 5) Confirm apply URL external rule
+
+For at least one row with `applyUrl` set to a non-LaneLogic domain:
+
+- `is_external_apply` is `true`
+
+For a LaneLogic-owned domain (or empty `applyUrl`):
+
+- `is_external_apply` is `false`
+
+Please confirm the LaneLogic domain allowlist source (env var or constant) and show the values.
+
+### 6) Tagging validator (expected current behavior)
+
+`TAGGING_ARCH_ENABLED` defaults to `false`.
+
+- When false: do not block on keywords, store `rawSkills` / `rawKeywords` in `job_metadata`.
+- When true (future): ambiguous mapping must reject with `AMBIGUOUS_KEYWORD`.
+
+After you paste the outputs for steps 2–5, we will sign off bulk import v1.
