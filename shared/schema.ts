@@ -1,5 +1,5 @@
-import { pgTable, text, serial, integer, boolean, timestamp, jsonb } from "drizzle-orm/pg-core";
-import { relations } from "drizzle-orm";
+import { pgTable, text, serial, integer, boolean, timestamp, jsonb, uniqueIndex } from "drizzle-orm/pg-core";
+import { relations, sql } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -32,6 +32,7 @@ export const users = pgTable("users", {
 export const jobs = pgTable("jobs", {
   id: serial("id").primaryKey(),
   employerId: integer("employer_id").notNull(),
+  externalJobKey: text("external_job_key"),
   title: text("title").notNull(),
   companyName: text("company_name"),
   jobType: text("job_type"),
@@ -46,9 +47,14 @@ export const jobs = pgTable("jobs", {
   salary: text("salary"),
   applyUrl: text("apply_url"),
   isExternalApply: boolean("is_external_apply").default(false),
+  jobMetadata: jsonb("job_metadata"),
   expiresAt: timestamp("expires_at"),
   createdAt: timestamp("created_at").defaultNow(),
-});
+}, (table) => [
+  uniqueIndex("jobs_employer_external_key_idx")
+    .on(table.employerId, table.externalJobKey)
+    .where(sql`${table.externalJobKey} IS NOT NULL`),
+]);
 
 export const applications = pgTable("applications", {
   id: serial("id").primaryKey(),
@@ -169,6 +175,27 @@ export const pages = pgTable("pages", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
+export const importRuns = pgTable("import_runs", {
+  id: serial("id").primaryKey(),
+  employerId: integer("employer_id").notNull(),
+  uploadedBy: integer("uploaded_by").notNull(),
+  uploadedAt: timestamp("uploaded_at").defaultNow(),
+  filename: text("filename"),
+  fileHash: text("file_hash"),
+  rowsTotal: integer("rows_total").default(0),
+  rowsImported: integer("rows_imported").default(0),
+  rowsSkipped: integer("rows_skipped").default(0),
+  status: text("status").notNull().default("Processing"),
+});
+
+export const importArtifacts = pgTable("import_artifacts", {
+  id: serial("id").primaryKey(),
+  runId: integer("run_id").notNull(),
+  filename: text("filename").notNull(),
+  contentType: text("content_type"),
+  data: text("data").notNull(),
+});
+
 export const insertUserSchema = createInsertSchema(users).omit({ id: true, createdAt: true });
 export const insertJobSchema = createInsertSchema(jobs).omit({ id: true, createdAt: true });
 export const insertApplicationSchema = createInsertSchema(applications).omit({ id: true, createdAt: true });
@@ -178,6 +205,8 @@ export const insertResumeSchema = createInsertSchema(resumes).omit({ id: true, c
 export const insertCategorySchema = createInsertSchema(categories).omit({ id: true, createdAt: true });
 export const insertCouponSchema = createInsertSchema(coupons).omit({ id: true, createdAt: true, currentUses: true });
 export const insertPageSchema = createInsertSchema(pages).omit({ id: true, createdAt: true, updatedAt: true });
+export const insertImportRunSchema = createInsertSchema(importRuns).omit({ id: true, uploadedAt: true });
+export const insertImportArtifactSchema = createInsertSchema(importArtifacts).omit({ id: true });
 
 export type User = typeof users.$inferSelect;
 export type InsertUser = z.infer<typeof insertUserSchema>;
@@ -197,6 +226,10 @@ export type Coupon = typeof coupons.$inferSelect;
 export type InsertCoupon = z.infer<typeof insertCouponSchema>;
 export type Page = typeof pages.$inferSelect;
 export type InsertPage = z.infer<typeof insertPageSchema>;
+export type ImportRun = typeof importRuns.$inferSelect;
+export type InsertImportRun = z.infer<typeof insertImportRunSchema>;
+export type ImportArtifact = typeof importArtifacts.$inferSelect;
+export type InsertImportArtifact = z.infer<typeof insertImportArtifactSchema>;
 
 // Site Settings
 export interface SiteSettingsData {

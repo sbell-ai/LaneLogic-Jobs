@@ -1,0 +1,105 @@
+## Admin-only bulk job import (CSV) — Implementation Contract
+
+### Goal
+
+Extend the existing CSV upload so it implements the PRD “Admin-only bulk import: Job postings (CSV)” behavior:
+
+- Import valid rows and **skip invalid rows**
+- Import run status is **Completed with errors** when any rows are skipped
+- **Store the error report CSV file** as an import artifact for later download
+- No auto-publish
+
+### Jobs table (current)
+
+`jobs(id, employer_id, title, description, requirements, salary, apply_url, is_external_apply, created_at, company_name, job_type, location_city, location_state, location_country, category, industry, expires_at)`
+
+### Schema changes (required)
+
+1. Add `external_job_key TEXT NOT NULL`
+2. Add unique constraint: `UNIQUE (employer_id, external_job_key)`
+3. Add `job_metadata JSONB` (or TEXT if JSONB not available) to store new fields not in the Jobs table.
+
+### CSV columns to support (target)
+
+`externalJobKey,title,companyName,jobType,category,category2,category3,industry,locationCity,locationState,locationCountry,description,coreResponsibilities,requirements,benefits,salaryMin,salaryMax,salaryUnit,experienceLevel,skills,keywords,applyUrl`
+
+### CSV → DB mapping rules
+
+**Identity / upsert**
+
+- `externalJobKey` → `jobs.external_job_key` (required)
+- Upsert by `(employer_id, external_job_key)`
+
+**Direct fields**
+
+- `title` → `title`
+- `companyName` → `company_name`
+- `jobType` → `job_type`
+- `industry` → `industry`
+- `locationCity` → `location_city`
+- `locationState` → `location_state`
+- `locationCountry` → `location_country`
+- `description` → `description`
+- `requirements` → `requirements`
+- `applyUrl` → `apply_url`
+
+**Category (CSV has 3, DB has 1)**
+
+- Store `category` as: `category | category2 | category3` (skip empties). If only `category` exists, store it alone.
+
+**Salary**
+
+- Validate `salaryMin` and `salaryMax` are numeric when provided.
+- Validate `salaryMin <= salaryMax`.
+- Store `salary` as a normalized string using `salaryMin/salaryMax/salaryUnit` (exact format is fine as long as it is consistent).
+
+**New fields (store in job_metadata)**
+
+- `coreResponsibilities` (string)
+- `benefits` (string)
+- `experienceLevel` (string)
+- `skills` (parse comma-separated string into array)
+- `keywords` (parse comma-separated string into array)
+
+### External apply rule (required)
+
+- If `applyUrl` is non-empty and URL is **not** a LaneLogic-owned domain, set `is_external_apply = true`.
+- Otherwise set `is_external_apply = false`.
+
+### Import run + stored error report artifact (required)
+
+Create import tracking so the admin can download the stored error report later:
+
+- `import_runs` table: run_id, employer_id, uploaded_by, uploaded_at, filename, file_hash, rows_total, rows_imported, rows_skipped, status (`Completed`, `Completed with errors`, `Failed`)
+- `import_artifacts` table (or equivalent): store `error_report.csv` bytes and metadata keyed by run_id
+
+### Behavior
+
+- Parse all rows.
+- Validate each row.
+- **Valid rows:** upsert into `jobs`
+- **Invalid rows:** skip and record errors
+- Generate `error_report.csv` containing skipped rows plus columns like `rowNumber,errorCode,errorMessage`
+- Store `error_report.csv` as an artifact.
+- Set status:
+    - `Completed` if skipped=0
+    - `Completed with errors` if skipped>0
+    - `Failed` only for system-level failures (file unreadable, crash, DB down)
+
+### Endpoints (suggested)
+
+- `POST /api/admin/jobs/import` → starts import, returns run_id
+- `GET /api/admin/jobs/import/:runId` → status + counts
+- `GET /api/admin/jobs/import/:runId/error-report` → downloads stored error_report.csv
+
+### Acceptance test
+
+Upload 10-row CSV with 3 invalid rows:
+
+- 7 jobs created/updated, 3 skipped
+- run status = **Completed with errors**
+- error report is downloadable later
+
+Re-upload same CSV:
+
+- no duplicates (updates same 7 jobs by external_job_key)

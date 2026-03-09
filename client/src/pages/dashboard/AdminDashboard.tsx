@@ -719,134 +719,89 @@ function PostJobTab({ userId }: { userId: number }) {
 
 // ─── UPLOAD JOBS CSV TAB ──────────────────────────────────────────────────────
 
-interface ParsedJob {
-  title: string;
-  companyName?: string;
-  jobType?: string;
-  category?: string;
-  industry?: string;
-  locationCity?: string;
-  locationState?: string;
-  locationCountry?: string;
-  description: string;
-  requirements: string;
-  benefits?: string;
-  salary?: string;
-  applyUrl?: string;
+interface ImportResult {
+  runId: number;
+  status: string;
+  rowsTotal: number;
+  rowsImported: number;
+  rowsSkipped: number;
+  hasErrors: boolean;
+}
+
+interface ImportRunRecord {
+  id: number;
+  employerId: number;
+  uploadedBy: number;
+  uploadedAt: string;
+  filename: string | null;
+  rowsTotal: number | null;
+  rowsImported: number | null;
+  rowsSkipped: number | null;
+  status: string;
 }
 
 function UploadJobsTab({ userId }: { userId: number }) {
   const queryClient = useQueryClient();
   const { toast } = useToast();
-  const [parsed, setParsed] = useState<ParsedJob[]>([]);
-  const [uploading, setUploading] = useState(false);
   const [importing, setImporting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [lastResult, setLastResult] = useState<ImportResult | null>(null);
 
-  const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const { data: importHistory = [], isLoading: historyLoading } = useQuery<ImportRunRecord[]>({
+    queryKey: ["/api/admin/jobs/import/runs"],
+  });
+
+  const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     setError(null);
-    setParsed([]);
-    setUploading(true);
-
-    const reader = new FileReader();
-    reader.onload = (ev) => {
-      try {
-        const text = ev.target?.result as string;
-        const lines = text.trim().split("\n");
-        if (lines.length < 2) {
-          setError("CSV must have a header row and at least one data row.");
-          setUploading(false);
-          return;
-        }
-        const parseCsvLine = (line: string): string[] => {
-          const result: string[] = [];
-          let current = "";
-          let inQuotes = false;
-          for (let c = 0; c < line.length; c++) {
-            const ch = line[c];
-            if (ch === '"') {
-              if (inQuotes && line[c + 1] === '"') { current += '"'; c++; }
-              else { inQuotes = !inQuotes; }
-            } else if (ch === ',' && !inQuotes) {
-              result.push(current.trim());
-              current = "";
-            } else {
-              current += ch;
-            }
-          }
-          result.push(current.trim());
-          return result;
-        };
-        const headers = parseCsvLine(lines[0]).map(h => h.toLowerCase().replace(/"/g, ""));
-        const rows: ParsedJob[] = [];
-        for (let i = 1; i < lines.length; i++) {
-          const vals = parseCsvLine(lines[i]);
-          const row: any = {};
-          headers.forEach((h, idx) => { row[h] = vals[idx] || ""; });
-          if (!row.title) continue;
-          rows.push({
-            title: row.title,
-            companyName: row.companyname || row.company_name || row.company || undefined,
-            jobType: row.jobtype || row.job_type || row.type || undefined,
-            category: row.category || undefined,
-            industry: row.industry || undefined,
-            locationCity: row.locationcity || row.location_city || row.city || undefined,
-            locationState: row.locationstate || row.location_state || row.state || undefined,
-            locationCountry: row.locationcountry || row.location_country || row.country || undefined,
-            description: row.description || "Please contact us for full job details.",
-            requirements: row.requirements || "Please contact us for requirements.",
-            benefits: row.benefits || undefined,
-            salary: row.salary || undefined,
-            applyUrl: row.applyurl || row.apply_url || undefined,
-          });
-        }
-        if (rows.length === 0) {
-          setError("No valid rows found. Ensure the CSV has a 'title' column.");
-          setUploading(false);
-          return;
-        }
-        setParsed(rows);
-        setUploading(false);
-      } catch {
-        setError("Failed to parse CSV. Please check the file format.");
-        setUploading(false);
-      }
-    };
-    reader.readAsText(file);
-    e.target.value = "";
-  };
-
-  const importAll = async () => {
+    setLastResult(null);
     setImporting(true);
-    let success = 0;
-    for (const job of parsed) {
-      try {
-        await apiRequest("POST", "/api/jobs", {
-          ...job,
-          employerId: userId,
-          isExternalApply: !!job.applyUrl,
-        });
-        success++;
-      } catch { /* skip bad rows */ }
+
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+
+      const res = await fetch("/api/admin/jobs/import", {
+        method: "POST",
+        body: formData,
+        credentials: "include",
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.message || "Import failed");
+        setImporting(false);
+        e.target.value = "";
+        return;
+      }
+
+      setLastResult(data);
+      queryClient.invalidateQueries({ queryKey: ["/api/jobs"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/jobs/import/runs"] });
+      toast({
+        title: data.status === "Completed"
+          ? `Successfully imported ${data.rowsImported} jobs!`
+          : `Imported ${data.rowsImported} of ${data.rowsTotal} jobs (${data.rowsSkipped} skipped)`,
+      });
+    } catch (err: any) {
+      setError(err.message || "Upload failed");
+    } finally {
+      setImporting(false);
+      e.target.value = "";
     }
-    queryClient.invalidateQueries({ queryKey: ["/api/jobs"] });
-    setParsed([]);
-    setImporting(false);
-    toast({ title: `Imported ${success} of ${parsed.length} jobs!` });
   };
 
-  const sampleCsv = `title,companyName,jobType,category,industry,locationCity,locationState,locationCountry,description,requirements,benefits,salary,applyUrl
-CDL Class A Driver,Fast Trucking Co.,Full-time,Driving,Trucking,Chicago,IL,USA,"Looking for an experienced long haul driver","CDL Class A required; 3+ years experience","Health insurance; 401k",$80000,
-Fleet Dispatcher,Metro Logistics,Contract,Dispatch,Logistics,Atlanta,GA,USA,"Manage driver schedules and routes","2+ years dispatching experience","PTO; remote options","$55,000–$65,000",https://example.com/apply`;
+  const sampleCsv = `externalJobKey,title,companyName,jobType,category,category2,category3,industry,locationCity,locationState,locationCountry,description,coreResponsibilities,requirements,benefits,salaryMin,salaryMax,salaryUnit,experienceLevel,skills,keywords,applyUrl
+CDL-001,CDL Class A Driver,Fast Trucking Co.,Full-time,Driving,,,Trucking,Chicago,IL,USA,"Long haul driver needed","Drive routes; maintain logs","CDL Class A; 3+ years","Health insurance; 401k",70000,90000,year,Mid-level,"CDL,long haul,freight","trucking,driver",
+DISP-001,Fleet Dispatcher,Metro Logistics,Contract,Dispatch,,,Logistics,Atlanta,GA,USA,"Manage driver schedules","Schedule routes; coordinate","2+ years dispatching","PTO; remote",55000,65000,year,Entry-level,"dispatching,routing","logistics,dispatch",https://example.com/apply`;
 
   const downloadSample = () => {
     const blob = new Blob([sampleCsv], { type: "text/csv" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = "lanelogicjobs-sample.csv";
+    a.download = "lanelogicjobs-import-sample.csv";
     a.click();
   };
 
@@ -854,8 +809,8 @@ Fleet Dispatcher,Metro Logistics,Contract,Dispatch,Logistics,Atlanta,GA,USA,"Man
     <div className="max-w-3xl">
       <div className="flex justify-between items-start mb-2">
         <div>
-          <h2 className="text-2xl font-bold font-display">Upload Jobs via CSV</h2>
-          <p className="text-muted-foreground mt-1">Import multiple job listings at once from a CSV file.</p>
+          <h2 className="text-2xl font-bold font-display" data-testid="text-upload-heading">Upload Jobs via CSV</h2>
+          <p className="text-muted-foreground mt-1">Import multiple job listings at once. Valid rows are upserted by external key; invalid rows are skipped.</p>
         </div>
         <Button variant="outline" size="sm" onClick={downloadSample} data-testid="button-download-sample">
           <Download size={15} className="mr-2" /> Sample CSV
@@ -863,19 +818,19 @@ Fleet Dispatcher,Metro Logistics,Contract,Dispatch,Logistics,Atlanta,GA,USA,"Man
       </div>
 
       <div className="bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 rounded-xl p-4 text-sm text-blue-800 dark:text-blue-300 mb-6">
-        <p className="font-semibold mb-1">Required column:</p>
-        <code className="text-xs">title</code>
-        <p className="mt-1">Optional: <code className="text-xs">companyName, jobType, category, industry, locationCity, locationState, locationCountry, description, requirements, benefits, salary, applyUrl</code></p>
+        <p className="font-semibold mb-1">Required columns:</p>
+        <code className="text-xs">externalJobKey, title</code>
+        <p className="mt-1">Optional: <code className="text-xs">companyName, jobType, category, category2, category3, industry, locationCity, locationState, locationCountry, description, coreResponsibilities, requirements, benefits, salaryMin, salaryMax, salaryUnit, experienceLevel, skills, keywords, applyUrl</code></p>
       </div>
 
       <div className="bg-white dark:bg-slate-900 rounded-2xl border border-border p-8 mb-6">
         <div className="border-2 border-dashed border-border rounded-xl py-10 text-center mb-0">
           <Upload className="mx-auto mb-3 text-muted-foreground" size={36} />
-          <p className="font-semibold mb-1">Drop your CSV file here or click to browse</p>
+          <p className="font-semibold mb-1">{importing ? "Importing..." : "Drop your CSV file here or click to browse"}</p>
           <p className="text-sm text-muted-foreground mb-4">UTF-8 encoded .csv files only</p>
           <Label htmlFor="csv-jobs-upload" className="cursor-pointer">
-            <Button asChild variant="outline" disabled={uploading}>
-              <span data-testid="button-choose-csv">{uploading ? "Reading..." : "Choose CSV File"}</span>
+            <Button asChild variant="outline" disabled={importing}>
+              <span data-testid="button-choose-csv">{importing ? "Processing..." : "Choose CSV File"}</span>
             </Button>
           </Label>
           <Input id="csv-jobs-upload" type="file" accept=".csv" className="hidden" onChange={handleFile} data-testid="input-csv-upload" />
@@ -883,36 +838,85 @@ Fleet Dispatcher,Metro Logistics,Contract,Dispatch,Logistics,Atlanta,GA,USA,"Man
       </div>
 
       {error && (
-        <div className="flex items-center gap-3 p-4 bg-red-50 dark:bg-red-900/20 rounded-xl border border-red-200 dark:border-red-800 mb-6">
+        <div className="flex items-center gap-3 p-4 bg-red-50 dark:bg-red-900/20 rounded-xl border border-red-200 dark:border-red-800 mb-6" data-testid="alert-import-error">
           <AlertCircle className="text-red-500 shrink-0" size={20} />
           <p className="text-sm text-red-700 dark:text-red-400">{error}</p>
         </div>
       )}
 
-      {parsed.length > 0 && (
-        <div>
-          <div className="flex justify-between items-center mb-4">
-            <p className="font-semibold">{parsed.length} job{parsed.length !== 1 ? "s" : ""} ready to import</p>
-            <Button onClick={importAll} disabled={importing} data-testid="button-import-jobs">
-              {importing ? "Importing..." : `Import All ${parsed.length} Jobs`}
-            </Button>
+      {lastResult && (
+        <div className={`rounded-xl border p-5 mb-6 ${lastResult.status === "Completed" ? "bg-green-50 dark:bg-green-950/30 border-green-200 dark:border-green-800" : "bg-amber-50 dark:bg-amber-950/30 border-amber-200 dark:border-amber-800"}`} data-testid="section-import-result">
+          <div className="flex items-center gap-2 mb-3">
+            {lastResult.status === "Completed" ? (
+              <CheckCircle2 className="text-green-600" size={20} />
+            ) : (
+              <AlertCircle className="text-amber-600" size={20} />
+            )}
+            <p className="font-semibold" data-testid="text-import-status">{lastResult.status}</p>
           </div>
+          <div className="grid grid-cols-3 gap-4 text-sm mb-3">
+            <div>
+              <p className="text-muted-foreground">Total Rows</p>
+              <p className="font-semibold text-lg" data-testid="text-rows-total">{lastResult.rowsTotal}</p>
+            </div>
+            <div>
+              <p className="text-muted-foreground">Imported</p>
+              <p className="font-semibold text-lg text-green-700 dark:text-green-400" data-testid="text-rows-imported">{lastResult.rowsImported}</p>
+            </div>
+            <div>
+              <p className="text-muted-foreground">Skipped</p>
+              <p className="font-semibold text-lg text-red-700 dark:text-red-400" data-testid="text-rows-skipped">{lastResult.rowsSkipped}</p>
+            </div>
+          </div>
+          {lastResult.hasErrors && (
+            <a
+              href={`/api/admin/jobs/import/${lastResult.runId}/error-report`}
+              download
+              className="inline-flex items-center gap-2 text-sm font-medium text-primary hover:underline"
+              data-testid="link-download-error-report"
+            >
+              <Download size={14} /> Download Error Report
+            </a>
+          )}
+        </div>
+      )}
+
+      <div>
+        <h3 className="text-lg font-semibold font-display mb-3" data-testid="text-import-history-heading">Import History</h3>
+        {historyLoading ? (
+          <p className="text-sm text-muted-foreground">Loading...</p>
+        ) : importHistory.length === 0 ? (
+          <p className="text-sm text-muted-foreground" data-testid="text-no-imports">No imports yet.</p>
+        ) : (
           <div className="space-y-2 max-h-80 overflow-y-auto">
-            {parsed.map((job, i) => (
-              <div key={i} className="bg-white dark:bg-slate-900 rounded-lg border border-border p-4 text-sm">
-                <p className="font-semibold">{job.title}{job.companyName ? ` · ${job.companyName}` : ""}</p>
-                <p className="text-muted-foreground">
-                  {[job.locationCity, job.locationState, job.locationCountry].filter(Boolean).join(", ")}
-                  {job.jobType ? ` · ${job.jobType}` : ""}
-                  {job.category ? ` · ${job.category}` : ""}
-                  {job.industry ? ` · ${job.industry}` : ""}
-                  {job.salary ? ` · ${job.salary}` : ""}
-                </p>
+            {importHistory.map((run) => (
+              <div key={run.id} className="bg-white dark:bg-slate-900 rounded-lg border border-border p-4 text-sm flex items-center justify-between" data-testid={`row-import-run-${run.id}`}>
+                <div>
+                  <p className="font-semibold">{run.filename || "Unknown file"}</p>
+                  <p className="text-muted-foreground text-xs">
+                    {new Date(run.uploadedAt).toLocaleDateString()} · {run.rowsImported ?? 0} imported · {run.rowsSkipped ?? 0} skipped
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Badge variant={run.status === "Completed" ? "default" : run.status === "Failed" ? "destructive" : "secondary"} data-testid={`badge-status-${run.id}`}>
+                    {run.status}
+                  </Badge>
+                  {(run.rowsSkipped ?? 0) > 0 && (
+                    <a
+                      href={`/api/admin/jobs/import/${run.id}/error-report`}
+                      download
+                      className="text-primary hover:underline text-xs"
+                      data-testid={`link-error-report-${run.id}`}
+                    >
+                      Errors
+                    </a>
+                  )}
+                </div>
               </div>
             ))}
           </div>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 }

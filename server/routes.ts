@@ -11,8 +11,165 @@ import { Strategy as LocalStrategy } from "passport-local";
 import multer from "multer";
 import path from "path";
 import { randomUUID } from "crypto";
+import { createHash } from "crypto";
 import { getPricingData, resolveUserEntitlements, checkEntitlement } from "./registry/entitlementResolver";
 import { JOB_CATEGORIES, US_STATES as SEO_STATES } from "@shared/seoConfig";
+
+const LANELOGIC_OWNED_DOMAINS: string[] = (process.env.LANELOGIC_OWNED_DOMAINS || "lanelogicjobs.com,lanelogic.com")
+  .split(",").map(d => d.trim().toLowerCase()).filter(Boolean);
+
+function isLaneLogicDomain(urlStr: string): boolean {
+  try {
+    const host = new URL(urlStr).hostname.toLowerCase();
+    return LANELOGIC_OWNED_DOMAINS.some(d => host === d || host.endsWith(`.${d}`));
+  } catch {
+    return false;
+  }
+}
+
+function parseCsvText(text: string): { headers: string[]; rows: string[][] } {
+  const lines: string[][] = [];
+  let current: string[] = [];
+  let field = "";
+  let inQuotes = false;
+
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (inQuotes) {
+      if (ch === '"') {
+        if (i + 1 < text.length && text[i + 1] === '"') {
+          field += '"';
+          i++;
+        } else {
+          inQuotes = false;
+        }
+      } else {
+        field += ch;
+      }
+    } else {
+      if (ch === '"') {
+        inQuotes = true;
+      } else if (ch === ',') {
+        current.push(field.trim());
+        field = "";
+      } else if (ch === '\n' || ch === '\r') {
+        if (ch === '\r' && i + 1 < text.length && text[i + 1] === '\n') i++;
+        current.push(field.trim());
+        if (current.some(c => c !== "")) lines.push(current);
+        current = [];
+        field = "";
+      } else {
+        field += ch;
+      }
+    }
+  }
+  current.push(field.trim());
+  if (current.some(c => c !== "")) lines.push(current);
+
+  if (lines.length === 0) return { headers: [], rows: [] };
+  const headers = lines[0].map(h => h.replace(/^\uFEFF/, ""));
+  return { headers, rows: lines.slice(1) };
+}
+
+interface RowError {
+  rowNumber: number;
+  field: string;
+  errorCode: string;
+  errorMessage: string;
+}
+
+function validateAndMapCsvRow(
+  record: Record<string, string>,
+  rowNumber: number,
+  employerId: number,
+): { job: any; errors: RowError[] } {
+  const errors: RowError[] = [];
+  const get = (key: string) => (record[key] || "").trim();
+
+  const externalJobKey = get("externalJobKey");
+  if (!externalJobKey) {
+    errors.push({ rowNumber, field: "externalJobKey", errorCode: "REQUIRED", errorMessage: "externalJobKey is required" });
+  }
+
+  const title = get("title");
+  if (!title) {
+    errors.push({ rowNumber, field: "title", errorCode: "REQUIRED", errorMessage: "title is required" });
+  }
+
+  const description = get("description") || "No description provided";
+  const requirements = get("requirements") || "See description";
+
+  const cats = [get("category"), get("category2"), get("category3")].filter(Boolean);
+  const category = cats.join(" | ") || null;
+
+  let salary: string | null = null;
+  const salaryMin = get("salaryMin");
+  const salaryMax = get("salaryMax");
+  const salaryUnit = get("salaryUnit") || "year";
+  if (salaryMin || salaryMax) {
+    if (salaryMin && isNaN(Number(salaryMin))) {
+      errors.push({ rowNumber, field: "salaryMin", errorCode: "INVALID_NUMBER", errorMessage: `salaryMin "${salaryMin}" is not a valid number` });
+    }
+    if (salaryMax && isNaN(Number(salaryMax))) {
+      errors.push({ rowNumber, field: "salaryMax", errorCode: "INVALID_NUMBER", errorMessage: `salaryMax "${salaryMax}" is not a valid number` });
+    }
+    if (salaryMin && salaryMax && !isNaN(Number(salaryMin)) && !isNaN(Number(salaryMax)) && Number(salaryMin) > Number(salaryMax)) {
+      errors.push({ rowNumber, field: "salaryMin", errorCode: "MIN_GT_MAX", errorMessage: `salaryMin (${salaryMin}) is greater than salaryMax (${salaryMax})` });
+    }
+    if (errors.length === 0 || !errors.some(e => e.field === "salaryMin" || e.field === "salaryMax")) {
+      const parts = [];
+      if (salaryMin) parts.push(salaryMin);
+      if (salaryMax) parts.push(salaryMax);
+      salary = parts.join("-") + `/${salaryUnit}`;
+    }
+  }
+
+  const applyUrl = get("applyUrl") || null;
+  let isExternalApply = false;
+  if (applyUrl) {
+    try {
+      new URL(applyUrl);
+      isExternalApply = !isLaneLogicDomain(applyUrl);
+    } catch {
+      errors.push({ rowNumber, field: "applyUrl", errorCode: "INVALID_URL", errorMessage: `applyUrl "${applyUrl}" is not a valid URL` });
+    }
+  }
+
+  const coreResponsibilities = get("coreResponsibilities") || null;
+  const experienceLevel = get("experienceLevel") || null;
+  const skillsRaw = get("skills");
+  const keywordsRaw = get("keywords");
+  const skills = skillsRaw ? skillsRaw.split(",").map(s => s.trim()).filter(Boolean) : null;
+  const keywords = keywordsRaw ? keywordsRaw.split(",").map(s => s.trim()).filter(Boolean) : null;
+
+  const jobMetadata: Record<string, any> = {};
+  if (coreResponsibilities) jobMetadata.coreResponsibilities = coreResponsibilities;
+  if (experienceLevel) jobMetadata.experienceLevel = experienceLevel;
+  if (skills) jobMetadata.skills = skills;
+  if (keywords) jobMetadata.keywords = keywords;
+
+  const job = {
+    employerId,
+    externalJobKey: externalJobKey || null,
+    title: title || "",
+    companyName: get("companyName") || null,
+    jobType: get("jobType") || null,
+    category,
+    industry: get("industry") || null,
+    description,
+    requirements,
+    benefits: get("benefits") || null,
+    locationCity: get("locationCity") || null,
+    locationState: get("locationState") || null,
+    locationCountry: get("locationCountry") || null,
+    salary,
+    applyUrl,
+    isExternalApply,
+    jobMetadata: Object.keys(jobMetadata).length > 0 ? jobMetadata : null,
+  };
+
+  return { job, errors };
+}
 
 const uploadStorage = multer.diskStorage({
   destination: path.join(process.cwd(), "uploads"),
@@ -30,6 +187,18 @@ const upload = multer({
       cb(null, true);
     } else {
       cb(new Error("Only image files are allowed"));
+    }
+  },
+});
+
+const csvUpload = multer({
+  storage: uploadStorage,
+  limits: { fileSize: 10 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    if (/\.csv$/i.test(path.extname(file.originalname))) {
+      cb(null, true);
+    } else {
+      cb(new Error("Only CSV files are allowed"));
     }
   },
 });
@@ -656,6 +825,143 @@ export async function registerRoutes(
 
   app.post(api.uploads.csv.path, (req, res) => {
     res.json({ message: "CSV uploaded successfully", count: 10 });
+  });
+
+  app.post("/api/admin/jobs/import", csvUpload.single("file"), async (req, res) => {
+    let run: any = null;
+    try {
+      if (!req.isAuthenticated() || !req.user || (req.user as any).role !== "admin") {
+        return res.status(403).json({ message: "Admin access required" });
+      }
+      if (!req.file) {
+        return res.status(400).json({ message: "No file uploaded" });
+      }
+
+      const user = req.user as any;
+      const fileBuffer = await import("fs").then(fs => fs.readFileSync(req.file!.path));
+      const csvText = fileBuffer.toString("utf-8");
+      const fileHash = createHash("sha256").update(csvText).digest("hex");
+
+      run = await storage.createImportRun({
+        employerId: user.id,
+        uploadedBy: user.id,
+        filename: req.file.originalname,
+        fileHash,
+        rowsTotal: 0,
+        rowsImported: 0,
+        rowsSkipped: 0,
+        status: "Processing",
+      });
+
+      const { headers, rows } = parseCsvText(csvText);
+      if (headers.length === 0) {
+        await storage.updateImportRun(run.id, { status: "Failed", rowsTotal: 0 });
+        return res.status(400).json({ message: "CSV file is empty or has no headers", runId: run.id });
+      }
+
+      const allErrors: RowError[] = [];
+      let imported = 0;
+      let skipped = 0;
+
+      for (let i = 0; i < rows.length; i++) {
+        const row = rows[i];
+        const record: Record<string, string> = {};
+        headers.forEach((h, idx) => { record[h] = row[idx] || ""; });
+
+        const { job, errors } = validateAndMapCsvRow(record, i + 2, user.id);
+
+        if (errors.length > 0) {
+          allErrors.push(...errors);
+          skipped++;
+          continue;
+        }
+
+        try {
+          await storage.upsertJobByExternalKey(user.id, job.externalJobKey!, job);
+          imported++;
+        } catch (dbErr: any) {
+          allErrors.push({
+            rowNumber: i + 2,
+            field: "_db",
+            errorCode: "DB_ERROR",
+            errorMessage: dbErr.message || "Database error during upsert",
+          });
+          skipped++;
+        }
+      }
+
+      const status = skipped === 0 ? "Completed" : "Completed with errors";
+
+      await storage.updateImportRun(run.id, {
+        rowsTotal: rows.length,
+        rowsImported: imported,
+        rowsSkipped: skipped,
+        status,
+      });
+
+      if (allErrors.length > 0) {
+        const sanitizeCsvCell = (val: string) => {
+          let s = val.replace(/"/g, '""');
+          if (/^[=+\-@\t\r]/.test(s)) s = "'" + s;
+          return `"${s}"`;
+        };
+        const errorCsvHeaders = "rowNumber,field,errorCode,errorMessage";
+        const errorCsvRows = allErrors.map(e =>
+          `${e.rowNumber},${sanitizeCsvCell(e.field)},${sanitizeCsvCell(e.errorCode)},${sanitizeCsvCell(e.errorMessage)}`
+        );
+        const errorCsv = [errorCsvHeaders, ...errorCsvRows].join("\n");
+
+        await storage.createImportArtifact({
+          runId: run.id,
+          filename: "error_report.csv",
+          contentType: "text/csv",
+          data: errorCsv,
+        });
+      }
+
+      res.json({
+        runId: run.id,
+        status,
+        rowsTotal: rows.length,
+        rowsImported: imported,
+        rowsSkipped: skipped,
+        hasErrors: allErrors.length > 0,
+      });
+    } catch (err: any) {
+      console.error("Import error:", err);
+      if (run) {
+        try { await storage.updateImportRun(run.id, { status: "Failed" }); } catch {}
+      }
+      res.status(500).json({ message: "Import failed: " + (err.message || "Unknown error") });
+    }
+  });
+
+  app.get("/api/admin/jobs/import/runs", async (req, res) => {
+    if (!req.isAuthenticated() || !req.user || (req.user as any).role !== "admin") {
+      return res.status(403).json({ message: "Admin access required" });
+    }
+    const runs = await storage.getImportRuns();
+    res.json(runs);
+  });
+
+  app.get("/api/admin/jobs/import/:runId", async (req, res) => {
+    if (!req.isAuthenticated() || !req.user || (req.user as any).role !== "admin") {
+      return res.status(403).json({ message: "Admin access required" });
+    }
+    const run = await storage.getImportRun(Number(req.params.runId));
+    if (!run) return res.status(404).json({ message: "Import run not found" });
+    res.json(run);
+  });
+
+  app.get("/api/admin/jobs/import/:runId/error-report", async (req, res) => {
+    if (!req.isAuthenticated() || !req.user || (req.user as any).role !== "admin") {
+      return res.status(403).json({ message: "Admin access required" });
+    }
+    const artifact = await storage.getImportArtifact(Number(req.params.runId), "error_report.csv");
+    if (!artifact) return res.status(404).json({ message: "Error report not found" });
+    res.set("Content-Type", "text/csv");
+    res.set("Content-Disposition", `attachment; filename="error_report_run_${req.params.runId}.csv"`);
+    res.send(artifact.data);
   });
 
   // Stripe public key (for frontend)
