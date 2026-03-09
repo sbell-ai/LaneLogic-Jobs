@@ -1,0 +1,62 @@
+## Go-ahead (do T001 first only)
+
+Approved to proceed, **starting with T001 (schema changes) only**. After `db:push` succeeds, stop and show me the final diffs for `shared/schema.ts` and any generated migrations before moving to T002.
+
+### Non-negotiable requirements (must match PRD)
+
+1) **Idempotent upsert**
+
+- Jobs must upsert by **(employer_id, external_job_key)**.
+- `external_job_key` is required in CSV rows, but **nullable in DB** for legacy rows.
+
+2) **Safe uniqueness**
+
+- Implement **partial unique index**:
+    - unique on `(employer_id, external_job_key)` **WHERE external_job_key IS NOT NULL**.
+- Do **not** set a default empty string.
+
+3) **Skip invalid rows**
+
+- Import valid rows, skip invalid rows.
+- Import run status:
+    - `Completed` if skipped = 0
+    - `Completed with errors` if skipped > 0
+    - `Failed` only for system failures
+
+4) **Store error report CSV artifact**
+
+- Generate `error_report.csv` for skipped rows and **store it** in `import_artifacts` for later download.
+
+5) **Apply URL rule**
+
+- If `applyUrl` is non-empty and host is not in a configurable LaneLogic domain allowlist, set `is_external_apply = true`; else `false`.
+- Invalid URLs should be treated as a row validation error.
+
+6) **Keyword ambiguity rule**
+
+- Keyword/tag normalization uses Tagging Architecture semantics.
+- If any keyword is **ambiguous** (maps to multiple canonical tags), the job cannot be saved (even Draft). For CSV import, mark row invalid with `AMBIGUOUS_KEYWORD`.
+- If keyword has **no match**, store as raw/unmapped (do not block save).
+
+### CSV mapping (confirm in code)
+
+- Required: `externalJobKey`, `title`, `description`, `requirements`
+- `category` stored as `category | category2 | category3` (skip empties)
+- `salary` normalized from `salaryMin/salaryMax/salaryUnit` with numeric validation and min ≤ max
+- `skills`, `keywords`: parse comma-separated into arrays (store in `job_metadata`)
+- `coreResponsibilities`, `experienceLevel`: store in `job_metadata`
+- `benefits` → `jobs.benefits` (exists)
+
+### T001 acceptance
+
+- `db:push` succeeds
+- existing rows remain with `external_job_key = NULL`
+- unique index exists and does not error on existing data
+
+Proceed with T001 now.
+
+---
+
+If you want to be extra strict (recommended), add one line at the end:
+
+- “If anything in the plan conflicts with the PRD section ‘Admin-only bulk import: Job postings (CSV)’ on the PRD page, the PRD wins.”
