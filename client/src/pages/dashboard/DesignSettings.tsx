@@ -559,8 +559,8 @@ export default function DesignSettings() {
                   { key: "socialLinkedin" as const, label: "LinkedIn", placeholder: "https://linkedin.com/company/yourcompany" },
                   { key: "socialFacebook" as const, label: "Facebook", placeholder: "https://facebook.com/yourcompany" },
                   { key: "socialInstagram" as const, label: "Instagram", placeholder: "https://instagram.com/yourcompany" },
-                  { key: "socialYoutube" as const, label: "YouTube", placeholder: "https://youtube.com/@yourcompany" },
-                  { key: "socialTiktok" as const, label: "TikTok", placeholder: "https://tiktok.com/@yourcompany" },
+                  { key: "socialYoutube" as const, label: "YouTube", placeholder: "https://www.youtube.com/@yourcompany" },
+                  { key: "socialTiktok" as const, label: "TikTok", placeholder: "https://www.tiktok.com/@yourcompany" },
                 ].map(({ key, label, placeholder }) => (
                   <div key={key} className="flex items-center gap-2">
                     <span className="text-xs font-medium text-muted-foreground w-20 shrink-0">{label}</span>
