@@ -2,7 +2,9 @@ import type { Express } from "express";
 import type { Server } from "http";
 import { storage } from "./storage";
 import { api } from "@shared/routes";
-import { insertPageSchema } from "@shared/schema";
+import { insertPageSchema, jobs } from "@shared/schema";
+import { eq } from "drizzle-orm";
+import { db } from "./db";
 import { z } from "zod";
 import session from "express-session";
 import connectPgSimple from "connect-pg-simple";
@@ -997,6 +999,29 @@ export async function registerRoutes(
         try { await storage.updateImportRun(run.id, { status: "Failed" }); } catch {}
       }
       res.status(500).json({ message: "Import failed: " + (err.message || "Unknown error") });
+    }
+  });
+
+  app.post("/api/admin/jobs/migrate-paragraphize", async (req, res) => {
+    if (!req.isAuthenticated() || !req.user || (req.user as any).role !== "admin") {
+      return res.status(403).json({ message: "Admin access required" });
+    }
+    try {
+      const allJobs = await db.select({ id: jobs.id, description: jobs.description }).from(jobs);
+      let updated = 0;
+      for (const job of allJobs) {
+        if (!job.description) continue;
+        const newlineCount = (job.description.match(/\n/g) || []).length;
+        if (newlineCount >= 2) continue;
+        const newDesc = paragraphize(job.description);
+        if (newDesc !== job.description) {
+          await db.update(jobs).set({ description: newDesc }).where(eq(jobs.id, job.id));
+          updated++;
+        }
+      }
+      res.json({ message: `Paragraphized ${updated} job descriptions`, updated });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
     }
   });
 
