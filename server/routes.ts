@@ -472,10 +472,12 @@ export async function registerRoutes(
 
   // Jobs
   app.get(api.jobs.list.path, async (req, res) => {
+    const isAdmin = req.isAuthenticated() && (req.user as any).role === "admin";
     const allJobs = await storage.getJobs();
+    const visibleJobs = isAdmin ? allJobs : allJobs.filter(j => j.isPublished);
     const allUsers = await storage.getUsers();
     const employerMap = new Map(allUsers.filter(u => u.role === "employer").map(u => [u.id, u]));
-    const enriched = allJobs.map(job => ({
+    const enriched = visibleJobs.map(job => ({
       ...job,
       employerLogo: employerMap.get(job.employerId)?.companyLogo || null,
     }));
@@ -485,6 +487,8 @@ export async function registerRoutes(
   app.get(api.jobs.get.path, async (req, res) => {
     const job = await storage.getJob(Number(req.params.id));
     if (!job) return res.status(404).json({ message: "Not found" });
+    const isAdmin = req.isAuthenticated() && (req.user as any).role === "admin";
+    if (!isAdmin && !job.isPublished) return res.status(404).json({ message: "Not found" });
     const employer = await storage.getUser(job.employerId);
     res.json({ ...job, employerLogo: employer?.companyLogo || null });
   });
@@ -587,8 +591,17 @@ export async function registerRoutes(
 
   // Resources
   app.get(api.resources.list.path, async (req, res) => {
-    const resources = await storage.getResources();
-    res.json(resources);
+    const isAdmin = req.isAuthenticated() && (req.user as any).role === "admin";
+    const allResources = await storage.getResources();
+    res.json(isAdmin ? allResources : allResources.filter(r => r.isPublished));
+  });
+
+  app.get("/api/resources/:id", async (req, res) => {
+    const resource = await storage.getResource(Number(req.params.id));
+    if (!resource) return res.status(404).json({ message: "Not found" });
+    const isAdmin = req.isAuthenticated() && (req.user as any).role === "admin";
+    if (!isAdmin && !resource.isPublished) return res.status(404).json({ message: "Not found" });
+    res.json(resource);
   });
 
   app.post(api.resources.create.path, async (req, res) => {
@@ -603,13 +616,16 @@ export async function registerRoutes(
 
   // Blog
   app.get(api.blog.list.path, async (req, res) => {
+    const isAdmin = req.isAuthenticated() && (req.user as any).role === "admin";
     const posts = await storage.getBlogPosts();
-    res.json(posts);
+    res.json(isAdmin ? posts : posts.filter(p => p.isPublished));
   });
 
   app.get(api.blog.get.path, async (req, res) => {
     const post = await storage.getBlogPost(Number(req.params.id));
     if (!post) return res.status(404).json({ message: "Not found" });
+    const isAdmin = req.isAuthenticated() && (req.user as any).role === "admin";
+    if (!isAdmin && !post.isPublished) return res.status(404).json({ message: "Not found" });
     res.json(post);
   });
 
@@ -1454,6 +1470,293 @@ ${urls.join("\n")}
     const cat = JOB_CATEGORIES.find((c) => c.slug === catSlug);
     if (!cat || !Object.prototype.hasOwnProperty.call(SEO_STATES, stateSlug)) return next();
     res.redirect(301, `/jobs/${slug}`);
+  });
+
+  // Social Publishing endpoints
+  const ZAPIER_WEBHOOK_URL = process.env.ZAPIER_SOCIAL_POST_WEBHOOK_URL;
+  const ZAPIER_CALLBACK_SECRET = process.env.ZAPIER_CALLBACK_SECRET;
+
+  app.get("/api/admin/social-posts/webhook-status", async (req, res) => {
+    if (!req.isAuthenticated() || (req.user as any).role !== "admin") return res.status(403).json({ message: "Forbidden" });
+    res.json({ configured: !!ZAPIER_WEBHOOK_URL });
+  });
+
+  app.get("/api/admin/social-posts", async (req, res) => {
+    if (!req.isAuthenticated() || (req.user as any).role !== "admin") return res.status(403).json({ message: "Forbidden" });
+    const filters: { status?: string; entityType?: string } = {};
+    if (typeof req.query.status === "string") filters.status = req.query.status;
+    if (typeof req.query.entityType === "string") filters.entityType = req.query.entityType;
+    const posts = await storage.listSocialPosts(filters);
+    res.json(posts);
+  });
+
+  app.post("/api/admin/social-posts", async (req, res) => {
+    if (!req.isAuthenticated() || (req.user as any).role !== "admin") return res.status(403).json({ message: "Forbidden" });
+    try {
+      const { entityType, entityId, platforms, scheduledAt, copyMaster, imageUrl } = req.body;
+      let entity: any;
+      if (entityType === "job") entity = await storage.getJob(entityId);
+      else if (entityType === "blog") entity = await storage.getBlogPost(entityId);
+      else if (entityType === "resource") entity = await storage.getResource(entityId);
+      else return res.status(400).json({ message: "Invalid entityType" });
+
+      if (!entity) return res.status(404).json({ message: "Entity not found" });
+
+      const { checkShareable } = await import("./socialHelpers");
+      const shareCheck = checkShareable(entityType, entity);
+      if (!shareCheck.shareable) {
+        const msg = entityType === "job" && shareCheck.errors.some(e => e.reason === "expired")
+          ? "Only published, non-expired jobs can be shared to social."
+          : "Only published items can be shared to social.";
+        return res.status(409).json({ message: msg, errors: shareCheck.errors });
+      }
+
+      const { getPublicEntityUrl } = await import("./socialHelpers");
+      const { buildLinkUrl, generateDefaultCopy } = await import("../shared/socialUtils");
+      const entityUrl = getPublicEntityUrl(entityType, entity);
+      const linkUrl = buildLinkUrl(entityUrl);
+      const titleSnapshot = entity.title;
+      const defaultCopy = generateDefaultCopy(entityType, {
+        title: entity.title,
+        location: entity.locationState || entity.locationCity,
+        salary: entity.salary,
+        linkUrl,
+      });
+
+      const post = await storage.createSocialPost({
+        entityType,
+        entityId,
+        entityUrl,
+        titleSnapshot,
+        imageUrl: imageUrl || null,
+        linkUrl,
+        platforms: platforms || ["linkedin"],
+        status: "draft",
+        scheduledAt: scheduledAt ? new Date(scheduledAt) : null,
+        copyMaster: copyMaster || null,
+        copyByPlatform: defaultCopy,
+        provider: "zapier",
+        createdBy: (req.user as any).id,
+      });
+      res.status(201).json(post);
+    } catch (err) {
+      res.status(500).json({ message: "Failed to create social post" });
+    }
+  });
+
+  app.patch("/api/admin/social-posts/:id", async (req, res) => {
+    if (!req.isAuthenticated() || (req.user as any).role !== "admin") return res.status(403).json({ message: "Forbidden" });
+    try {
+      const post = await storage.getSocialPost(Number(req.params.id));
+      if (!post) return res.status(404).json({ message: "Social post not found" });
+
+      const { platforms, scheduledAt, copyMaster, copyByPlatform, imageUrl } = req.body;
+      const updates: any = {};
+      if (platforms !== undefined) {
+        if (!Array.isArray(platforms) || platforms.length === 0) {
+          return res.status(400).json({ message: "At least one platform is required", errors: [{ field: "platforms", reason: "empty" }] });
+        }
+        updates.platforms = platforms;
+      }
+      if (scheduledAt !== undefined) updates.scheduledAt = scheduledAt ? new Date(scheduledAt) : null;
+      if (copyMaster !== undefined) updates.copyMaster = copyMaster;
+      if (copyByPlatform !== undefined) updates.copyByPlatform = copyByPlatform;
+      if (imageUrl !== undefined) updates.imageUrl = imageUrl;
+
+      if (updates.copyByPlatform && updates.platforms) {
+        const { validatePlatformCopy } = await import("../shared/socialUtils");
+        const copyErrors = validatePlatformCopy(updates.copyByPlatform, updates.platforms);
+        if (copyErrors.length > 0) {
+          return res.status(400).json({ message: copyErrors.join(" "), errors: copyErrors.map(e => ({ field: "copy", reason: e })) });
+        }
+      }
+
+      const updated = await storage.updateSocialPost(Number(req.params.id), updates);
+      res.json(updated);
+    } catch (err) {
+      res.status(500).json({ message: "Failed to update social post" });
+    }
+  });
+
+  async function queueSocialPost(postId: number, req: any, res: any) {
+    const post = await storage.getSocialPost(postId);
+    if (!post) return res.status(404).json({ message: "Social post not found" });
+    if (post.status !== "draft" && post.status !== "failed") {
+      return res.status(409).json({ message: `Cannot queue a post with status "${post.status}".` });
+    }
+
+    let entity: any;
+    if (post.entityType === "job") entity = await storage.getJob(post.entityId);
+    else if (post.entityType === "blog") entity = await storage.getBlogPost(post.entityId);
+    else if (post.entityType === "resource") entity = await storage.getResource(post.entityId);
+
+    if (!entity) return res.status(404).json({ message: "Original entity no longer exists" });
+
+    const { checkShareable } = await import("./socialHelpers");
+    const shareCheck = checkShareable(post.entityType, entity);
+    if (!shareCheck.shareable) {
+      const msg = post.entityType === "job" && shareCheck.errors.some(e => e.reason === "expired")
+        ? "Only published, non-expired jobs can be shared to social."
+        : "Only published items can be shared to social.";
+      return res.status(409).json({ message: msg, errors: shareCheck.errors });
+    }
+
+    const platforms = post.platforms as string[];
+    const copyByPlatform = (post.copyByPlatform || {}) as Record<string, string>;
+    const copyMaster = post.copyMaster;
+    const resolvedCopy: Record<string, string> = {};
+    const missingCopy: string[] = [];
+
+    for (const p of platforms) {
+      if (copyByPlatform[p]) {
+        resolvedCopy[p] = copyByPlatform[p];
+      } else if (copyMaster) {
+        resolvedCopy[p] = copyMaster;
+      } else {
+        const { PLATFORM_LABELS } = await import("../shared/socialUtils");
+        const label = PLATFORM_LABELS[p as keyof typeof PLATFORM_LABELS] || p;
+        missingCopy.push(label);
+      }
+    }
+    if (missingCopy.length > 0) {
+      return res.status(400).json({
+        message: `Missing copy for: ${missingCopy.join(", ")}. Provide platform-specific copy or a master copy.`,
+        errors: missingCopy.map(p => ({ field: "copy", reason: `missing_${p}` })),
+      });
+    }
+
+    const { validatePlatformCopy } = await import("../shared/socialUtils");
+    const copyErrors = validatePlatformCopy(resolvedCopy, platforms);
+    if (copyErrors.length > 0) {
+      return res.status(400).json({ message: copyErrors.join(" "), errors: copyErrors.map(e => ({ field: "copy", reason: e })) });
+    }
+
+    if (!ZAPIER_WEBHOOK_URL) {
+      await storage.updateSocialPost(postId, { status: "failed", lastError: "Zapier webhook URL not configured" } as any);
+      return res.status(500).json({ message: "Zapier webhook URL not configured" });
+    }
+
+    const providerRequestId = randomUUID();
+    const payload = {
+      providerRequestId,
+      entityType: post.entityType,
+      entityId: post.entityId,
+      titleSnapshot: post.titleSnapshot,
+      linkUrl: post.linkUrl,
+      imageUrl: post.imageUrl,
+      platforms,
+      copyByPlatform: resolvedCopy,
+      scheduledAt: post.scheduledAt,
+    };
+
+    try {
+      const response = await fetch(ZAPIER_WEBHOOK_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const responseData = await response.json().catch(() => ({}));
+
+      if (response.ok) {
+        const updated = await storage.updateSocialPost(postId, {
+          status: "queued",
+          providerRequestId,
+          providerResponse: responseData,
+        } as any);
+        return res.json(updated);
+      } else {
+        await storage.updateSocialPost(postId, {
+          status: "failed",
+          lastError: `Zapier returned ${response.status}: ${JSON.stringify(responseData)}`,
+          providerRequestId,
+          providerResponse: responseData,
+        } as any);
+        return res.status(502).json({ message: `Zapier returned ${response.status}`, details: responseData });
+      }
+    } catch (err: any) {
+      await storage.updateSocialPost(postId, {
+        status: "failed",
+        lastError: err.message || "Network error sending to Zapier",
+        providerRequestId,
+      } as any);
+      return res.status(502).json({ message: "Failed to send to Zapier: " + (err.message || "Network error") });
+    }
+  }
+
+  app.post("/api/admin/social-posts/:id/queue", async (req, res) => {
+    if (!req.isAuthenticated() || (req.user as any).role !== "admin") return res.status(403).json({ message: "Forbidden" });
+    await queueSocialPost(Number(req.params.id), req, res);
+  });
+
+  app.post("/api/admin/social-posts/:id/retry", async (req, res) => {
+    if (!req.isAuthenticated() || (req.user as any).role !== "admin") return res.status(403).json({ message: "Forbidden" });
+    await queueSocialPost(Number(req.params.id), req, res);
+  });
+
+  app.post("/api/admin/social-posts/:id/cancel", async (req, res) => {
+    if (!req.isAuthenticated() || (req.user as any).role !== "admin") return res.status(403).json({ message: "Forbidden" });
+    const post = await storage.getSocialPost(Number(req.params.id));
+    if (!post) return res.status(404).json({ message: "Social post not found" });
+    if (post.status === "queued") {
+      return res.status(409).json({ message: "Queued posts cannot be canceled in MVP." });
+    }
+    if (post.status !== "draft") {
+      return res.status(409).json({ message: `Cannot cancel a post with status "${post.status}".` });
+    }
+    const updated = await storage.updateSocialPost(Number(req.params.id), { status: "canceled" } as any);
+    res.json(updated);
+  });
+
+  app.post("/api/admin/social-posts/test-webhook", async (req, res) => {
+    if (!req.isAuthenticated() || (req.user as any).role !== "admin") return res.status(403).json({ message: "Forbidden" });
+    if (!ZAPIER_WEBHOOK_URL) return res.status(500).json({ message: "Zapier webhook URL not configured", success: false });
+    try {
+      const testPayload = {
+        test: true,
+        providerRequestId: randomUUID(),
+        entityType: "test",
+        entityId: 0,
+        titleSnapshot: "Test Post",
+        linkUrl: "https://example.com/test",
+        platforms: ["linkedin"],
+        copyByPlatform: { linkedin: "This is a test post from LaneLogic Jobs admin." },
+      };
+      const response = await fetch(ZAPIER_WEBHOOK_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(testPayload),
+      });
+      const data = await response.json().catch(() => ({}));
+      res.json({ success: response.ok, status: response.status, response: data });
+    } catch (err: any) {
+      res.json({ success: false, error: err.message || "Network error" });
+    }
+  });
+
+  app.post("/api/integrations/zapier/social-posts/callback", async (req, res) => {
+    const secret = req.headers["x-zapier-secret"];
+    if (!ZAPIER_CALLBACK_SECRET || secret !== ZAPIER_CALLBACK_SECRET) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+    try {
+      const { providerRequestId, status, providerJobId, error, response: providerResp } = req.body;
+      if (!providerRequestId) return res.status(400).json({ message: "providerRequestId required" });
+
+      const allPosts = await storage.listSocialPosts();
+      const post = allPosts.find(p => p.providerRequestId === providerRequestId);
+      if (!post) return res.status(409).json({ message: "No matching social post for this providerRequestId" });
+
+      const updates: any = {};
+      if (status) updates.status = status;
+      if (providerJobId) updates.providerJobId = providerJobId;
+      if (error) updates.lastError = error;
+      if (providerResp) updates.providerResponse = providerResp;
+
+      const updated = await storage.updateSocialPost(post.id, updates);
+      res.json(updated);
+    } catch (err) {
+      res.status(500).json({ message: "Callback processing failed" });
+    }
   });
 
   // Seed database

@@ -19,6 +19,7 @@ import Pricing from "@/pages/Pricing";
 import Employers from "@/pages/Employers";
 import Contact from "@/pages/Contact";
 import JobsByTypeAndState from "@/pages/JobsByTypeAndState";
+import ResourceDetail from "@/pages/ResourceDetail";
 import DynamicPage from "@/pages/DynamicPage";
 import type { Page } from "@shared/schema";
 import { findCategoryBySlug, US_STATES } from "@/config/jobCategories";
@@ -162,6 +163,7 @@ function Router() {
       <Route path="/employers" component={Employers} />
       <Route path="/blog" component={Blog} />
       <Route path="/blog/:id" component={BlogPost} />
+      <Route path="/resources/:id" component={ResourceDetail} />
       <Route path="/resources" component={Resources} />
       <Route path="/pricing" component={Pricing} />
       <Route path="/contact" component={Contact} />

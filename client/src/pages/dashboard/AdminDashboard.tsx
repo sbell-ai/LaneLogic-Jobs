@@ -20,11 +20,13 @@ import {
   Users, Briefcase, BookOpen, FileText, Plus, Trash2,
   Upload, CheckCircle2, Copy, Eye, EyeOff, UserPlus,
   AlertCircle, Download, Pencil, X, Tag, Ticket, ExternalLink,
-  FilePlus2, Globe, Search as SearchIcon
+  FilePlus2, Globe, Search as SearchIcon, Share2
 } from "lucide-react";
 import { ImageUpload } from "@/components/ui/image-upload";
 import { RichTextEditor } from "@/components/ui/rich-text-editor";
 import type { User, Job, Resource, BlogPost, Category, Coupon, SiteSettingsData, Page } from "@shared/schema";
+import { ShareToSocialModal } from "@/components/ShareToSocialModal";
+import SocialPublishing from "./SocialPublishing";
 import { insertResourceSchema, insertBlogPostSchema, insertJobSchema } from "@shared/schema";
 import { z } from "zod";
 import { formatDistanceToNow, format } from "date-fns";
@@ -249,6 +251,7 @@ function AllJobsTab() {
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [bulkEditOpen, setBulkEditOpen] = useState(false);
   const [bulkForm, setBulkForm] = useState<{ jobType: string; category: string; industry: string }>({ jobType: "", category: "", industry: "" });
+  const [shareJob, setShareJob] = useState<Job | null>(null);
 
   const deleteMutation = useMutation({
     mutationFn: (id: number) => apiRequest("DELETE", `/api/jobs/${id}`),
@@ -317,6 +320,7 @@ function AllJobsTab() {
       locationCity: j.locationCity || "", locationState: j.locationState || "", locationCountry: j.locationCountry || "",
       applyUrl: j.applyUrl || "", isExternalApply: j.isExternalApply || false,
       expiresAt: j.expiresAt ? new Date(j.expiresAt).toISOString().slice(0, 10) : "",
+      isPublished: j.isPublished ?? false,
     });
     setEditJob(j);
   };
@@ -392,6 +396,7 @@ function AllJobsTab() {
                   {job.companyName && <span className="text-sm text-muted-foreground">· {job.companyName}</span>}
                   {job.category && <Badge variant="outline" className="text-xs">{job.category}</Badge>}
                   {job.industry && <Badge variant="outline" className="text-xs">{job.industry}</Badge>}
+                  {!job.isPublished && <Badge variant="secondary" className="text-xs" data-testid={`badge-draft-job-${job.id}`}>Draft</Badge>}
                 </div>
                 <p className="text-sm text-muted-foreground mt-0.5">
                   {fmtLoc(job)}{job.salary ? ` · ${job.salary}` : ""}
@@ -402,6 +407,7 @@ function AllJobsTab() {
             <div className="flex gap-1 shrink-0">
               <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setViewJob(job)} data-testid={`button-view-job-${job.id}`}><Eye size={15} /></Button>
               <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEdit(job)} data-testid={`button-edit-job-${job.id}`}><Pencil size={15} /></Button>
+              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setShareJob(job)} data-testid={`button-share-job-${job.id}`}><Share2 size={15} /></Button>
               <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => deleteMutation.mutate(job.id)} data-testid={`button-admin-delete-job-${job.id}`}><Trash2 size={15} /></Button>
             </div>
           </div>
@@ -475,12 +481,43 @@ function AllJobsTab() {
             <div><Label>Description</Label><Textarea value={editForm.description || ""} onChange={e => setEditForm(f => ({ ...f, description: e.target.value }))} className="min-h-[100px]" /></div>
             <div><Label>Requirements</Label><Textarea value={editForm.requirements || ""} onChange={e => setEditForm(f => ({ ...f, requirements: e.target.value }))} className="min-h-[80px]" /></div>
             <div><Label>Benefits</Label><Textarea value={editForm.benefits || ""} onChange={e => setEditForm(f => ({ ...f, benefits: e.target.value }))} className="min-h-[60px]" /></div>
-            <Button className="w-full" disabled={updateMutation.isPending} onClick={() => editJob && updateMutation.mutate({ id: editJob.id, ...editForm, expiresAt: editForm.expiresAt ? new Date(editForm.expiresAt).toISOString() : null })} data-testid="button-save-edit-job">
-              {updateMutation.isPending ? "Saving..." : "Save Changes"}
-            </Button>
+            <div className="flex items-center justify-between py-2 px-1 border rounded-lg">
+              <Label className="font-medium">Published</Label>
+              <Switch
+                checked={editForm.isPublished ?? false}
+                onCheckedChange={v => setEditForm(f => ({ ...f, isPublished: v }))}
+                data-testid="switch-job-published"
+              />
+            </div>
+            <div className="flex gap-2">
+              <Button className="flex-1" disabled={updateMutation.isPending} onClick={() => {
+                if (!editJob) return;
+                const updates = { ...editForm, expiresAt: editForm.expiresAt ? new Date(editForm.expiresAt).toISOString() : null };
+                if (updates.isPublished && !editJob.isPublished) updates.publishedAt = new Date().toISOString();
+                if (!updates.isPublished && editJob.isPublished) updates.publishedAt = null;
+                updateMutation.mutate({ id: editJob.id, ...updates });
+              }} data-testid="button-save-edit-job">
+                {updateMutation.isPending ? "Saving..." : "Save Changes"}
+              </Button>
+              <Button variant="outline" onClick={() => { if (editJob) setShareJob(editJob); }} data-testid="button-share-from-edit-job">
+                <Share2 size={15} className="mr-1.5" /> Share
+              </Button>
+            </div>
           </div>
         </DialogContent>
       </Dialog>
+
+      {shareJob && (
+        <ShareToSocialModal
+          entityType="job"
+          entityId={shareJob.id}
+          entityTitle={shareJob.title}
+          isPublished={shareJob.isPublished ?? false}
+          isExpired={!!(shareJob.expiresAt && new Date(shareJob.expiresAt) < new Date())}
+          isOpen={!!shareJob}
+          onClose={() => setShareJob(null)}
+        />
+      )}
 
       <Dialog open={bulkEditOpen} onOpenChange={setBulkEditOpen}>
         <DialogContent className="max-w-md" data-testid="dialog-bulk-edit">
@@ -1106,7 +1143,8 @@ function BlogTab() {
   const { data: categories } = useQuery<Category[]>({ queryKey: ["/api/categories"] });
   const [showForm, setShowForm] = useState(false);
   const [editPost, setEditPost] = useState<BlogPost | null>(null);
-  const [editForm, setEditForm] = useState({ title: "", content: "", category: "" });
+  const [editForm, setEditForm] = useState({ title: "", content: "", category: "", isPublished: false as boolean });
+  const [shareBlog, setShareBlog] = useState<BlogPost | null>(null);
 
   const blogCats = (categories || []).filter(c => c.type === "blog");
 
@@ -1122,9 +1160,9 @@ function BlogTab() {
       queryClient.invalidateQueries({ queryKey: ["/api/blog"] });
       form.reset();
       setShowForm(false);
-      toast({ title: "Post published!" });
+      toast({ title: "Post created!" });
     },
-    onError: () => toast({ title: "Error", description: "Could not publish post.", variant: "destructive" }),
+    onError: () => toast({ title: "Error", description: "Could not create post.", variant: "destructive" }),
   });
 
   const updateMutation = useMutation({
@@ -1146,7 +1184,7 @@ function BlogTab() {
   });
 
   const openEdit = (p: BlogPost) => {
-    setEditForm({ title: p.title, content: p.content, category: p.category || "" });
+    setEditForm({ title: p.title, content: p.content, category: p.category || "", isPublished: p.isPublished ?? false });
     setEditPost(p);
   };
 
@@ -1228,6 +1266,7 @@ function BlogTab() {
                   <div className="flex items-center gap-2 mb-1">
                     <h3 className="font-bold font-display text-lg">{post.title}</h3>
                     {post.category && <Badge variant="outline" className="text-xs">{post.category}</Badge>}
+                    {!post.isPublished && <Badge variant="secondary" className="text-xs" data-testid={`badge-draft-blog-${post.id}`}>Draft</Badge>}
                   </div>
                   <p className="text-sm text-muted-foreground line-clamp-2">{post.content}</p>
                   <p className="text-xs text-muted-foreground mt-2">
@@ -1236,6 +1275,7 @@ function BlogTab() {
                 </div>
                 <div className="flex gap-1 shrink-0">
                   <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEdit(post)} data-testid={`button-edit-blog-${post.id}`}><Pencil size={15} /></Button>
+                  <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setShareBlog(post)} data-testid={`button-share-blog-${post.id}`}><Share2 size={15} /></Button>
                   <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => { if (confirm("Delete this post?")) deleteMutation.mutate(post.id); }} data-testid={`button-delete-blog-${post.id}`}><Trash2 size={15} /></Button>
                 </div>
               </div>
@@ -1262,12 +1302,42 @@ function BlogTab() {
               </div>
             )}
             <div><Label>Content</Label><Textarea value={editForm.content} onChange={e => setEditForm(f => ({ ...f, content: e.target.value }))} className="min-h-[200px]" data-testid="textarea-edit-blog-content" /></div>
-            <Button className="w-full" disabled={updateMutation.isPending} onClick={() => editPost && updateMutation.mutate({ id: editPost.id, ...editForm })} data-testid="button-save-edit-blog">
-              {updateMutation.isPending ? "Saving..." : "Save Changes"}
-            </Button>
+            <div className="flex items-center justify-between py-2 px-1 border rounded-lg">
+              <Label className="font-medium">Published</Label>
+              <Switch
+                checked={editForm.isPublished ?? false}
+                onCheckedChange={v => setEditForm(f => ({ ...f, isPublished: v }))}
+                data-testid="switch-blog-published"
+              />
+            </div>
+            <div className="flex gap-2">
+              <Button className="flex-1" disabled={updateMutation.isPending} onClick={() => {
+                if (!editPost) return;
+                const updates: Record<string, any> = { ...editForm };
+                if (updates.isPublished && !editPost.isPublished) updates.publishedAt = new Date().toISOString();
+                if (!updates.isPublished && editPost.isPublished) updates.publishedAt = null;
+                updateMutation.mutate({ id: editPost.id, ...updates });
+              }} data-testid="button-save-edit-blog">
+                {updateMutation.isPending ? "Saving..." : "Save Changes"}
+              </Button>
+              <Button variant="outline" onClick={() => { if (editPost) setShareBlog(editPost); }} data-testid="button-share-from-edit-blog">
+                <Share2 size={15} className="mr-1.5" /> Share
+              </Button>
+            </div>
           </div>
         </DialogContent>
       </Dialog>
+
+      {shareBlog && (
+        <ShareToSocialModal
+          entityType="blog"
+          entityId={shareBlog.id}
+          entityTitle={shareBlog.title}
+          isPublished={shareBlog.isPublished ?? false}
+          isOpen={!!shareBlog}
+          onClose={() => setShareBlog(null)}
+        />
+      )}
     </div>
   );
 }
@@ -1285,7 +1355,8 @@ function ResourcesTab() {
   const { data: resources, isLoading } = useQuery<Resource[]>({ queryKey: ["/api/resources"] });
   const [showForm, setShowForm] = useState(false);
   const [editResource, setEditResource] = useState<Resource | null>(null);
-  const [editForm, setEditForm] = useState({ title: "", content: "", targetAudience: "both", requiredTier: "free" });
+  const [editForm, setEditForm] = useState({ title: "", content: "", targetAudience: "both", requiredTier: "free", isPublished: false as boolean });
+  const [shareResource, setShareResource] = useState<Resource | null>(null);
 
   const form = useForm<z.infer<typeof resourceFormSchema>>({
     resolver: zodResolver(resourceFormSchema),
@@ -1321,7 +1392,7 @@ function ResourcesTab() {
   });
 
   const openEdit = (r: Resource) => {
-    setEditForm({ title: r.title, content: r.content, targetAudience: r.targetAudience, requiredTier: r.requiredTier });
+    setEditForm({ title: r.title, content: r.content, targetAudience: r.targetAudience, requiredTier: r.requiredTier, isPublished: r.isPublished ?? false });
     setEditResource(r);
   };
 
@@ -1406,10 +1477,12 @@ function ResourcesTab() {
                 <div className="flex gap-2 mt-3">
                   <Badge variant="outline" className="text-xs capitalize">{r.targetAudience.replace("_", " ")}</Badge>
                   <Badge variant="outline" className="text-xs capitalize">{r.requiredTier} tier</Badge>
+                  {!r.isPublished && <Badge variant="secondary" className="text-xs" data-testid={`badge-draft-resource-${r.id}`}>Draft</Badge>}
                 </div>
               </div>
               <div className="flex gap-1 shrink-0">
                 <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEdit(r)} data-testid={`button-edit-resource-${r.id}`}><Pencil size={15} /></Button>
+                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setShareResource(r)} data-testid={`button-share-resource-${r.id}`}><Share2 size={15} /></Button>
                 <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => { if (confirm("Delete this resource?")) deleteMutation.mutate(r.id); }} data-testid={`button-delete-resource-${r.id}`}><Trash2 size={15} /></Button>
               </div>
             </div>
@@ -1453,12 +1526,42 @@ function ResourcesTab() {
                 </Select>
               </div>
             </div>
-            <Button className="w-full" disabled={updateMutation.isPending} onClick={() => editResource && updateMutation.mutate({ id: editResource.id, ...editForm })} data-testid="button-save-edit-resource">
-              {updateMutation.isPending ? "Saving..." : "Save Changes"}
-            </Button>
+            <div className="flex items-center justify-between py-2 px-1 border rounded-lg">
+              <Label className="font-medium">Published</Label>
+              <Switch
+                checked={editForm.isPublished ?? false}
+                onCheckedChange={v => setEditForm(f => ({ ...f, isPublished: v }))}
+                data-testid="switch-resource-published"
+              />
+            </div>
+            <div className="flex gap-2">
+              <Button className="flex-1" disabled={updateMutation.isPending} onClick={() => {
+                if (!editResource) return;
+                const updates: Record<string, any> = { ...editForm };
+                if (updates.isPublished && !editResource.isPublished) updates.publishedAt = new Date().toISOString();
+                if (!updates.isPublished && editResource.isPublished) updates.publishedAt = null;
+                updateMutation.mutate({ id: editResource.id, ...updates });
+              }} data-testid="button-save-edit-resource">
+                {updateMutation.isPending ? "Saving..." : "Save Changes"}
+              </Button>
+              <Button variant="outline" onClick={() => { if (editResource) setShareResource(editResource); }} data-testid="button-share-from-edit-resource">
+                <Share2 size={15} className="mr-1.5" /> Share
+              </Button>
+            </div>
           </div>
         </DialogContent>
       </Dialog>
+
+      {shareResource && (
+        <ShareToSocialModal
+          entityType="resource"
+          entityId={shareResource.id}
+          entityTitle={shareResource.title}
+          isPublished={shareResource.isPublished ?? false}
+          isOpen={!!shareResource}
+          onClose={() => setShareResource(null)}
+        />
+      )}
     </div>
   );
 }
@@ -1820,13 +1923,13 @@ function CustomPagesTab() {
     content: "",
     seoTitle: "",
     metaDescription: "",
-    isPublished: true,
+    isPublished: false,
   });
 
   const [autoSlug, setAutoSlug] = useState(true);
 
   const resetForm = () => {
-    setFormData({ title: "", slug: "", content: "", seoTitle: "", metaDescription: "", isPublished: true });
+    setFormData({ title: "", slug: "", content: "", seoTitle: "", metaDescription: "", isPublished: false });
     setAutoSlug(true);
     setEditingPage(null);
     setIsCreating(false);
@@ -2472,6 +2575,7 @@ export default function AdminDashboard({ section }: { section?: string }) {
       case "coupons": return <CouponsTab />;
       case "site-pages": return <SitePagesTab />;
       case "custom-pages": return <CustomPagesTab />;
+      case "social": return <SocialPublishing />;
       default: return <UsersTab />;
     }
   };

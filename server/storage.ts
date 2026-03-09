@@ -1,7 +1,7 @@
 import { db } from "./db";
 import {
   users, jobs, applications, resources, blogPosts, resumes, siteSettings, categories, coupons, pages,
-  importRuns, importArtifacts,
+  importRuns, importArtifacts, socialPosts,
   type User, type InsertUser, type Job, type InsertJob,
   type Application, type InsertApplication,
   type Resource, type InsertResource,
@@ -12,6 +12,7 @@ import {
   type Page, type InsertPage,
   type ImportRun, type InsertImportRun,
   type ImportArtifact, type InsertImportArtifact,
+  type SocialPost, type InsertSocialPost,
   type SiteSettingsData, DEFAULT_SETTINGS
 } from "@shared/schema";
 import { eq, and, sql, desc, isNotNull } from "drizzle-orm";
@@ -85,6 +86,12 @@ export interface IStorage {
   getImportRuns(): Promise<ImportRun[]>;
   createImportArtifact(artifact: InsertImportArtifact): Promise<ImportArtifact>;
   getImportArtifact(runId: number, filename: string): Promise<ImportArtifact | undefined>;
+
+  // Social Posts
+  createSocialPost(data: InsertSocialPost): Promise<SocialPost>;
+  getSocialPost(id: number): Promise<SocialPost | undefined>;
+  listSocialPosts(filters?: { status?: string; entityType?: string }): Promise<SocialPost[]>;
+  updateSocialPost(id: number, updates: Partial<InsertSocialPost>): Promise<SocialPost>;
 
   // Site Settings
   getSiteSettings(): Promise<SiteSettingsData>;
@@ -300,6 +307,29 @@ export class DatabaseStorage implements IStorage {
       and(eq(importArtifacts.runId, runId), eq(importArtifacts.filename, filename))
     );
     return a;
+  }
+
+  // Social Posts
+  async createSocialPost(data: InsertSocialPost): Promise<SocialPost> {
+    const [post] = await db.insert(socialPosts).values(data).returning();
+    return post;
+  }
+  async getSocialPost(id: number): Promise<SocialPost | undefined> {
+    const [post] = await db.select().from(socialPosts).where(eq(socialPosts.id, id));
+    return post;
+  }
+  async listSocialPosts(filters?: { status?: string; entityType?: string }): Promise<SocialPost[]> {
+    const conditions = [];
+    if (filters?.status) conditions.push(eq(socialPosts.status, filters.status));
+    if (filters?.entityType) conditions.push(eq(socialPosts.entityType, filters.entityType));
+    if (conditions.length > 0) {
+      return await db.select().from(socialPosts).where(and(...conditions)).orderBy(desc(socialPosts.createdAt));
+    }
+    return await db.select().from(socialPosts).orderBy(desc(socialPosts.createdAt));
+  }
+  async updateSocialPost(id: number, updates: Partial<InsertSocialPost>): Promise<SocialPost> {
+    const [post] = await db.update(socialPosts).set({ ...updates, updatedAt: new Date() }).where(eq(socialPosts.id, id)).returning();
+    return post;
   }
 
   // Site Settings

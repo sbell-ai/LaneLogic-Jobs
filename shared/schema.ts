@@ -48,6 +48,8 @@ export const jobs = pgTable("jobs", {
   applyUrl: text("apply_url"),
   isExternalApply: boolean("is_external_apply").default(false),
   jobMetadata: jsonb("job_metadata"),
+  isPublished: boolean("is_published").notNull().default(false),
+  publishedAt: timestamp("published_at"),
   expiresAt: timestamp("expires_at"),
   createdAt: timestamp("created_at").defaultNow(),
 }, (table) => [
@@ -71,6 +73,8 @@ export const resources = pgTable("resources", {
   content: text("content").notNull(),
   targetAudience: text("target_audience").notNull(), // employer, job_seeker, both
   requiredTier: text("required_tier").notNull().default("free"),
+  isPublished: boolean("is_published").notNull().default(false),
+  publishedAt: timestamp("published_at"),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
@@ -80,6 +84,7 @@ export const blogPosts = pgTable("blog_posts", {
   title: text("title").notNull(),
   content: text("content").notNull(),
   category: text("category"),
+  isPublished: boolean("is_published").notNull().default(false),
   publishedAt: timestamp("published_at").defaultNow(),
 });
 
@@ -170,7 +175,7 @@ export const pages = pgTable("pages", {
   content: text("content").notNull().default(""),
   seoTitle: text("seo_title"),
   metaDescription: text("meta_description"),
-  isPublished: boolean("is_published").notNull().default(true),
+  isPublished: boolean("is_published").notNull().default(false),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -196,6 +201,29 @@ export const importArtifacts = pgTable("import_artifacts", {
   data: text("data").notNull(),
 });
 
+export const socialPosts = pgTable("social_posts", {
+  id: serial("id").primaryKey(),
+  entityType: text("entity_type").notNull(),
+  entityId: integer("entity_id").notNull(),
+  entityUrl: text("entity_url").notNull(),
+  titleSnapshot: text("title_snapshot").notNull(),
+  imageUrl: text("image_url"),
+  linkUrl: text("link_url").notNull(),
+  platforms: jsonb("platforms").notNull().$type<string[]>(),
+  status: text("status").notNull().default("draft"),
+  scheduledAt: timestamp("scheduled_at"),
+  copyMaster: text("copy_master"),
+  copyByPlatform: jsonb("copy_by_platform").$type<Record<string, string>>(),
+  provider: text("provider").notNull().default("zapier"),
+  providerRequestId: text("provider_request_id"),
+  providerJobId: text("provider_job_id"),
+  providerResponse: jsonb("provider_response"),
+  lastError: text("last_error"),
+  createdBy: integer("created_by").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
 export const insertUserSchema = createInsertSchema(users).omit({ id: true, createdAt: true });
 export const insertJobSchema = createInsertSchema(jobs).omit({ id: true, createdAt: true });
 export const insertApplicationSchema = createInsertSchema(applications).omit({ id: true, createdAt: true });
@@ -207,6 +235,7 @@ export const insertCouponSchema = createInsertSchema(coupons).omit({ id: true, c
 export const insertPageSchema = createInsertSchema(pages).omit({ id: true, createdAt: true, updatedAt: true });
 export const insertImportRunSchema = createInsertSchema(importRuns).omit({ id: true, uploadedAt: true });
 export const insertImportArtifactSchema = createInsertSchema(importArtifacts).omit({ id: true });
+export const insertSocialPostSchema = createInsertSchema(socialPosts).omit({ id: true, createdAt: true, updatedAt: true });
 
 export type User = typeof users.$inferSelect;
 export type InsertUser = z.infer<typeof insertUserSchema>;
@@ -230,6 +259,8 @@ export type ImportRun = typeof importRuns.$inferSelect;
 export type InsertImportRun = z.infer<typeof insertImportRunSchema>;
 export type ImportArtifact = typeof importArtifacts.$inferSelect;
 export type InsertImportArtifact = z.infer<typeof insertImportArtifactSchema>;
+export type SocialPost = typeof socialPosts.$inferSelect;
+export type InsertSocialPost = z.infer<typeof insertSocialPostSchema>;
 
 // Site Settings
 export interface SiteSettingsData {
