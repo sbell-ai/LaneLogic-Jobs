@@ -1,0 +1,5 @@
+externalJobKey,title,companyName,jobType,category,industry,locationCity,locationState,locationCountry,description,requirements,experienceLevelYears,skills,keywords,applyUrl
+EXP-001,Junior CDL Driver,FastFreight,Full-time,Driving,Trucking,Chicago,IL,USA,Entry-level CDL driving position,CDL Class A required,0-2,"CDL,freight","trucking,driver",
+EXP-002,Senior Fleet Manager,BigFleet,Full-time,Dispatcher,Logistics,Atlanta,GA,USA,Manage large fleet operations,10+ years fleet management,10+,"fleet,management","logistics,fleet",https://bigfleet.example.com/apply
+EXP-003,Bad Experience,TestCorp,Full-time,Driving,Trucking,Denver,CO,USA,Some driving job,CDL required,Entry Level,"CDL","trucking",
+EXP-004,No Experience Set,NoCo,Part-time,Warehouse,Warehousing,Miami,FL,USA,Warehouse receiving role,Ability to lift 50 lbs,,"warehouse","receiving",

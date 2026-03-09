@@ -1,0 +1,73 @@
+## Change request: Experience level → years-based bands
+
+### Goal
+
+Replace the current experience level labels (Entry Level, Mid level, etc.) with a **years-based experience band** with allowed values:
+
+- `0-2`
+- `2-5`
+- `5-10`
+- `10+`
+
+This should apply consistently across:
+
+- Admin CSV bulk import
+- Any job create/edit UI
+- Any API endpoints that accept experience level
+- Stored job data and search/indexing (if applicable)
+
+### Storage (current design)
+
+Continue storing this in `jobs.job_metadata` as a single string value:
+
+- Key: `experienceLevelYears`
+- Value: one of `0-2 | 2-5 | 5-10 | 10+`
+
+### Import behavior (non-negotiable)
+
+- If the CSV provides experience level:
+    - Accept only the allowed values above.
+    - If the value is not allowed, **skip the row** with error code `INVALID_EXPERIENCE_LEVEL`.
+- If the CSV does not provide experience level:
+    - Do not block import (leave it unset).
+
+### Backward compatibility
+
+If you currently accept `experienceLevel` in CSV/JSON:
+
+- Support a temporary alias mapping:
+    - If column/key is `experienceLevel`, read it but write it to `experienceLevelYears`.
+- If old label values show up (Entry/Mid/Senior), treat them as **invalid** (skip row) unless you explicitly add a mapping table.
+
+### Required code changes
+
+1) **server/routes.ts** (CSV importer)
+
+- Rename/adjust mapping to set `job_metadata.experienceLevelYears`
+- Add validator: allowed set `{ "0-2", "2-5", "5-10", "10+" }`
+- On invalid: push row error `{ field: "experienceLevelYears", errorCode: "INVALID_EXPERIENCE_LEVEL", ... }` and skip row
+
+2) **Admin upload template/UI**
+
+- Update the displayed required/optional columns list so the CSV column is `experienceLevelYears`
+- Update help text/examples
+
+3) [**replit.md**](http://replit.md)
+
+- Update CSV spec documentation to reflect the new field name and allowed values
+
+### Acceptance test
+
+Upload a CSV with 4 rows where:
+
+- 2 rows have valid `experienceLevelYears` values (`0-2`, `10+`)
+- 1 row has `experienceLevelYears = "Entry Level"` (should be skipped with `INVALID_EXPERIENCE_LEVEL`)
+- 1 row has blank experience (should import and leave unset)
+
+Return:
+
+- run status `Completed with errors`
+- error_report.csv includes `INVALID_EXPERIENCE_LEVEL`
+- imported jobs have `job_metadata.experienceLevelYears` set correctly
+
+Proceed with this change now and paste the diff + one verification run output.

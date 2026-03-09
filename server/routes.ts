@@ -144,7 +144,11 @@ function validateAndMapCsvRow(
   }
 
   const coreResponsibilities = get("coreResponsibilities") || null;
-  const experienceLevel = get("experienceLevel") || null;
+  const ALLOWED_EXPERIENCE_BANDS = new Set(["0-2", "2-5", "5-10", "10+"]);
+  const experienceLevelYears = get("experienceLevelYears") || get("experienceLevel") || null;
+  if (experienceLevelYears && !ALLOWED_EXPERIENCE_BANDS.has(experienceLevelYears)) {
+    errors.push({ rowNumber, field: "experienceLevelYears", errorCode: "INVALID_EXPERIENCE_LEVEL", errorMessage: `experienceLevelYears "${experienceLevelYears}" is not valid. Allowed values: 0-2, 2-5, 5-10, 10+` });
+  }
   const skillsRaw = get("skills");
   const keywordsRaw = get("keywords");
   const rawSkills = skillsRaw ? skillsRaw.split(",").map(s => s.trim()).filter(Boolean) : [];
@@ -170,7 +174,7 @@ function validateAndMapCsvRow(
 
   const jobMetadata: Record<string, any> = {};
   if (coreResponsibilities) jobMetadata.coreResponsibilities = coreResponsibilities;
-  if (experienceLevel) jobMetadata.experienceLevel = experienceLevel;
+  if (experienceLevelYears && ALLOWED_EXPERIENCE_BANDS.has(experienceLevelYears)) jobMetadata.experienceLevelYears = experienceLevelYears;
   if (rawSkills.length > 0) jobMetadata.rawSkills = rawSkills;
   if (rawKeywords.length > 0) jobMetadata.rawKeywords = rawKeywords;
 
