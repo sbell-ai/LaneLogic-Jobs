@@ -1,0 +1,370 @@
+**Goal**  
+
+Implement a **native-feeling Social Publishing workflow inside the admin dashboard** so LaneLogic Jobs can create, edit, schedule, and queue social posts for **Job Listings**, **Blog Posts**, and **Free Resources**. Use **Option A (queue + scheduler)** with **Zapier-first** as the provider. Do not integrate directly with social network APIs in MVP.
+
+---
+
+## Product requirements (MVP)
+
+### Supported platforms (MVP targets)
+
+Support these as selectable targets in UI and in the `SocialPost` schema:
+
+- `linkedin`
+- `facebook_page`
+- `instagram_business`
+
+Design schema to add later:
+
+- `x`, `threads`, `tiktok`
+
+### UX decision (confirmed)
+
+Default in the Share modal is **Post now**. Include a **Schedule** toggle that reveals a datetime picker.
+
+Timezone: use the admin’s timezone (America/Detroit) for scheduling display and defaults, but store scheduled times in ISO.
+
+---
+
+## Information architecture (Admin)
+
+### Add new admin nav item (do not place under Design Settings)
+
+- **Social Publishing** (new top-level admin nav)
+    - **Social Queue** (default view)
+    - **Connections** (Zapier webhook configuration + test)
+
+Rationale: Design Settings is for theme/layout tokens. Social Publishing is operational workflow with retries and logs.
+
+---
+
+## Data model: `SocialPost` (new persisted entity)
+
+Create a new table/collection/model named `SocialPost` with these fields:
+
+- `id` (uuid, primary key)
+- `entityType` (enum: `job | blog | resource`)
+- `entityId` (string/uuid)
+- `entityUrl` (string) canonical public URL at time of creation
+- `titleSnapshot` (string) title at time of creation
+- `imageUrl` (string, nullable) public image URL used for the post
+- `linkUrl` (string) usually `entityUrl` plus UTM params
+- `platforms` (array of enum strings)
+- `status` (enum):
+    - `draft`
+    - `queued`
+    - `sent`
+    - `failed`
+    - `canceled`
+- `scheduledAt` (datetime nullable)
+- `copyMaster` (text nullable)
+- `copyByPlatform` (json object: platform → text)
+- `provider` (enum, MVP only: `zapier`)
+- `providerRequestId` (string nullable) correlation id we generate
+- `providerJobId` (string nullable) if provider returns one
+- `providerResponse` (json nullable)
+- `lastError` (text nullable)
+- `createdBy` (admin user id)
+- `createdAt`, `updatedAt`
+
+**Constraints**
+
+- Keep `titleSnapshot` and `entityUrl` immutable snapshots so the queued post does not drift if the underlying entity is edited later.
+- Allow multiple `SocialPost` records per entity (re-posting is allowed).
+
+---
+
+## Backend endpoints
+
+### 1) Create a draft social post (from an entity)
+
+`POST /admin/social-posts`
+
+Body:
+
+```json
+{
+  "entityType": "job",
+  "entityId": "…",
+  "platforms": ["linkedin", "facebook_page"],
+  "scheduledAt": null
+}
+```
+
+Server behavior:
+
+- Load entity by type/id.
+- Compute:
+    - `entityUrl` (public canonical URL)
+    - `titleSnapshot`
+    - `imageUrl` (best available)
+    - `linkUrl` = entityUrl + UTM params (see below)
+- Generate default copy using templates (below).
+- Create `SocialPost` with `status = "draft"`.
+
+Return created `SocialPost`.
+
+### 2) Edit a draft social post
+
+`PATCH /admin/social-posts/:id`
+
+Allow updating:
+
+- `platforms`
+- `scheduledAt`
+- `copyMaster`
+- `copyByPlatform`
+- `imageUrl`
+
+Validation:
+
+- `platforms.length >= 1`
+- Per-platform character limits (below)
+
+### 3) Queue a social post to Zapier
+
+`POST /admin/social-posts/:id/queue`
+
+Server behavior:
+
+- Allowed statuses: `draft` or `failed`
+- Validate:
+    - platforms present
+    - copy exists per platform (use `copyByPlatform[platform]` or derive from `copyMaster`)
+    - `linkUrl` present
+    - character limits pass
+- Build payload and send to Zapier webhook (below)
+- Set:
+    - `status = "queued"`
+    - `provider = "zapier"`
+    - `providerRequestId = <generated uuid>`
+    - store request payload (optional) and response metadata in `providerResponse`
+
+If webhook request fails:
+
+- Keep `status` as `draft` (or set to `failed`, but be consistent)
+- Populate `lastError`
+- Return a non-200 with a specific message for the UI
+
+### 4) Receive provider callback (Zapier → our server)
+
+`POST /integrations/zapier/social-posts/callback`
+
+Expected body:
+
+```json
+{
+  "socialPostId": "uuid",
+  "providerRequestId": "uuid",
+  "providerJobId": "optional",
+  "status": "sent",
+  "error": "optional"
+}
+```
+
+Server behavior:
+
+- Look up `SocialPost` by `socialPostId`
+- Verify `providerRequestId` matches the stored request id (prevents random spoof updates)
+- Update:
+    - status to `sent` or `failed`
+    - set `providerJobId` if provided
+    - set `lastError` if failed
+    - store the callback payload in `providerResponse`
+
+---
+
+## Zapier integration (MVP)
+
+### Configuration
+
+- Store Zapier webhook URL server-side in env var:
+    - `ZAPIER_SOCIAL_POST_WEBHOOK_URL`
+- Do not hardcode in frontend.
+
+### Webhook payload (server → Zapier)
+
+```json
+{
+  "socialPostId": "uuid",
+  "providerRequestId": "uuid",
+  "scheduledAt": "2026-03-10T14:00:00-04:00",
+  "platforms": ["linkedin", "facebook_page", "instagram_business"],
+  "copyByPlatform": {
+    "linkedin": "…",
+    "facebook_page": "…",
+    "instagram_business": "…"
+  },
+  "linkUrl": "https://lanelogicjobs.com/…?utm_source=social&utm_medium=organic&utm_campaign=admin_share",
+  "imageUrl": "https://…",
+  "entity": {
+    "type": "job",
+    "id": "…",
+    "title": "…"
+  }
+}
+```
+
+Zapier should:
+
+- Post/schedule via the chosen social scheduling tool
+- Call back to `/integrations/zapier/social-posts/callback`
+
+---
+
+## UTM rules
+
+Always append UTMs to outbound links:
+
+- `utm_source=social`
+- `utm_medium=organic`
+- `utm_campaign=admin_share`
+- optional: `utm_content=<platform>`
+
+---
+
+## Admin UI (must feel native)
+
+### A) “Share to Social” action on each admin edit page (Jobs, Blog, Resources)
+
+Add a button **Share to Social**.
+
+On click, open modal/drawer with:
+
+1. **Platforms** (checkboxes)
+2. **Timing**
+    - Default: “Post now”
+    - Toggle: “Schedule”
+    - If scheduled, show datetime picker (default: next whole hour in America/Detroit)
+3. **Copy editor**
+    - Tabs per platform: LinkedIn / Facebook / Instagram
+    - Each tab includes:
+        - textarea
+        - character counter
+        - validation message if exceeds limit
+4. **Preview (lightweight)**
+    - Show a simple preview block with:
+        - background card
+        - post text
+        - linkUrl
+        - image thumbnail if present
+5. **CTA**
+    - Primary: **Queue post**
+    - Secondary: Cancel
+
+On submit:
+
+- Create draft via `POST /admin/social-posts`
+- Immediately queue via `POST /admin/social-posts/:id/queue`
+- On success: show “Queued” and a link: “View in Social Queue”
+- On failure: show exact server message inline, and keep the draft for editing/retry
+
+### B) Social Publishing → Social Queue
+
+Route: `/admin/social/queue` (or similar)
+
+Table columns:
+
+- Created time
+- Entity type
+- Title snapshot (clickable to view entity and/or view social post)
+- Platforms
+- ScheduledAt / “Now”
+- Status
+- Last error (if failed)
+
+Filters:
+
+- Status
+- Entity type
+- Platform
+- Date range
+
+Row actions:
+
+- View/Edit (opens details page or modal)
+- Retry (only for `failed`)
+- Cancel (for `draft`, and optionally for `queued` if you can cancel at provider)
+
+### C) Social Publishing → Connections
+
+Route: `/admin/social/connections`
+
+Features:
+
+- Display whether `ZAPIER_SOCIAL_POST_WEBHOOK_URL` is configured (do not show full secret if you treat it as secret; otherwise show full value)
+- Button: **Send test payload**
+    - Server sends a test webhook to Zapier
+    - Display last test timestamp + result + response body
+- This page exists specifically to prevent “it’s not working” dead ends.
+
+---
+
+## Copy templates (default generation)
+
+Generate default per-platform copy so share can be 1-click.
+
+### Job
+
+- LinkedIn:
+    - `Now hiring: {title} — {location}\nPay: {salaryRange}\nApply: {linkUrl}`
+- Facebook:
+    - `Hiring: {title} ({location})\nPay: {salaryRange}\nApply here: {linkUrl}`
+- Instagram:
+    - `Now hiring: {title} — {location}\nPay: {salaryRange}\nApply: {linkUrl}`
+
+### Blog
+
+- `{title}\nRead: {linkUrl}`
+
+### Resource
+
+- `Free resource: {title}\nGet it here: {linkUrl}`
+
+If salary/location is missing, omit the line rather than inserting “undefined”.
+
+---
+
+## Platform constraints (MVP)
+
+Enforce character limits before queue:
+
+- LinkedIn: 3,000
+- Facebook: 2,000
+- Instagram: 2,200
+
+Error format must be explicit:
+
+- “Instagram copy is 2350 characters (max 2200).”
+
+---
+
+## Security + reliability
+
+- Only admin users can call admin endpoints
+- Rate limit queue endpoint (example: 10/min per admin)
+- Store errors on the `SocialPost` record (`lastError`)
+- Never show generic “could not save” messages. Surface server error messages in UI.
+
+---
+
+## Testing (required)
+
+1. Create + queue immediate post from each entity type
+2. Create + schedule post
+3. Force a failure (bad webhook URL) and verify:
+    - SocialPost persists as draft/failed
+    - error is visible in Social Queue
+    - Retry works after fixing connection
+4. Verify per-platform char limit errors block queue with clear message
+5. Verify callback updates status from queued → sent/failed
+
+---
+
+## Definition of Done
+
+- Share to Social exists on each content admin edit page
+- Social Publishing module exists with Social Queue + Connections
+- SocialPost is persisted and auditable
+- Zapier webhook queue + callback flow works end-to-end
+- Errors are actionable and visible

@@ -1,0 +1,280 @@
+## Outcome (MVP)
+
+Add a **Social Publishing** admin module that lets an admin create, edit, schedule, and queue social posts for **Jobs**, **Blog posts**, and **Resources** using a **Zapier webhook** (Option A). Include a Social Queue and a Connections page. Add a **Share to Social** button on each entity’s existing admin edit page.
+
+Supported platforms (MVP): `linkedin`, `facebook_page`, `instagram_business`.
+
+Default behavior: **Post now** with optional **Schedule** toggle.
+
+---
+
+## 1) Database (Drizzle + Neon Postgres)
+
+**File:** `shared/schema.ts`
+
+Add a new `pgTable` called `social_posts` (naming can follow your conventions). Include at least:
+
+- `id` uuid primary key
+- `entityType` text (or enum) values: `job | blog | resource`
+- `entityId` text
+- `entityUrl` text
+- `titleSnapshot` text
+- `imageUrl` text nullable
+- `linkUrl` text
+- `platforms` jsonb (array of strings)
+- `status` text: `draft | queued | sent | failed | canceled`
+- `scheduledAt` timestamp nullable
+- `copyMaster` text nullable
+- `copyByPlatform` jsonb (map platform → text)
+- `provider` text default `zapier`
+- `providerRequestId` text nullable
+- `providerJobId` text nullable
+- `providerResponse` jsonb nullable
+- `lastError` text nullable
+- `createdBy` text (or uuid, whatever your users table uses)
+- `createdAt`, `updatedAt` timestamps
+
+Create and run a Drizzle migration for this new table (using your existing migration workflow).
+
+---
+
+## 2) Server routes (Express)
+
+**Files:**
+
+- `server/index.ts` (no major changes other than ensuring env vars are loaded)
+- `server/routes.ts` (add endpoints here)
+
+### Environment variable
+
+Add (server-side only):
+
+- `ZAPIER_SOCIAL_POST_WEBHOOK_URL`
+
+### Endpoints to implement in `server/routes.ts`
+
+#### A) Create draft social post
+
+`POST /api/admin/social-posts`
+
+Body:
+
+```json
+{
+  "entityType": "job",
+  "entityId": "…",
+  "platforms": ["linkedin", "facebook_page"],
+  "scheduledAt": null
+}
+```
+
+Server responsibilities:
+
+- Load entity data from your existing tables based on `entityType/entityId`
+- Compute immutable snapshot fields:
+    - `titleSnapshot`
+    - `entityUrl` (canonical public URL)
+    - `linkUrl` = `entityUrl` + UTMs (`utm_source=social&utm_medium=organic&utm_campaign=admin_share&utm_content=<platform optional>`)
+    - `imageUrl` best available
+- Generate default copy per platform using templates (see section 6)
+- Insert row into `social_posts` with status `draft`
+- Return created record
+
+#### B) Update draft (edit copy, schedule, platforms)
+
+`PATCH /api/admin/social-posts/:id`
+
+Allow updates to:
+
+- `platforms`, `scheduledAt`, `copyMaster`, `copyByPlatform`, `imageUrl`
+
+Validate:
+
+- at least 1 platform
+- per-platform length limits (LinkedIn 3000, Facebook 2000, Instagram 2200)
+
+#### C) Queue to Zapier
+
+`POST /api/admin/social-posts/:id/queue`
+
+Behavior:
+
+- Allowed status: `draft` or `failed`
+- Validate:
+    - platforms present
+    - copy exists for each selected platform (use `copyByPlatform` or derive from `copyMaster`)
+    - linkUrl exists
+    - length limits pass
+- Generate `providerRequestId` (uuid)
+- POST payload to `ZAPIER_SOCIAL_POST_WEBHOOK_URL`
+- On success:
+    - set status `queued`
+    - store `providerRequestId`
+    - store response metadata in `providerResponse`
+- On failure:
+    - set status `failed` (preferred) and store `lastError`
+    - return a non-200 with a specific error message (not generic)
+
+#### D) Zapier callback receiver
+
+`POST /api/integrations/zapier/social-posts/callback`
+
+Body:
+
+```json
+{
+  "socialPostId": "uuid",
+  "providerRequestId": "uuid",
+  "providerJobId": "optional",
+  "status": "sent|failed",
+  "error": "optional"
+}
+```
+
+Behavior:
+
+- Find record
+- Verify `providerRequestId` matches (prevents spoofing)
+- Update status to `sent` or `failed`
+- Persist `providerJobId`, `lastError`, and callback payload into `providerResponse`
+
+---
+
+## 3) Admin navigation + routing (Wouter)
+
+**Files:**
+
+- `client/src/pages/dashboard/DashboardLayout.tsx` (add nav link)
+- `client/src/pages/dashboard/AdminDashboard.tsx` (add switch case)
+- `client/src/App.tsx` (likely no change because section routing already exists)
+
+### A) Add left-nav link
+
+In `client/src/pages/dashboard/DashboardLayout.tsx`, add to `adminLinks`:
+
+- title: `Social Publishing`
+- path: `/dashboard/admin/social` (or `/dashboard/admin/social-queue`; pick one)
+- icon: choose an existing icon pattern
+
+### B) Add admin section dispatch
+
+In `client/src/pages/dashboard/AdminDashboard.tsx`, extend `switch(section)`:
+
+- case `"social"` → render `<SocialPublishing />`
+
+Implement `SocialPublishing` with internal tabs or sub-nav:
+
+- Social Queue (default)
+- Connections
+
+(Or if your admin already uses a consistent tab component, mirror that.)
+
+---
+
+## 4) Client UI: Social Queue + Connections
+
+Create new components under your existing admin pages pattern (match repo conventions).
+
+### Social Queue UI
+
+Route: `/dashboard/admin/social`
+
+Features:
+
+- Table listing `social_posts` with:
+    - createdAt
+    - entityType
+    - titleSnapshot (click opens detail modal or links to entity edit page)
+    - platforms
+    - scheduledAt (“Now” if null)
+    - status
+    - lastError (visible when failed)
+- Filters:
+    - status
+    - entityType
+    - platform
+- Actions:
+    - View/Edit (opens editor modal)
+    - Retry (calls `/queue` again)
+
+API needed:
+
+- `GET /api/admin/social-posts?filters…` (add this endpoint too, or reuse your existing list conventions)
+
+### Connections UI
+
+Show:
+
+- Whether `ZAPIER_SOCIAL_POST_WEBHOOK_URL` is set (do not expose full value if you treat it as secret)
+- “Send test payload” button:
+    - Calls `POST /api/admin/social-posts/test-webhook` (implement endpoint)
+    - Server POSTs a test payload to Zapier and returns status + response body
+- Display last test result in UI
+
+This page exists to prevent “it doesn’t work” dead ends.
+
+---
+
+## 5) Add “Share to Social” on entity edit pages
+
+On each existing admin edit page (Jobs, Blog, Resources), add a button: **Share to Social**.
+
+Click opens a modal/drawer that:
+
+- Defaults to Post now
+- Has Schedule toggle → reveals datetime picker
+- Has platform checkboxes
+- Has per-platform copy tabs (LinkedIn/Facebook/Instagram) with character counts
+- Has image preview + optional image URL override
+- CTA: **Queue post**
+
+Submit behavior:
+
+1. `POST /api/admin/social-posts` to create draft
+2. immediately `POST /api/admin/social-posts/:id/queue`
+3. On success: toast “Queued” + link “View in Social Queue”
+4. On failure: show the server error inline and keep the draft so it can be retried
+
+Important: do **not** show generic “could not save.” Always surface the server message.
+
+---
+
+## 6) Default copy templates (server-side)
+
+When creating a draft, generate defaults:
+
+### Jobs
+
+LinkedIn:
+
+- `Now hiring: {title} — {location}\nPay: {salaryRange}\nApply: {linkUrl}`
+
+Facebook:
+
+- `Hiring: {title} ({location})\nPay: {salaryRange}\nApply: {linkUrl}`
+
+Instagram:
+
+- `Now hiring: {title} — {location}\nPay: {salaryRange}\nApply: {linkUrl}`
+
+If location or salary is missing, omit that line.
+
+### Blog
+
+- `{title}\nRead: {linkUrl}`
+
+### Resource
+
+- `Free resource: {title}\nGet it here: {linkUrl}`
+
+---
+
+## 7) Definition of Done
+
+- `social_posts` exists in Postgres + Drizzle schema + migrations
+- Admin nav shows “Social Publishing”
+- Social Queue lists posts with retry
+- Connections page can send a test webhook
+- Each entity edit page has “Share to Social” modal
+- Queue sends to Zapier and status is tracked via callback
+- Errors are actionable (never generic)

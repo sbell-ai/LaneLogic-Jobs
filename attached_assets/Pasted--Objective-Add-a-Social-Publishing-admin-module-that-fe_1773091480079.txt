@@ -1,0 +1,346 @@
+**Objective**  
+
+Add a **Social Publishing** admin module that feels native in the existing admin dashboard. It must support creating, editing, scheduling, queueing, and tracking social posts for **Jobs**, **Blog posts**, and **Resources** using **Zapier-first** (Option A). **No direct social network APIs** in MVP.
+
+**MVP platforms:** `linkedin`, `facebook_page`, `instagram_business` (schema must be extensible for `x`, `threads`, `tiktok`).
+
+**Confirmed UX choice:** Share modal defaults to **Post now**, with a **Schedule** toggle revealing a datetime picker.
+
+Repo specifics (implement in these files):
+
+- Express entry: `server/index.ts`
+- Routes: `server/routes.ts`
+- Drizzle config: `drizzle.config.ts`
+- Tables: `shared/schema.ts` (single schema file)
+- Client routing: Wouter, `client/src/App.tsx`
+- Admin section switch: `client/src/pages/dashboard/AdminDashboard.tsx`
+- Admin sidebar links: `client/src/pages/dashboard/DashboardLayout.tsx` (`adminLinks`)
+
+---
+
+## A) Required fixes / clarifications (must adjust plan)
+
+### A1) ID type consistency
+
+Match existing conventions in `shared/schema.ts` for IDs.
+
+- If the project uses real UUID column types, use UUID for `social_posts.id`.
+- If using string ids with uuid defaults, that is fine, but then treat ids as **strings everywhere** (routes, storage, UI).
+- `providerRequestId` must be a uuid string as well.
+
+### A2) “Share to Social” must be on the dedicated *edit pages* (MVP)
+
+Jobs, Blog, and Resources have dedicated admin edit pages.
+
+- Implement the **Share to Social** button and modal on those edit pages.
+- Do not rely on adding share only in list tabs (`AllJobsTab`, etc.). (Share-from-list can be Phase 2.)
+
+### A3) Queue-time copy policy must be explicit
+
+Policy (recommended):
+
+- At queue time, for each selected platform:
+    - If `copyByPlatform[platform]` is missing/empty and `copyMaster` exists, auto-derive from `copyMaster`.
+    - If both missing, block with a specific error.
+
+Server must enforce this in `/queue` (client validation is not enough).
+
+### A4) Cancel semantics (Zapier-first constraint)
+
+MVP: allow cancel only for `status="draft"`.
+
+- If `status="queued"`, return a clear error: queued posts cannot be canceled in MVP.
+
+### A5) Secure the Zapier callback endpoint
+
+`providerRequestId` matching alone is not enough.
+
+- Add env var: `ZAPIER_CALLBACK_SECRET`
+- Require header: `X-Zapier-Secret: <secret>` on callback
+- Reject missing/invalid with 401
+
+### A6) Canonical public URL generation must be centralized
+
+Implement a single server helper: `getPublicEntityUrl(entityType, entity)` and use it everywhere that sets `entityUrl/linkUrl`.
+
+---
+
+## B) Publish gating rules (CRITICAL)
+
+### B1) Pages are draft-by-default (required fix)
+
+Current schema shows:
+
+- `pages.isPublished` defaults to **true** (this breaks draft gating).
+
+**Required change:** In `shared/schema.ts`, change:
+
+- `pages.isPublished default(true)` → `default(false)`
+
+Add a migration to update the DB default accordingly.
+
+Ensure publish/unpublish routes explicitly set `pages.isPublished` to true/false.
+
+**Page-based entities (blog/resources if they use pages):**
+
+- Shareable only when `page.isPublished === true`.
+
+### B2) Jobs need their own publish gate (required)
+
+Jobs are stored in `jobs` table and do **not** inherit `pages.isPublished`.
+
+**Required change:** Add to `jobs` table in `shared/schema.ts`:
+
+- `isPublished: boolean("is_published").notNull().default(false)`
+- (Recommended) `publishedAt: timestamp("published_at")` default null
+
+Ensure job publish/unpublish sets:
+
+- publish: `isPublished=true`, `publishedAt=now()`
+- unpublish: `isPublished=false`, `publishedAt=null`
+
+### B3) Job shareability rule (confirmed = B)
+
+For `entityType === "job"`, a job is shareable only if:
+
+- `job.isPublished === true`, AND
+- `job.expiresAt IS NULL OR job.expiresAt > now()`
+
+If not, return **409 Conflict** with structured errors:
+
+```json
+{
+  "message": "Only published, non-expired jobs can be shared to social.",
+  "errors": [
+    { "field": "isPublished", "reason": "not_published" },
+    { "field": "expiresAt", "reason": "expired" }
+  ]
+}
+```
+
+(Include only applicable errors.)
+
+### B4) Enforce gating in TWO places
+
+Enforce publish/expiry gating in both:
+
+- `POST /api/admin/social-posts` (draft creation)
+- `POST /api/admin/social-posts/:id/queue` (queue-time re-check, prevents race conditions)
+
+UI should also block, but server is authoritative.
+
+---
+
+## C) Database: `social_posts` (Drizzle + Neon Postgres)
+
+**File:** `shared/schema.ts`  
+
+Add `social_posts` table with at least:
+
+- `id` (per A1)
+- `entityType` text: `job | blog | resource`
+- `entityId` text
+- `entityUrl` text (canonical public URL snapshot)
+- `titleSnapshot` text
+- `imageUrl` text nullable
+- `linkUrl` text (entityUrl + UTM)
+- `platforms` jsonb (array of strings)
+- `status` text: `draft | queued | sent | failed | canceled`
+- `scheduledAt` timestamp nullable
+- `copyMaster` text nullable
+- `copyByPlatform` jsonb (platform → copy)
+- `provider` text default `"zapier"`
+- `providerRequestId` text nullable
+- `providerJobId` text nullable
+- `providerResponse` jsonb nullable
+- `lastError` text nullable
+- `createdBy` integer (match users id)
+- `createdAt`, `updatedAt` timestamps
+
+Add drizzle-zod insert/select types using your existing patterns (`createInsertSchema`, etc.). Run migrations/db push and ensure types compile.
+
+---
+
+## D) Shared utilities
+
+**New file:** `shared/socialUtils.ts`
+
+- `SUPPORTED_PLATFORMS = ["linkedin","facebook_page","instagram_business"] as const`
+- `PLATFORM_CHAR_LIMITS`: linkedin 3000, facebook_page 2000, instagram_business 2200
+- `PLATFORM_LABELS`
+- `buildLinkUrl(entityUrl, platform?)` appends:
+    - `utm_source=social&utm_medium=organic&utm_campaign=admin_share`
+    - optional `utm_content=<platform>`
+- `generateDefaultCopy(entityType, {title, location?, salary?, linkUrl})` using templates below
+- `validatePlatformCopy(copyByPlatform, platforms)` returns human-readable errors
+
+---
+
+## E) Storage layer
+
+**File:** `server/storage.ts`
+
+Add CRUD for social posts in `IStorage` + implement in `DatabaseStorage`:
+
+- `createSocialPost`
+- `getSocialPost`
+- `listSocialPosts(filters: status/entityType/platform; order by createdAt desc)`
+- `updateSocialPost`
+
+---
+
+## F) Server endpoints (Express)
+
+**File:** `server/routes.ts`
+
+### Env vars
+
+- `ZAPIER_SOCIAL_POST_WEBHOOK_URL`
+- `ZAPIER_CALLBACK_SECRET`
+
+### Admin endpoints must require admin auth
+
+Use existing pattern: `req.isAuthenticated()` and admin role check.
+
+### Endpoints
+
+1) `POST /api/admin/social-posts` (Create draft)
+
+- Load entity by entityType/entityId
+- Enforce publish gating:
+    - page entities: `isPublished === true`
+    - jobs: `isPublished === true` AND not expired (rule above)
+- Compute snapshots:
+    - `entityUrl` via `getPublicEntityUrl`
+    - `linkUrl` via `buildLinkUrl(entityUrl)`
+    - `titleSnapshot`, `imageUrl`
+- Generate `copyByPlatform` via `generateDefaultCopy`
+- Insert with `status="draft"`, `createdBy=req.user.id`
+- Return created record
+
+2) `PATCH /api/admin/social-posts/:id` (Edit draft)
+
+- Allow updating: platforms, scheduledAt, copyMaster, copyByPlatform, imageUrl
+- Validate: platforms non-empty and char limits pass
+- Return updated record or structured errors (no generic toast messaging)
+
+3) `GET /api/admin/social-posts?status=&entityType=&platform=` (List for Social Queue)
+
+4) `POST /api/admin/social-posts/:id/queue` (Queue to Zapier)
+
+- Allowed status: draft or failed
+- Re-load underlying entity and re-check gating (publish/expiry)
+- Ensure copy exists per platform per policy A3
+- Validate char limits server-side
+- Generate `providerRequestId` (uuid string)
+- POST payload to `ZAPIER_SOCIAL_POST_WEBHOOK_URL`:
+
+```json
+{
+  "socialPostId": "…",
+  "providerRequestId": "…",
+  "scheduledAt": "… or null",
+  "platforms": ["linkedin","facebook_page","instagram_business"],
+  "copyByPlatform": { "linkedin": "…", "facebook_page": "…", "instagram_business": "…" },
+  "linkUrl": "…",
+  "imageUrl": "…",
+  "entity": { "type": "job|blog|resource", "id": "…", "title": "…" }
+}
+```
+
+- On success: set status queued, store providerRequestId and providerResponse metadata
+- On failure: set status failed, store lastError, return specific error
+
+5) `POST /api/admin/social-posts/:id/retry` (Alias of queue)
+
+6) `POST /api/admin/social-posts/:id/cancel`
+
+- Only allow if status draft; else return clear error.
+
+7) `POST /api/integrations/zapier/social-posts/callback` (Secured)
+
+- Require header `X-Zapier-Secret` matches `ZAPIER_CALLBACK_SECRET`, else 401
+- Verify providerRequestId matches stored providerRequestId, else 409
+- Update status sent/failed, store providerJobId, lastError, providerResponse
+
+8) Connections support
+
+- `POST /api/admin/social-posts/test-webhook` (send test payload)
+- `GET /api/admin/social-posts/webhook-status` returns `{ configured: boolean }` without exposing secrets
+
+---
+
+## G) Client: Admin nav + Social Publishing page (Wouter)
+
+**File:** `client/src/pages/dashboard/DashboardLayout.tsx`
+
+- Add to `adminLinks`: Social Publishing → `/dashboard/admin/social`
+
+**File:** `client/src/pages/dashboard/AdminDashboard.tsx`
+
+- Add switch case: `"social"` → `<SocialPublishing />`
+
+**New file:** `client/src/pages/dashboard/SocialPublishing.tsx`
+
+- Tabs:
+    - Social Queue (default): table + filters + retry/cancel
+    - Connections: configured status + send test payload + show response
+
+---
+
+## H) Client: Share modal on dedicated edit pages (MVP)
+
+**New file:** `client/src/components/ShareToSocialModal.tsx`
+
+- Platform checkboxes
+- Timing: Post now default + Schedule toggle + datetime picker
+- Per-platform tabs: textarea + char counter + client-side validation
+- CTA: Queue post
+
+**Published-only UI gating**
+
+- If not shareable (page not published OR job not published/expired):
+    - Disable Queue and show a clear message:
+        - Page/blog/resource: “Publish this item to enable social sharing.”
+        - Job draft: “Publish this job to enable social sharing.”
+        - Job expired: “This job is expired. Extend the expiration date to enable social sharing.”
+
+Submission:
+
+- Create draft → immediately queue
+- Surface server errors inline (never generic “could not save”)
+
+Add the **Share to Social** button on the actual Job/Blog/Resource admin edit pages (not only list tabs).
+
+---
+
+## I) Default copy templates (server-side generation)
+
+**Jobs**
+
+- LinkedIn: `Now hiring: {title} — {location}\nPay: {salaryRange}\nApply: {linkUrl}`
+- Facebook: `Hiring: {title} ({location})\nPay: {salaryRange}\nApply: {linkUrl}`
+- Instagram: `Now hiring: {title} — {location}\nPay: {salaryRange}\nApply: {linkUrl}`
+
+Omit lines if location/salary missing.
+
+**Blog**
+
+- `{title}\nRead: {linkUrl}`
+
+**Resource**
+
+- `Free resource: {title}\nGet it here: {linkUrl}`
+
+---
+
+## Definition of Done
+
+- `pages.isPublished` default fixed to false + migration applied
+- `jobs.isPublished` (+ publishedAt recommended) added + migration applied
+- Publish gating enforced server-side in create + queue, with 409 structured errors
+- Jobs shareable only if published + not expired
+- Social Publishing nav + Social Queue + Connections works
+- Share modal exists on dedicated edit pages and queues successfully via Zapier
+- Callback is secured with shared secret header
+- No generic error toasts; errors are actionable and visible

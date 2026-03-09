@@ -1,0 +1,62 @@
+### Replit instructions (final pre-flight + required confirmations)
+
+You’ve updated T001B to add server-side publish gating and consistent publish semantics. Before implementing, please do the following **two confirmations and behaviors exactly** so we do not leak drafts or create inconsistent results.
+
+## 1) Confirm the auth boundary for “admin sees all”
+
+For each endpoint below, confirm in writing how “admin” is determined.
+
+Endpoints:
+
+- `GET /api/jobs`
+- `GET /api/jobs/:id`
+- `GET /api/blog`
+- `GET /api/blog/:id`
+- `GET /api/resources`
+- `GET /api/resources/:id` (Option 2)
+
+**Requirement**
+
+- “Admin sees all” must be based on **server-verified auth** only (existing `req.isAuthenticated()` and `req.user.role === "admin"` pattern).
+- If the request is unauthenticated, it must behave as public and only return `isPublished === true`.
+- There must be no client-provided flag (query param, header, or body) that can switch behavior.
+
+## 2) Align list + detail behavior (no enumeration of drafts)
+
+For non-admin requests:
+
+- List endpoints (`/api/jobs`, `/api/blog`, `/api/resources`) must filter to:
+    - `isPublished === true`
+- Detail endpoints (`/api/jobs/:id`, `/api/blog/:id`, `/api/resources/:id`) must:
+    - Return **404** if the record is not published
+    - Return **404** if it does not exist
+    - (Do not return 403 and do not return a “sanitized 200” response.)
+
+Admin requests can return drafts normally.
+
+## 3) Publish semantics (already agreed, re-stating as requirements)
+
+For each entity type:
+
+- Create = draft
+    - `isPublished = false`
+- Publish toggle:
+    - `isPublished = true`
+    - `publishedAt = now()` where the column exists (jobs/blog/resources)
+- Unpublish toggle:
+    - `isPublished = false`
+    - `publishedAt = null` where the column exists
+- Pages: only flips `isPublished` (no `publishedAt` column)
+
+## 4) Acceptance tests (must run)
+
+- Create a draft job/blog/resource:
+    - Public endpoints must not return it.
+    - Direct public detail request must return 404.
+- Publish it:
+    - It appears in list endpoints.
+    - Detail endpoint returns 200.
+- Unpublish it:
+    - It disappears again and detail returns 404.
+
+Once the above is confirmed and implemented, proceed with the Social Publishing feature (social_posts table + queue + callback + Share modal) using these publish gates.
