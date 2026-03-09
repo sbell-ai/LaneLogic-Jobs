@@ -1,0 +1,19 @@
+externalJobKey,title,companyName,jobType,category,industry,locationCity,locationState,locationCountry,description,requirements,experienceLevelYears,skills,keywords,applyUrl
+MD-001,Markdown Driver,"FastFreight Co",Full-time,Driving,Trucking,Chicago,IL,USA,"## Overview
+This is a **CDL Class A** driving position.
+
+## Responsibilities
+- Drive long-haul routes across the Midwest
+- Complete daily logs and inspections
+- Maintain vehicle safety standards
+
+## Benefits
+We offer competitive pay and full benefits package.",CDL Class A license required,2-5,"CDL,freight","trucking,driver",
+MD-002,Plain Text Mechanic,"TruckFix Pro",Full-time,Mechanic,Maintenance,Denver,CO,USA,"We are looking for an experienced diesel mechanic.
+
+The ideal candidate will have ASE certification and 5+ years experience.
+
+Responsibilities:
+Fix and maintain diesel engines
+Perform routine inspections
+Order replacement parts",ASE diesel certification,5-10,"diesel,ASE","mechanic,repair",

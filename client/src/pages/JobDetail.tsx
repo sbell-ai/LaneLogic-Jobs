@@ -10,6 +10,7 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import type { Job } from "@shared/schema";
 import { formatDistanceToNow } from "date-fns";
+import MarkdownDescription from "@/components/MarkdownDescription";
 
 function fmtLoc(job: Job) {
   return [job.locationCity, job.locationState, job.locationCountry].filter(Boolean).join(", ");
@@ -171,7 +172,7 @@ export default function JobDetail() {
             <div className="p-8 space-y-8">
               <div>
                 <h2 className="text-lg font-bold font-display mb-3">Job Description</h2>
-                <p className="text-muted-foreground leading-relaxed whitespace-pre-wrap">{job.description}</p>
+                <MarkdownDescription content={job.description} className="text-muted-foreground" />
               </div>
 
               <div>
