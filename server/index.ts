@@ -163,6 +163,7 @@ async function startServer() {
   }
 
   await seedDatabaseIfEmpty();
+  await runParagraphizeMigration();
 
   httpServer.listen(
     { port, host: "0.0.0.0", reusePort: true },
@@ -260,6 +261,42 @@ async function seedDatabaseIfEmpty() {
     log("Database seeding complete");
   } catch (err) {
     console.error("Error seeding database:", err);
+  }
+}
+
+async function runParagraphizeMigration() {
+  try {
+    const { db } = await import("./db");
+    const { jobs } = await import("@shared/schema");
+    const { eq, sql } = await import("drizzle-orm");
+
+    const flagCheck = await db.execute(sql`
+      SELECT settings->>'migration_paragraphize_done' as flag FROM site_settings LIMIT 1
+    `);
+    if (flagCheck.rows.length > 0 && flagCheck.rows[0].flag === "true") {
+      return;
+    }
+
+    log("Running one-time paragraphize migration...");
+    const allJobs = await db.select({ id: jobs.id, description: jobs.description }).from(jobs);
+    let updated = 0;
+    for (const job of allJobs) {
+      if (!job.description) continue;
+      const newlineCount = (job.description.match(/\n/g) || []).length;
+      if (newlineCount >= 2) continue;
+      const newDesc = job.description.replace(/([.?!])\s+/g, "$1\n\n");
+      if (newDesc !== job.description) {
+        await db.update(jobs).set({ description: newDesc }).where(eq(jobs.id, job.id));
+        updated++;
+      }
+    }
+
+    await db.execute(sql`
+      UPDATE site_settings SET settings = settings || '{"migration_paragraphize_done": "true"}'::jsonb
+    `);
+    log(`Paragraphize migration complete: updated ${updated} job descriptions`);
+  } catch (err) {
+    console.error("Paragraphize migration error:", err);
   }
 }
 
