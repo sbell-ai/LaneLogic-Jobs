@@ -1,0 +1,8 @@
+externalJobKey,title,companyName,jobType,category,industry,locationCity,locationState,locationCountry,description,requirements,experienceLevelYears,skills,keywords,applyUrl
+PARA-001,Flat Description,TestCo,Full-time,Driving,Trucking,Chicago,IL,USA,We are hiring a CDL driver. Must have 2 years experience. Clean driving record required! Apply today.,CDL Class A,2-5,"CDL","trucking",
+PARA-002,Already Formatted,TestCo,Full-time,Mechanic,Maintenance,Denver,CO,USA,"## Overview
+We need a mechanic.
+
+## Requirements
+- ASE certified
+- 5 years experience",ASE cert,5-10,"ASE","mechanic",

@@ -79,6 +79,12 @@ interface RowError {
   errorMessage: string;
 }
 
+function paragraphize(text: string): string {
+  const newlineCount = (text.match(/\n/g) || []).length;
+  if (newlineCount >= 2) return text;
+  return text.replace(/([.?!])\s+/g, "$1\n\n");
+}
+
 function validateAndMapCsvRow(
   record: Record<string, string>,
   rowNumber: number,
@@ -186,7 +192,7 @@ function validateAndMapCsvRow(
     jobType: get("jobType") || null,
     category,
     industry: get("industry") || null,
-    description: description || "",
+    description: paragraphize(description || ""),
     requirements: requirements || "",
     benefits: get("benefits") || null,
     locationCity: get("locationCity") || null,
