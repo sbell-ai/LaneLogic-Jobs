@@ -1,0 +1,3 @@
+externalJobKey,title,companyName,jobType,category,industry,locationCity,locationState,locationCountry,description,requirements,applyUrl
+ALLVALID-001,Test Driver,TestCo,Full-time,Driving,Trucking,Chicago,IL,USA,Valid description,Valid requirements,https://lanelogicjobs.com/apply
+ALLVALID-002,Test Mechanic,TestCo,Full-time,Mechanic,Auto,Denver,CO,USA,Another valid description,More requirements,https://external.com/apply

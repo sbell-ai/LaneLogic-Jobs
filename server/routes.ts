@@ -217,9 +217,12 @@ const upload = multer({
   },
 });
 
+const MAX_CSV_FILE_BYTES = parseInt(process.env.MAX_CSV_FILE_BYTES || String(10 * 1024 * 1024), 10);
+const MAX_CSV_ROWS = parseInt(process.env.MAX_CSV_ROWS || "5000", 10);
+
 const csvUpload = multer({
   storage: uploadStorage,
-  limits: { fileSize: 10 * 1024 * 1024 },
+  limits: { fileSize: MAX_CSV_FILE_BYTES },
   fileFilter: (_req, file, cb) => {
     if (/\.csv$/i.test(path.extname(file.originalname))) {
       cb(null, true);
@@ -853,7 +856,19 @@ export async function registerRoutes(
     res.json({ message: "CSV uploaded successfully", count: 10 });
   });
 
-  app.post("/api/admin/jobs/import", csvUpload.single("file"), async (req, res) => {
+  app.post("/api/admin/jobs/import", (req, res, next) => {
+    csvUpload.single("file")(req, res, (err: any) => {
+      if (err) {
+        if (err.code === "LIMIT_FILE_SIZE") {
+          return res.status(413).json({
+            message: `File exceeds maximum size of ${Math.round(MAX_CSV_FILE_BYTES / (1024 * 1024))} MB`,
+          });
+        }
+        return res.status(400).json({ message: err.message || "File upload error" });
+      }
+      next();
+    });
+  }, async (req, res) => {
     let run: any = null;
     try {
       if (!req.isAuthenticated() || !req.user || (req.user as any).role !== "admin") {
@@ -883,6 +898,14 @@ export async function registerRoutes(
       if (headers.length === 0) {
         await storage.updateImportRun(run.id, { status: "Failed", rowsTotal: 0 });
         return res.status(400).json({ message: "CSV file is empty or has no headers", runId: run.id });
+      }
+
+      if (rows.length > MAX_CSV_ROWS) {
+        await storage.updateImportRun(run.id, { status: "Failed", rowsTotal: rows.length });
+        return res.status(400).json({
+          message: `CSV contains ${rows.length} data rows, which exceeds the maximum of ${MAX_CSV_ROWS}`,
+          runId: run.id,
+        });
       }
 
       const allErrors: RowError[] = [];
@@ -945,14 +968,19 @@ export async function registerRoutes(
         });
       }
 
-      res.json({
+      const hasErrors = allErrors.length > 0;
+      const response: Record<string, any> = {
         runId: run.id,
         status,
         rowsTotal: rows.length,
         rowsImported: imported,
         rowsSkipped: skipped,
-        hasErrors: allErrors.length > 0,
-      });
+        hasErrors,
+      };
+      if (hasErrors) {
+        response.errorReportUrl = `/api/admin/jobs/import/${run.id}/error-report`;
+      }
+      res.json(response);
     } catch (err: any) {
       console.error("Import error:", err);
       if (run) {
