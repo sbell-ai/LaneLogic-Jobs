@@ -1,11 +1,19 @@
+function getBaseUrl(): string {
+  const domains = process.env.REPLIT_DOMAINS || process.env.REPLIT_DEV_DOMAIN || "";
+  const domain = domains.split(",")[0]?.trim();
+  if (domain) return `https://${domain}`;
+  return "https://localhost:5000";
+}
+
 export function getPublicEntityUrl(entityType: string, entity: { id: number }): string {
+  const base = getBaseUrl();
   switch (entityType) {
     case "job":
-      return `/jobs/${entity.id}`;
+      return `${base}/jobs/${entity.id}`;
     case "blog":
-      return `/blog/${entity.id}`;
+      return `${base}/blog/${entity.id}`;
     case "resource":
-      return `/resources/${entity.id}`;
+      return `${base}/resources/${entity.id}`;
     default:
       throw new Error(`Unknown entity type: ${entityType}`);
   }

@@ -30,8 +30,28 @@ The platform utilizes React with TypeScript, Wouter for routing, and a combinati
 - **Blog and Resources**: Content management for blog posts and a member-gated resource library.
 - **Site Management**: Admin tools for managing site settings, custom pages, categories, and coupons. Includes a **footer theme editor** (`DesignSettings.tsx`) with color pickers for footer background (+ opacity slider), text, link, and link-hover colors, plus page background. Live preview panel shows real-time appearance. All footer colors validated against WCAG AA contrast ratio (4.5:1) both client-side (inline badges) and server-side (PUT `/api/settings` returns 400 with `errors[]` on failure). Color utilities in `shared/colorUtils.ts`: `parseHex`, `normalizeHex`, `alphaBlend`, `contrastRatio`, `computeEffectiveBg`, `checkFooterContrast`. Footer component (`Footer.tsx`) applies colors via CSS custom properties set from settings.
 - **Add-on Purchase Flow**: One-time payments for features like "Resume Access" (additive views, 365-day expiry) and "Featured Employer" (7-day window, extends on repurchase).
+- **Publish/Unpublish Flow**: All content types (jobs, blog posts, resources, pages) have an `isPublished` boolean column. `isPublished === true` is the sole publish gate; `publishedAt` is metadata only. New items default to draft (`isPublished: false`). Public API endpoints filter by `isPublished` for non-admin users. Admin sees all content. Toggle is in each entity's edit Dialog in the admin dashboard.
+- **Social Publishing Module**: Admin module for creating, scheduling, and queuing social media posts for jobs, blog posts, and resources via Zapier webhook. MVP platforms: LinkedIn, Facebook Page, Instagram Business.
+  - **Schema**: `social_posts` table (`shared/schema.ts`) stores entity references, platform list, copy per platform, scheduling, status (draft/queued/sent/failed/canceled), and Zapier provider data.
+  - **Shared utilities**: `shared/socialUtils.ts` (SUPPORTED_PLATFORMS, char limits, UTM builder, copy templates, validation); `server/socialHelpers.ts` (canonical URL builder, shareability checker).
+  - **API endpoints** (all admin-gated except callback):
+    - `POST /api/admin/social-posts` — Create draft social post
+    - `PATCH /api/admin/social-posts/:id` — Edit platforms/copy/schedule
+    - `GET /api/admin/social-posts` — List with optional status/entityType filters
+    - `POST /api/admin/social-posts/:id/queue` — Queue to Zapier (draft/failed only)
+    - `POST /api/admin/social-posts/:id/retry` — Re-queue failed post
+    - `POST /api/admin/social-posts/:id/cancel` — Cancel draft only (queued returns 409)
+    - `POST /api/integrations/zapier/social-posts/callback` — Secured with `X-Zapier-Secret` header matching `ZAPIER_CALLBACK_SECRET`
+    - `POST /api/admin/social-posts/test-webhook` — Send test payload to webhook
+    - `GET /api/admin/social-posts/webhook-status` — Check if webhook URL is configured
+  - **Frontend components**:
+    - `ShareToSocialModal` (`client/src/components/ShareToSocialModal.tsx`) — Platform selection, copy editor with char limits, scheduling, preview. Opened from Share buttons on admin card rows and edit Dialogs.
+    - `SocialPublishing` (`client/src/pages/dashboard/SocialPublishing.tsx`) — Social Queue tab (table with filters, retry/cancel actions) + Connections tab (webhook status, test button). Accessible at `/dashboard/admin/social`.
+  - **Env vars**: `ZAPIER_SOCIAL_POST_WEBHOOK_URL`, `ZAPIER_CALLBACK_SECRET`
+- **Resource Detail Pages**: Public route `/resources/:id` with component `client/src/pages/ResourceDetail.tsx` and API endpoint `GET /api/resources/:id` (gated on `isPublished`).
 
 ## External Dependencies
 - **Stripe**: For processing all payments, including subscriptions and one-time add-ons. It integrates with `stripe-replit-sync` for webhook handling and database synchronization.
 - **Mailgun**: Utilized for sending emails, specifically for contact form submissions.
 - **Notion API**: Used to retrieve and synchronize product, pricing, feature, entitlement, and compliance data into the application's database. This serves as the Source of Truth (SOT) for these configurations.
+- **Zapier Webhooks**: Used for social media publishing. The app sends social post payloads to a Zapier webhook, which handles posting to LinkedIn, Facebook, and Instagram. Zapier reports results back via a secured callback endpoint.

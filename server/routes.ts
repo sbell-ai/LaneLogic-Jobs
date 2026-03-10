@@ -517,12 +517,18 @@ export async function registerRoutes(
   });
 
   app.put(api.jobs.update.path, async (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+    const user = req.user as any;
+    const jobId = Number(req.params.id);
+    const existingJob = await storage.getJob(jobId);
+    if (!existingJob) return res.status(404).json({ message: "Job not found" });
+    if (user.role !== "admin" && existingJob.employerId !== user.id) return res.status(403).json({ message: "Forbidden" });
     try {
       const body = { ...req.body };
       if (body.expiresAt && typeof body.expiresAt === "string") body.expiresAt = new Date(body.expiresAt);
       if (body.expiresAt === null || body.expiresAt === "") body.expiresAt = null;
       const input = api.jobs.update.input.parse(body);
-      const job = await storage.updateJob(Number(req.params.id), input);
+      const job = await storage.updateJob(jobId, input);
       res.json(job);
     } catch (err) {
       if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
@@ -531,7 +537,13 @@ export async function registerRoutes(
   });
 
   app.delete(api.jobs.delete.path, async (req, res) => {
-    await storage.deleteJob(Number(req.params.id));
+    if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+    const user = req.user as any;
+    const jobId = Number(req.params.id);
+    const existingJob = await storage.getJob(jobId);
+    if (!existingJob) return res.status(404).json({ message: "Job not found" });
+    if (user.role !== "admin" && existingJob.employerId !== user.id) return res.status(403).json({ message: "Forbidden" });
+    await storage.deleteJob(jobId);
     res.status(204).end();
   });
 
@@ -1690,6 +1702,9 @@ ${urls.join("\n")}
 
   app.post("/api/admin/social-posts/:id/retry", async (req, res) => {
     if (!req.isAuthenticated() || (req.user as any).role !== "admin") return res.status(403).json({ message: "Forbidden" });
+    const post = await storage.getSocialPost(Number(req.params.id));
+    if (!post) return res.status(404).json({ message: "Social post not found" });
+    if (post.status !== "failed") return res.status(409).json({ message: `Retry is only available for failed posts. Current status: "${post.status}".` });
     await queueSocialPost(Number(req.params.id), req, res);
   });
 
@@ -1746,6 +1761,10 @@ ${urls.join("\n")}
       const post = allPosts.find(p => p.providerRequestId === providerRequestId);
       if (!post) return res.status(409).json({ message: "No matching social post for this providerRequestId" });
 
+      const VALID_CALLBACK_STATUSES = ["sent", "failed", "canceled"];
+      if (status && !VALID_CALLBACK_STATUSES.includes(status)) {
+        return res.status(400).json({ message: `Invalid status "${status}". Allowed: ${VALID_CALLBACK_STATUSES.join(", ")}` });
+      }
       const updates: any = {};
       if (status) updates.status = status;
       if (providerJobId) updates.providerJobId = providerJobId;
