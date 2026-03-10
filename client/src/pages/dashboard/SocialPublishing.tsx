@@ -151,6 +151,7 @@ function SocialQueueTab() {
                 <TableHead>Platforms</TableHead>
                 <TableHead>Scheduled</TableHead>
                 <TableHead>Status</TableHead>
+                <TableHead>Sent At</TableHead>
                 <TableHead>Error</TableHead>
                 <TableHead>Actions</TableHead>
               </TableRow>
@@ -191,6 +192,9 @@ function SocialQueueTab() {
                       >
                         {post.status}
                       </Badge>
+                    </TableCell>
+                    <TableCell className="whitespace-nowrap text-sm text-muted-foreground" data-testid={`text-sent-at-${post.id}`}>
+                      {post.status === "sent" && post.updatedAt ? format(new Date(post.updatedAt), "MMM d, yyyy h:mm a") : "—"}
                     </TableCell>
                     <TableCell className="max-w-[200px] truncate text-sm text-destructive" data-testid={`text-error-${post.id}`}>
                       {post.lastError || "—"}
