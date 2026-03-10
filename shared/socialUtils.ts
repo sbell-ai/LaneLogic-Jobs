@@ -1,16 +1,18 @@
-export const SUPPORTED_PLATFORMS = ["linkedin", "facebook_page", "instagram_business"] as const;
+export const SUPPORTED_PLATFORMS = ["linkedin", "facebook_page", "instagram_business", "twitter"] as const;
 export type SocialPlatform = typeof SUPPORTED_PLATFORMS[number];
 
 export const PLATFORM_CHAR_LIMITS: Record<SocialPlatform, number> = {
   linkedin: 3000,
   facebook_page: 2000,
   instagram_business: 2200,
+  twitter: 280,
 };
 
 export const PLATFORM_LABELS: Record<SocialPlatform, string> = {
   linkedin: "LinkedIn",
   facebook_page: "Facebook Page",
   instagram_business: "Instagram",
+  twitter: "X / Twitter",
 };
 
 export function buildLinkUrl(entityUrl: string, platform?: string): string {
@@ -48,6 +50,12 @@ export function generateDefaultCopy(
         salary ? `\nPay: ${salary}` : "",
         `\nApply: ${linkUrl}`,
       ],
+      twitter: [
+        `Now hiring: ${title}`,
+        location ? ` — ${location}` : "",
+        salary ? `\nPay: ${salary}` : "",
+        `\nApply: ${linkUrl}`,
+      ],
     };
     return Object.fromEntries(
       Object.entries(lines).map(([p, parts]) => [p, parts.join("")])
@@ -60,6 +68,7 @@ export function generateDefaultCopy(
       linkedin: text,
       facebook_page: text,
       instagram_business: text,
+      twitter: text,
     };
   }
 
@@ -68,6 +77,7 @@ export function generateDefaultCopy(
     linkedin: text,
     facebook_page: text,
     instagram_business: text,
+    twitter: text,
   };
 }
 
