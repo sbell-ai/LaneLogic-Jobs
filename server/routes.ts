@@ -203,6 +203,8 @@ function validateAndMapCsvRow(
     salary,
     applyUrl,
     isExternalApply,
+    isPublished: true,
+    publishedAt: new Date(),
     jobMetadata: Object.keys(jobMetadata).length > 0 ? jobMetadata : null,
   };
 
