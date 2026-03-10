@@ -1673,7 +1673,7 @@ ${urls.join("\n")}
 
       if (response.ok) {
         const updated = await storage.updateSocialPost(postId, {
-          status: "queued",
+          status: "sent",
           providerRequestId,
           providerResponse: responseData,
         } as any);
