@@ -163,6 +163,7 @@ async function startServer() {
   }
 
   await seedDatabaseIfEmpty();
+  await publishAllDraftJobs();
   await runParagraphizeMigration();
 
   httpServer.listen(
@@ -174,6 +175,20 @@ async function startServer() {
 
   initStripeBackground();
   initRegistrySync();
+}
+
+async function publishAllDraftJobs() {
+  try {
+    const { db } = await import("./db");
+    const { jobs } = await import("@shared/schema");
+    const { eq } = await import("drizzle-orm");
+    const result = await db.update(jobs).set({ isPublished: true, publishedAt: new Date() }).where(eq(jobs.isPublished, false)).returning({ id: jobs.id });
+    if (result.length > 0) {
+      log(`Published ${result.length} draft jobs`);
+    }
+  } catch (err) {
+    console.error("Failed to publish draft jobs:", err);
+  }
 }
 
 async function seedDatabaseIfEmpty() {
