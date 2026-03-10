@@ -1621,11 +1621,26 @@ ${urls.join("\n")}
     const resolvedCopy: Record<string, string> = {};
     const missingCopy: string[] = [];
 
+    const { generateDefaultCopy, buildLinkUrl } = await import("../shared/socialUtils");
+    const siteSettings = await storage.getSiteSettings();
+    const siteName = (siteSettings as any).siteName || "LaneLogic Jobs";
+    const baseUrl = process.env.BASE_URL || req.protocol + "://" + req.get("host");
+    const entityPath = post.entityType === "blog" ? "blog" : post.entityType === "job" ? "jobs" : "resources";
+    const entityUrl = `${baseUrl}/${entityPath}/${post.entityId}`;
+    const defaultCopy = generateDefaultCopy(post.entityType, {
+      title: post.titleSnapshot || entity.title || "",
+      location: entity.locationCity && entity.locationState ? `${entity.locationCity}, ${entity.locationState}` : entity.locationCity || entity.locationState || undefined,
+      salary: entity.salary || undefined,
+      linkUrl: buildLinkUrl(entityUrl),
+    });
+
     for (const p of platforms) {
       if (copyByPlatform[p]) {
         resolvedCopy[p] = copyByPlatform[p];
       } else if (copyMaster) {
         resolvedCopy[p] = copyMaster;
+      } else if (defaultCopy[p]) {
+        resolvedCopy[p] = defaultCopy[p];
       } else {
         const { PLATFORM_LABELS } = await import("../shared/socialUtils");
         const label = PLATFORM_LABELS[p as keyof typeof PLATFORM_LABELS] || p;
