@@ -516,6 +516,8 @@ function AllJobsTab() {
           isExpired={!!(shareJob.expiresAt && new Date(shareJob.expiresAt) < new Date())}
           isOpen={!!shareJob}
           onClose={() => setShareJob(null)}
+          entityLocation={[shareJob.locationCity, shareJob.locationState].filter(Boolean).join(", ") || undefined}
+          entitySalary={shareJob.salary || undefined}
         />
       )}
 

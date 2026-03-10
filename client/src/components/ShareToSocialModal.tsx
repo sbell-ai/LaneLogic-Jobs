@@ -6,6 +6,8 @@ import {
   SUPPORTED_PLATFORMS,
   PLATFORM_LABELS,
   PLATFORM_CHAR_LIMITS,
+  generateDefaultCopy,
+  buildLinkUrl,
   type SocialPlatform,
 } from "@shared/socialUtils";
 import {
@@ -35,6 +37,8 @@ interface ShareToSocialModalProps {
   isExpired?: boolean;
   isOpen: boolean;
   onClose: () => void;
+  entityLocation?: string;
+  entitySalary?: string;
 }
 
 function getNextWholeHour(): string {
@@ -57,6 +61,8 @@ export function ShareToSocialModal({
   isExpired = false,
   isOpen,
   onClose,
+  entityLocation,
+  entitySalary,
 }: ShareToSocialModalProps) {
   const { toast } = useToast();
   const [, navigate] = useLocation();
@@ -78,11 +84,20 @@ export function ShareToSocialModal({
       setSelectedPlatforms(["linkedin"]);
       setUseSchedule(false);
       setScheduledAt(getNextWholeHour());
-      setCopyByPlatform({});
       setActiveTab("linkedin");
       setServerErrors([]);
+
+      const entityPath = entityType === "blog" ? "blog" : entityType === "job" ? "jobs" : "resources";
+      const entityUrl = `${window.location.origin}/${entityPath}/${entityId}`;
+      const defaultCopy = generateDefaultCopy(entityType, {
+        title: entityTitle,
+        location: entityLocation,
+        salary: entitySalary,
+        linkUrl: buildLinkUrl(entityUrl),
+      });
+      setCopyByPlatform(defaultCopy);
     }
-  }, [isOpen]);
+  }, [isOpen, entityType, entityId, entityTitle, entityLocation, entitySalary]);
 
   useEffect(() => {
     if (
@@ -330,7 +345,7 @@ export function ShareToSocialModal({
                     return (
                       <TabsContent key={platform} value={platform}>
                         <Textarea
-                          placeholder={`Write your ${PLATFORM_LABELS[platform]} post copy... (leave empty to use auto-generated copy)`}
+                          placeholder={`Write your ${PLATFORM_LABELS[platform]} post copy...`}
                           value={copy}
                           onChange={(e) =>
                             setCopyByPlatform((prev) => ({
