@@ -92,6 +92,7 @@ export interface IStorage {
   getSocialPost(id: number): Promise<SocialPost | undefined>;
   listSocialPosts(filters?: { status?: string; entityType?: string }): Promise<SocialPost[]>;
   updateSocialPost(id: number, updates: Partial<InsertSocialPost>): Promise<SocialPost>;
+  deleteSocialPost(id: number): Promise<void>;
 
   // Site Settings
   getSiteSettings(): Promise<SiteSettingsData>;
@@ -330,6 +331,9 @@ export class DatabaseStorage implements IStorage {
   async updateSocialPost(id: number, updates: Partial<InsertSocialPost>): Promise<SocialPost> {
     const [post] = await db.update(socialPosts).set({ ...updates, updatedAt: new Date() }).where(eq(socialPosts.id, id)).returning();
     return post;
+  }
+  async deleteSocialPost(id: number): Promise<void> {
+    await db.delete(socialPosts).where(eq(socialPosts.id, id));
   }
 
   // Site Settings

@@ -1714,14 +1714,22 @@ ${urls.join("\n")}
     if (!req.isAuthenticated() || (req.user as any).role !== "admin") return res.status(403).json({ message: "Forbidden" });
     const post = await storage.getSocialPost(Number(req.params.id));
     if (!post) return res.status(404).json({ message: "Social post not found" });
-    if (post.status === "queued") {
-      return res.status(409).json({ message: "Queued posts cannot be canceled in MVP." });
-    }
-    if (post.status !== "draft") {
+    if (post.status !== "draft" && post.status !== "queued") {
       return res.status(409).json({ message: `Cannot cancel a post with status "${post.status}".` });
     }
     const updated = await storage.updateSocialPost(Number(req.params.id), { status: "canceled" } as any);
     res.json(updated);
+  });
+
+  app.delete("/api/admin/social-posts/:id", async (req, res) => {
+    if (!req.isAuthenticated() || (req.user as any).role !== "admin") return res.status(403).json({ message: "Forbidden" });
+    const post = await storage.getSocialPost(Number(req.params.id));
+    if (!post) return res.status(404).json({ message: "Social post not found" });
+    if (post.status === "sent") {
+      return res.status(409).json({ message: "Cannot delete a post that has already been sent." });
+    }
+    await storage.deleteSocialPost(Number(req.params.id));
+    res.json({ message: "Post deleted" });
   });
 
   app.post("/api/admin/social-posts/test-webhook", async (req, res) => {

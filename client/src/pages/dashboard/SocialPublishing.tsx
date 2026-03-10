@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
-import { RefreshCw, Send, XCircle, Wifi, WifiOff, Zap, RotateCcw } from "lucide-react";
+import { RefreshCw, Send, XCircle, Wifi, WifiOff, Zap, RotateCcw, Trash2 } from "lucide-react";
 import { PLATFORM_LABELS } from "@shared/socialUtils";
 import type { SocialPost } from "@shared/schema";
 import { format } from "date-fns";
@@ -84,6 +84,17 @@ function SocialQueueTab() {
     },
     onError: (err: Error) => {
       toast({ title: "Cancel failed", description: err.message, variant: "destructive" });
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: number) => apiRequest("DELETE", `/api/admin/social-posts/${id}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/social-posts"] });
+      toast({ title: "Post deleted" });
+    },
+    onError: (err: Error) => {
+      toast({ title: "Delete failed", description: err.message, variant: "destructive" });
     },
   });
 
@@ -190,6 +201,7 @@ function SocialQueueTab() {
                           <Button
                             size="icon"
                             variant="ghost"
+                            title="Retry"
                             onClick={() => retryMutation.mutate(post.id)}
                             disabled={retryMutation.isPending}
                             data-testid={`button-retry-${post.id}`}
@@ -197,15 +209,32 @@ function SocialQueueTab() {
                             <RotateCcw className="h-4 w-4" />
                           </Button>
                         )}
-                        {post.status === "draft" && (
+                        {(post.status === "draft" || post.status === "queued") && (
                           <Button
                             size="icon"
                             variant="ghost"
+                            title="Cancel"
                             onClick={() => cancelMutation.mutate(post.id)}
                             disabled={cancelMutation.isPending}
                             data-testid={`button-cancel-${post.id}`}
                           >
                             <XCircle className="h-4 w-4" />
+                          </Button>
+                        )}
+                        {post.status !== "sent" && (
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            title="Delete"
+                            onClick={() => {
+                              if (confirm("Are you sure you want to delete this post?")) {
+                                deleteMutation.mutate(post.id);
+                              }
+                            }}
+                            disabled={deleteMutation.isPending}
+                            data-testid={`button-delete-${post.id}`}
+                          >
+                            <Trash2 className="h-4 w-4 text-destructive" />
                           </Button>
                         )}
                       </div>
