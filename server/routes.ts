@@ -1666,13 +1666,21 @@ ${urls.join("\n")}
     }
 
     const providerRequestId = randomUUID();
+
+    const locationParts = [entity.locationCity, entity.locationState].filter(Boolean);
+    const location = locationParts.length > 0 ? locationParts.join(", ") : null;
+    const siteUrl = process.env.BASE_URL || "https://lanelogicjobs.com";
+    const entityPath = post.entityType === "blog" ? "blog" : post.entityType === "job" ? "jobs" : "resources";
+
     const payload = {
       providerRequestId,
       entityType: post.entityType,
       entityId: post.entityId,
-      titleSnapshot: post.titleSnapshot,
-      linkUrl: post.linkUrl,
-      imageUrl: post.imageUrl,
+      title: post.titleSnapshot || entity.title || "",
+      company: entity.companyName || null,
+      location,
+      url: `${siteUrl}/${entityPath}/${post.entityId}`,
+      imageUrl: post.imageUrl || null,
       platforms,
       copyByPlatform: resolvedCopy,
       scheduledAt: post.scheduledAt,
@@ -1756,10 +1764,14 @@ ${urls.join("\n")}
         providerRequestId: randomUUID(),
         entityType: "test",
         entityId: 0,
-        titleSnapshot: "Test Post",
-        linkUrl: "https://example.com/test",
+        title: "Test Post",
+        company: "LaneLogic Jobs",
+        location: null,
+        url: "https://lanelogicjobs.com/test",
+        imageUrl: null,
         platforms: ["linkedin"],
         copyByPlatform: { linkedin: "This is a test post from LaneLogic Jobs admin." },
+        scheduledAt: null,
       };
       const response = await fetch(ZAPIER_WEBHOOK_URL, {
         method: "POST",
