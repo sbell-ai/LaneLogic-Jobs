@@ -1669,8 +1669,6 @@ ${urls.join("\n")}
 
     const locationParts = [entity.locationCity, entity.locationState].filter(Boolean);
     const location = locationParts.length > 0 ? locationParts.join(", ") : null;
-    const siteUrl = process.env.BASE_URL || "https://lanelogicjobs.com";
-    const entityPath = post.entityType === "blog" ? "blog" : post.entityType === "job" ? "jobs" : "resources";
 
     const payload = {
       providerRequestId,
@@ -1679,7 +1677,7 @@ ${urls.join("\n")}
       title: post.titleSnapshot || entity.title || "",
       company: entity.companyName || null,
       location,
-      url: `${siteUrl}/${entityPath}/${post.entityId}`,
+      url: `${baseUrl}/${entityPath}/${post.entityId}`,
       imageUrl: post.imageUrl || null,
       platforms,
       copyByPlatform: resolvedCopy,
