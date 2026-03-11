@@ -137,6 +137,7 @@ export function ShareToSocialModal({
       const res = await apiRequest("POST", "/api/admin/social-posts", {
         entityType,
         entityId,
+        platforms: selectedPlatforms,
       });
       return (await res.json()) as { id: number };
     },
