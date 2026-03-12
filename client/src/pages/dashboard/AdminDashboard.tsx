@@ -1383,6 +1383,9 @@ function ResourcesTab() {
       setEditResource(null);
       toast({ title: "Resource updated" });
     },
+    onError: (error: any) => {
+      toast({ title: "Error updating resource", description: error.message, variant: "destructive" });
+    },
   });
 
   const deleteMutation = useMutation({
