@@ -254,26 +254,60 @@ function SocialQueueTab() {
   );
 }
 
+type WebhookStatus = {
+  configured: boolean;
+  fallback: boolean;
+  platforms: { twitter: boolean; facebook_page: boolean; linkedin: boolean };
+};
+
+type TestResult = {
+  success: boolean;
+  platforms?: Record<string, { success: boolean; status?: number; error?: string; response?: any }>;
+  error?: string;
+};
+
+const PLATFORM_ENV_VARS: Record<string, string> = {
+  twitter: "ZAPIER_WEBHOOK_URL_TWITTER",
+  facebook_page: "ZAPIER_WEBHOOK_URL_FACEBOOK",
+  linkedin: "ZAPIER_WEBHOOK_URL_LINKEDIN",
+};
+
+function PlatformStatusRow({ platform, specific, fallback }: { platform: string; specific: boolean; fallback: boolean }) {
+  const active = specific || fallback;
+  return (
+    <div className="flex items-center justify-between py-2 border-b last:border-0" data-testid={`text-platform-status-${platform}`}>
+      <div className="flex items-center gap-2">
+        <div className={`h-2.5 w-2.5 rounded-full ${active ? "bg-green-500" : "bg-red-400"}`} />
+        <span className="text-sm font-medium">{PLATFORM_LABELS[platform] ?? platform}</span>
+        {!specific && fallback && (
+          <span className="text-xs text-muted-foreground">(using fallback)</span>
+        )}
+      </div>
+      <code className="text-xs text-muted-foreground">{PLATFORM_ENV_VARS[platform]}</code>
+    </div>
+  );
+}
+
 function ConnectionsTab() {
   const { toast } = useToast();
 
-  const { data: webhookStatus, isLoading: statusLoading } = useQuery<{ configured: boolean }>({
+  const { data: webhookStatus, isLoading: statusLoading } = useQuery<WebhookStatus>({
     queryKey: ["/api/admin/social-posts/webhook-status"],
   });
 
-  const [testResult, setTestResult] = useState<{ success: boolean; status?: number; error?: string; response?: any } | null>(null);
+  const [testResult, setTestResult] = useState<TestResult | null>(null);
 
   const testMutation = useMutation({
     mutationFn: async () => {
       const res = await apiRequest("POST", "/api/admin/social-posts/test-webhook");
-      return res.json();
+      return res.json() as Promise<TestResult>;
     },
     onSuccess: (data) => {
       setTestResult(data);
       if (data.success) {
-        toast({ title: "Test payload sent successfully" });
+        toast({ title: "All test payloads sent successfully" });
       } else {
-        toast({ title: "Test payload failed", description: data.error || `Status: ${data.status}`, variant: "destructive" });
+        toast({ title: "One or more test payloads failed", variant: "destructive" });
       }
     },
     onError: (err: Error) => {
@@ -282,26 +316,41 @@ function ConnectionsTab() {
     },
   });
 
+  const platforms = webhookStatus?.platforms;
+
   return (
     <div className="space-y-6">
       <Card className="p-6">
-        <h3 className="text-lg font-semibold mb-4">Zapier Webhook</h3>
-        <div className="flex flex-wrap items-center gap-3 mb-4">
-          <div className="flex items-center gap-2" data-testid="text-webhook-status">
-            {statusLoading ? (
-              <Skeleton className="h-4 w-4 rounded-full" />
-            ) : webhookStatus?.configured ? (
-              <>
-                <div className="h-3 w-3 rounded-full bg-green-500" />
-                <span className="text-sm">Webhook URL configured</span>
-              </>
-            ) : (
-              <>
-                <div className="h-3 w-3 rounded-full bg-red-500" />
-                <span className="text-sm text-muted-foreground">Webhook URL not configured</span>
-              </>
-            )}
-          </div>
+        <h3 className="text-lg font-semibold mb-1">Platform Webhooks</h3>
+        <p className="text-sm text-muted-foreground mb-4">
+          Each platform can have its own Zapier webhook URL. If a platform-specific URL is not set, the fallback URL is used.
+        </p>
+
+        <div className="mb-4" data-testid="text-webhook-status">
+          {statusLoading ? (
+            <div className="space-y-2">
+              {["twitter", "facebook_page", "linkedin"].map(p => (
+                <Skeleton key={p} className="h-8 w-full rounded" />
+              ))}
+            </div>
+          ) : (
+            <div className="divide-y rounded-md border px-4">
+              {(["twitter", "facebook_page", "linkedin"] as const).map(p => (
+                <PlatformStatusRow
+                  key={p}
+                  platform={p}
+                  specific={!!platforms?.[p]}
+                  fallback={!!webhookStatus?.fallback}
+                />
+              ))}
+            </div>
+          )}
+          {!statusLoading && webhookStatus?.fallback && (
+            <p className="mt-2 text-xs text-muted-foreground flex items-center gap-1">
+              <Zap className="h-3 w-3" />
+              Fallback: <code className="bg-muted px-1 rounded">ZAPIER_SOCIAL_POST_WEBHOOK_URL</code> is set
+            </p>
+          )}
         </div>
 
         <Button
@@ -314,34 +363,43 @@ function ConnectionsTab() {
           ) : (
             <Send className="h-4 w-4 mr-2" />
           )}
-          Send Test Payload
+          Send Test Payloads
         </Button>
 
         {testResult && (
           <div className="mt-4 p-4 rounded-md border" data-testid="text-test-result">
-            <div className="flex items-center gap-2 mb-2">
+            <div className="flex items-center gap-2 mb-3">
               {testResult.success ? (
                 <>
                   <Wifi className="h-4 w-4 text-green-600" />
-                  <span className="font-medium text-green-700 dark:text-green-400">Test Successful</span>
+                  <span className="font-medium text-green-700 dark:text-green-400">All Tests Successful</span>
                 </>
               ) : (
                 <>
                   <WifiOff className="h-4 w-4 text-red-600" />
-                  <span className="font-medium text-red-700 dark:text-red-400">Test Failed</span>
+                  <span className="font-medium text-red-700 dark:text-red-400">One or More Tests Failed</span>
                 </>
               )}
             </div>
-            {testResult.status && (
-              <p className="text-sm text-muted-foreground">HTTP Status: {testResult.status}</p>
-            )}
             {testResult.error && (
-              <p className="text-sm text-destructive">{testResult.error}</p>
+              <p className="text-sm text-destructive mb-2">{testResult.error}</p>
             )}
-            {testResult.response && (
-              <pre className="mt-2 text-xs bg-muted p-2 rounded-md overflow-x-auto">
-                {JSON.stringify(testResult.response, null, 2)}
-              </pre>
+            {testResult.platforms && (
+              <div className="space-y-2">
+                {Object.entries(testResult.platforms).map(([platform, result]) => (
+                  <div key={platform} className="flex items-start gap-2 text-sm" data-testid={`text-test-result-${platform}`}>
+                    <div className={`h-2 w-2 rounded-full mt-1.5 shrink-0 ${result.success ? "bg-green-500" : "bg-red-400"}`} />
+                    <div>
+                      <span className="font-medium">{PLATFORM_LABELS[platform] ?? platform}:</span>{" "}
+                      {result.success ? (
+                        <span className="text-muted-foreground">OK {result.status ? `(${result.status})` : ""}</span>
+                      ) : (
+                        <span className="text-destructive">{result.error ?? `HTTP ${result.status}`}</span>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
             )}
           </div>
         )}
@@ -350,14 +408,14 @@ function ConnectionsTab() {
       <Card className="p-6">
         <h3 className="text-lg font-semibold mb-2">How It Works</h3>
         <div className="space-y-2 text-sm text-muted-foreground">
-          <p>Social posts are sent to Zapier via webhook. Zapier handles publishing to LinkedIn, Facebook, and Instagram.</p>
+          <p>When a post is shared to multiple platforms, a separate webhook is fired for each one — each with its own platform-specific copy and a unique <code className="bg-muted px-1 rounded">providerRequestId</code>.</p>
           <div className="flex items-start gap-2">
             <Zap className="h-4 w-4 mt-0.5 shrink-0" />
-            <span>Set <code className="bg-muted px-1 rounded">ZAPIER_SOCIAL_POST_WEBHOOK_URL</code> in your environment to connect.</span>
+            <span>Set per-platform env vars (<code className="bg-muted px-1 rounded">ZAPIER_WEBHOOK_URL_TWITTER</code>, etc.) or use <code className="bg-muted px-1 rounded">ZAPIER_SOCIAL_POST_WEBHOOK_URL</code> as a fallback for all platforms.</span>
           </div>
           <div className="flex items-start gap-2">
             <Zap className="h-4 w-4 mt-0.5 shrink-0" />
-            <span>Set <code className="bg-muted px-1 rounded">ZAPIER_CALLBACK_SECRET</code> for the callback endpoint security.</span>
+            <span>Set <code className="bg-muted px-1 rounded">ZAPIER_CALLBACK_SECRET</code> to secure the Zapier callback endpoint.</span>
           </div>
         </div>
       </Card>

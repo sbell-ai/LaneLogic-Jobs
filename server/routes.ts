@@ -1510,10 +1510,26 @@ ${urls.join("\n")}
   // Social Publishing endpoints
   const ZAPIER_WEBHOOK_URL = process.env.ZAPIER_SOCIAL_POST_WEBHOOK_URL;
   const ZAPIER_CALLBACK_SECRET = process.env.ZAPIER_CALLBACK_SECRET;
+  const ZAPIER_PLATFORM_URLS: Record<string, string | undefined> = {
+    twitter: process.env.ZAPIER_WEBHOOK_URL_TWITTER,
+    facebook_page: process.env.ZAPIER_WEBHOOK_URL_FACEBOOK,
+    linkedin: process.env.ZAPIER_WEBHOOK_URL_LINKEDIN,
+  };
+  const getPlatformWebhookUrl = (platform: string): string | undefined =>
+    ZAPIER_PLATFORM_URLS[platform] || ZAPIER_WEBHOOK_URL;
 
   app.get("/api/admin/social-posts/webhook-status", async (req, res) => {
     if (!req.isAuthenticated() || (req.user as any).role !== "admin") return res.status(403).json({ message: "Forbidden" });
-    res.json({ configured: !!ZAPIER_WEBHOOK_URL });
+    const anyConfigured = !!(ZAPIER_WEBHOOK_URL || Object.values(ZAPIER_PLATFORM_URLS).some(Boolean));
+    res.json({
+      configured: anyConfigured,
+      platforms: {
+        twitter: !!ZAPIER_PLATFORM_URLS.twitter,
+        facebook_page: !!ZAPIER_PLATFORM_URLS.facebook_page,
+        linkedin: !!ZAPIER_PLATFORM_URLS.linkedin,
+      },
+      fallback: !!ZAPIER_WEBHOOK_URL,
+    });
   });
 
   app.get("/api/admin/social-posts", async (req, res) => {
@@ -1681,61 +1697,72 @@ ${urls.join("\n")}
       return res.status(400).json({ message: copyErrors.join(" "), errors: copyErrors.map(e => ({ field: "copy", reason: e })) });
     }
 
-    if (!ZAPIER_WEBHOOK_URL) {
-      await storage.updateSocialPost(postId, { status: "failed", lastError: "Zapier webhook URL not configured" } as any);
-      return res.status(500).json({ message: "Zapier webhook URL not configured" });
+    const unconfiguredPlatforms = platforms.filter(p => !getPlatformWebhookUrl(p));
+    if (unconfiguredPlatforms.length > 0) {
+      await storage.updateSocialPost(postId, { status: "failed", lastError: `No webhook URL configured for: ${unconfiguredPlatforms.join(", ")}` } as any);
+      return res.status(500).json({ message: `No webhook URL configured for: ${unconfiguredPlatforms.join(", ")}` });
     }
-
-    const providerRequestId = randomUUID();
 
     const locationParts = [entity.locationCity, entity.locationState].filter(Boolean);
     const location = locationParts.length > 0 ? locationParts.join(", ") : null;
 
-    const payload = {
-      providerRequestId,
-      entityType: post.entityType,
-      entityId: post.entityId,
-      title: post.titleSnapshot || entity.title || "",
-      company: entity.companyName || null,
-      location,
-      url: `${baseUrl}/${entityPath}/${post.entityId}`,
-      imageUrl: post.imageUrl || null,
-      platforms,
-      copyByPlatform: resolvedCopy,
-      scheduledAt: post.scheduledAt,
-    };
+    const perPlatformResults: Array<{ platform: string; success: boolean; providerRequestId: string; error?: string; response?: any }> = [];
 
-    try {
-      const response = await fetch(ZAPIER_WEBHOOK_URL, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-      const responseData = await response.json().catch(() => ({}));
-
-      if (response.ok) {
-        const updated = await storage.updateSocialPost(postId, {
-          status: "sent",
-          providerRequestId,
-          providerResponse: responseData,
-        } as any);
-        return res.json(updated);
-      } else {
-        await storage.updateSocialPost(postId, {
-          status: "failed",
-          lastError: `Zapier returned ${response.status}: ${JSON.stringify(responseData)}`,
-          providerRequestId,
-          providerResponse: responseData,
-        } as any);
-        return res.status(502).json({ message: `Zapier returned ${response.status}`, details: responseData });
+    for (const platform of platforms) {
+      const webhookUrl = getPlatformWebhookUrl(platform)!;
+      const providerRequestId = `${post.entityType}-${post.entityId}-${platform}`;
+      const payload = {
+        providerRequestId,
+        entityType: post.entityType,
+        entityId: post.entityId,
+        title: post.titleSnapshot || entity.title || "",
+        company: entity.companyName || null,
+        location,
+        url: `${baseUrl}/${entityPath}/${post.entityId}`,
+        imageUrl: post.imageUrl || null,
+        platform,
+        copy: resolvedCopy[platform],
+        scheduledAt: post.scheduledAt,
+      };
+      try {
+        const response = await fetch(webhookUrl, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        const responseData = await response.json().catch(() => ({}));
+        if (response.ok) {
+          perPlatformResults.push({ platform, success: true, providerRequestId, response: responseData });
+        } else {
+          perPlatformResults.push({ platform, success: false, providerRequestId, error: `HTTP ${response.status}: ${JSON.stringify(responseData)}`, response: responseData });
+        }
+      } catch (err: any) {
+        perPlatformResults.push({ platform, success: false, providerRequestId, error: err.message || "Network error" });
       }
-    } catch (err: any) {
+    }
+
+    const allSucceeded = perPlatformResults.every(r => r.success);
+    const failedPlatforms = perPlatformResults.filter(r => !r.success).map(r => r.platform);
+    const combinedProviderRequestId = perPlatformResults.map(r => r.providerRequestId).join(",");
+
+    if (allSucceeded) {
+      const updated = await storage.updateSocialPost(postId, {
+        status: "sent",
+        providerRequestId: combinedProviderRequestId,
+        providerResponse: perPlatformResults,
+      } as any);
+      return res.json(updated);
+    } else {
       await storage.updateSocialPost(postId, {
         status: "failed",
-        lastError: err.message || "Network error sending to Zapier",
-        providerRequestId,
+        lastError: `Failed to send to: ${failedPlatforms.join(", ")}`,
+        providerRequestId: combinedProviderRequestId,
+        providerResponse: perPlatformResults,
       } as any);
-      return res.status(502).json({ message: "Failed to send to Zapier: " + (err.message || "Network error") });
+      return res.status(502).json({
+        message: `Failed to send to: ${failedPlatforms.join(", ")}`,
+        results: perPlatformResults,
+      });
     }
   }
 
@@ -1776,32 +1803,56 @@ ${urls.join("\n")}
 
   app.post("/api/admin/social-posts/test-webhook", async (req, res) => {
     if (!req.isAuthenticated() || (req.user as any).role !== "admin") return res.status(403).json({ message: "Forbidden" });
-    if (!ZAPIER_WEBHOOK_URL) return res.status(500).json({ message: "Zapier webhook URL not configured", success: false });
-    try {
-      const testPayload = {
-        test: true,
-        providerRequestId: randomUUID(),
-        entityType: "test",
-        entityId: 0,
-        title: "Test Post",
-        company: "LaneLogic Jobs",
-        location: null,
-        url: "https://lanelogicjobs.com/test",
-        imageUrl: null,
-        platforms: ["linkedin"],
-        copyByPlatform: { linkedin: "This is a test post from LaneLogic Jobs admin." },
-        scheduledAt: null,
-      };
-      const response = await fetch(ZAPIER_WEBHOOK_URL, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(testPayload),
-      });
-      const data = await response.json().catch(() => ({}));
-      res.json({ success: response.ok, status: response.status, response: data });
-    } catch (err: any) {
-      res.json({ success: false, error: err.message || "Network error" });
+
+    const PLATFORM_TEST_COPY: Record<string, string> = {
+      twitter: "This is a test post from LaneLogic Jobs admin. [X/Twitter]",
+      facebook_page: "This is a test post from LaneLogic Jobs admin. [Facebook]",
+      linkedin: "This is a test post from LaneLogic Jobs admin. [LinkedIn]",
+    };
+
+    const platformResults: Record<string, { success: boolean; status?: number; error?: string; response?: any }> = {};
+    let anyConfigured = false;
+
+    for (const platform of Object.keys(ZAPIER_PLATFORM_URLS)) {
+      const url = getPlatformWebhookUrl(platform);
+      if (!url) {
+        platformResults[platform] = { success: false, error: "Not configured" };
+        continue;
+      }
+      anyConfigured = true;
+      try {
+        const testPayload = {
+          test: true,
+          providerRequestId: `test-0-${platform}`,
+          entityType: "test",
+          entityId: 0,
+          title: "Test Post",
+          company: "LaneLogic Jobs",
+          location: null,
+          url: "https://lanelogicjobs.com/test",
+          imageUrl: null,
+          platform,
+          copy: PLATFORM_TEST_COPY[platform] || "This is a test post from LaneLogic Jobs admin.",
+          scheduledAt: null,
+        };
+        const response = await fetch(url, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(testPayload),
+        });
+        const data = await response.json().catch(() => ({}));
+        platformResults[platform] = { success: response.ok, status: response.status, response: data };
+      } catch (err: any) {
+        platformResults[platform] = { success: false, error: err.message || "Network error" };
+      }
     }
+
+    if (!anyConfigured) {
+      return res.status(500).json({ success: false, message: "No webhook URLs configured", platforms: platformResults });
+    }
+
+    const allSucceeded = Object.values(platformResults).every(r => r.success);
+    res.json({ success: allSucceeded, platforms: platformResults });
   });
 
   app.post("/api/integrations/zapier/social-posts/callback", async (req, res) => {
