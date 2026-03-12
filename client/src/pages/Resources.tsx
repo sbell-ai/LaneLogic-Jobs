@@ -7,7 +7,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/use-auth";
 import type { Resource } from "@shared/schema";
-import { BookOpen, Lock, Unlock, Users, Briefcase } from "lucide-react";
+import { INTRO_TRUNCATE_LENGTH } from "@shared/constants";
+import { BookOpen, Lock, Unlock, Users, Briefcase, ArrowRight } from "lucide-react";
 import { motion } from "framer-motion";
 import { useMemo } from "react";
 
@@ -30,6 +31,11 @@ const tierColors: Record<string, string> = {
   basic: "bg-blue-100 text-blue-700 border-blue-200",
   premium: "bg-purple-100 text-purple-700 border-purple-200",
 };
+
+function truncateIntro(text: string): string {
+  if (text.length <= INTRO_TRUNCATE_LENGTH) return text;
+  return text.slice(0, INTRO_TRUNCATE_LENGTH).trimEnd() + "\u2026";
+}
 
 function ResourceGrid({ resources, userTier, userRole }: { resources: Resource[]; userTier: string | undefined; userRole?: string }) {
   const accessible = resources.filter((r) => canAccess(userTier, r.requiredTier, userRole));
@@ -60,30 +66,39 @@ function ResourceGrid({ resources, userTier, userRole }: { resources: Resource[]
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: i * 0.05 }}
               >
-                <div
-                  data-testid={`card-resource-${resource.id}`}
-                  className="bg-white dark:bg-slate-900 rounded-2xl border border-border shadow-sm hover:shadow-lg transition-all duration-200 p-6 flex flex-col h-full"
-                >
-                  <div className="flex items-start justify-between mb-4">
-                    <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center text-primary">
-                      <BookOpen size={20} />
+                <Link href={`/resources/${resource.id}`} className="block h-full">
+                  <div
+                    data-testid={`card-resource-${resource.id}`}
+                    className="bg-white dark:bg-slate-900 rounded-2xl border border-border shadow-sm hover:shadow-lg transition-all duration-200 p-6 flex flex-col h-full cursor-pointer"
+                  >
+                    <div className="flex items-start justify-between mb-4">
+                      <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center text-primary">
+                        <BookOpen size={20} />
+                      </div>
+                      <div className="flex gap-2">
+                        <Badge className={`text-xs border ${tierColors[resource.requiredTier] || ''}`}>
+                          {resource.requiredTier}
+                        </Badge>
+                        <Badge variant="outline" className="text-xs">
+                          {resource.targetAudience === "employer" ? (
+                            <><Briefcase size={11} className="mr-1" />{audienceLabel[resource.targetAudience]}</>
+                          ) : resource.targetAudience === "job_seeker" ? (
+                            <><Users size={11} className="mr-1" />{audienceLabel[resource.targetAudience]}</>
+                          ) : audienceLabel[resource.targetAudience]}
+                        </Badge>
+                      </div>
                     </div>
-                    <div className="flex gap-2">
-                      <Badge className={`text-xs border ${tierColors[resource.requiredTier] || ''}`}>
-                        {resource.requiredTier}
-                      </Badge>
-                      <Badge variant="outline" className="text-xs">
-                        {resource.targetAudience === "employer" ? (
-                          <><Briefcase size={11} className="mr-1" />{audienceLabel[resource.targetAudience]}</>
-                        ) : resource.targetAudience === "job_seeker" ? (
-                          <><Users size={11} className="mr-1" />{audienceLabel[resource.targetAudience]}</>
-                        ) : audienceLabel[resource.targetAudience]}
-                      </Badge>
+                    <h3 className="font-bold font-display text-lg mb-2">{resource.title}</h3>
+                    <p className="text-sm text-muted-foreground leading-relaxed flex-grow" data-testid={`text-resource-intro-${resource.id}`}>
+                      {truncateIntro(resource.introText || resource.content || "")}
+                    </p>
+                    <div className="mt-4 pt-3 border-t border-border">
+                      <span className="text-sm font-medium text-primary flex items-center gap-1" data-testid={`link-read-more-${resource.id}`}>
+                        Read more <ArrowRight size={14} />
+                      </span>
                     </div>
                   </div>
-                  <h3 className="font-bold font-display text-lg mb-2">{resource.title}</h3>
-                  <p className="text-sm text-muted-foreground leading-relaxed flex-grow">{resource.content}</p>
-                </div>
+                </Link>
               </motion.div>
             ))}
           </div>
@@ -112,7 +127,7 @@ function ResourceGrid({ resources, userTier, userRole }: { resources: Resource[]
                   </Button>
                 </div>
                 <h3 className="font-bold font-display text-lg mb-2 blur-[2px]">{resource.title}</h3>
-                <p className="text-sm text-muted-foreground line-clamp-3 blur-[2px]">{resource.content}</p>
+                <p className="text-sm text-muted-foreground line-clamp-3 blur-[2px]">{truncateIntro(resource.introText || resource.content || "")}</p>
               </div>
             ))}
           </div>

@@ -39,7 +39,7 @@ export interface IStorage {
   updateApplication(id: number, updates: Partial<InsertApplication>): Promise<Application>;
 
   // Resources
-  getResources(): Promise<Resource[]>;
+  getResources(context?: "admin" | "public"): Promise<Resource[]>;
   getResource(id: number): Promise<Resource | undefined>;
   createResource(resource: InsertResource): Promise<Resource>;
   updateResource(id: number, updates: Partial<InsertResource>): Promise<Resource>;
@@ -158,8 +158,13 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Resources
-  async getResources(): Promise<Resource[]> {
-    return await db.select().from(resources);
+  async getResources(context: "admin" | "public" = "public"): Promise<Resource[]> {
+    if (context === "admin") {
+      return await db.select().from(resources).orderBy(desc(resources.updatedAt));
+    }
+    return await db.select().from(resources)
+      .where(eq(resources.isPublished, true))
+      .orderBy(desc(resources.publishedAt), desc(resources.id));
   }
   async getResource(id: number): Promise<Resource | undefined> {
     const [res] = await db.select().from(resources).where(eq(resources.id, id));
@@ -170,7 +175,7 @@ export class DatabaseStorage implements IStorage {
     return res;
   }
   async updateResource(id: number, updates: Partial<InsertResource>): Promise<Resource> {
-    const [res] = await db.update(resources).set(updates).where(eq(resources.id, id)).returning();
+    const [res] = await db.update(resources).set({ ...updates, updatedAt: new Date() }).where(eq(resources.id, id)).returning();
     return res;
   }
   async deleteResource(id: number): Promise<void> {

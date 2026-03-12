@@ -608,8 +608,8 @@ export async function registerRoutes(
   // Resources
   app.get(api.resources.list.path, async (req, res) => {
     const isAdmin = req.isAuthenticated() && (req.user as any).role === "admin";
-    const allResources = await storage.getResources();
-    res.json(isAdmin ? allResources : allResources.filter(r => r.isPublished));
+    const allResources = await storage.getResources(isAdmin ? "admin" : "public");
+    res.json(allResources);
   });
 
   app.get("/api/resources/:id", async (req, res) => {
@@ -623,6 +623,9 @@ export async function registerRoutes(
   app.post(api.resources.create.path, async (req, res) => {
     try {
       const input = api.resources.create.input.parse(req.body);
+      if (input.isPublished && (!input.bodyText || input.bodyText.trim() === "")) {
+        return res.status(400).json({ message: "Cannot publish a resource with empty body text" });
+      }
       const resource = await storage.createResource(input);
       res.status(201).json(resource);
     } catch (err) {
@@ -680,6 +683,13 @@ export async function registerRoutes(
       const updates = { ...req.body };
       if (updates.publishedAt && typeof updates.publishedAt === "string") {
         updates.publishedAt = new Date(updates.publishedAt);
+      }
+      if (updates.isPublished) {
+        const existing = await storage.getResource(Number(req.params.id));
+        const bodyText = updates.bodyText !== undefined ? updates.bodyText : existing?.bodyText;
+        if (!bodyText || bodyText.trim() === "") {
+          return res.status(400).json({ message: "Cannot publish a resource with empty body text" });
+        }
       }
       const resource = await storage.updateResource(Number(req.params.id), updates);
       res.json(resource);

@@ -164,6 +164,7 @@ async function startServer() {
 
   await seedDatabaseIfEmpty();
   await runParagraphizeMigration();
+  await runResourceContentBackfill();
 
   httpServer.listen(
     { port, host: "0.0.0.0", reusePort: true },
@@ -297,6 +298,33 @@ async function runParagraphizeMigration() {
     log(`Paragraphize migration complete: updated ${updated} job descriptions`);
   } catch (err) {
     console.error("Paragraphize migration error:", err);
+  }
+}
+
+async function runResourceContentBackfill() {
+  try {
+    const { db } = await import("./db");
+    const { sql } = await import("drizzle-orm");
+
+    const flagCheck = await db.execute(sql`
+      SELECT settings->>'migration_resource_content_backfill_done' as flag FROM site_settings LIMIT 1
+    `);
+    if (flagCheck.rows.length > 0 && flagCheck.rows[0].flag === "true") {
+      return;
+    }
+
+    log("Running one-time resource content backfill migration...");
+    const result = await db.execute(sql`
+      UPDATE resources SET intro_text = content, body_text = content, updated_at = NOW()
+      WHERE (intro_text = '' OR intro_text IS NULL) AND content != '' AND content IS NOT NULL
+    `);
+
+    await db.execute(sql`
+      UPDATE site_settings SET settings = settings || '{"migration_resource_content_backfill_done": true}'::jsonb
+    `);
+    log("Resource content backfill migration complete");
+  } catch (err) {
+    console.error("Resource content backfill migration error:", err);
   }
 }
 

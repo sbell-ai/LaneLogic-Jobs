@@ -28,6 +28,8 @@ import type { User, Job, Resource, BlogPost, Category, Coupon, SiteSettingsData,
 import { ShareToSocialModal } from "@/components/ShareToSocialModal";
 import SocialPublishing from "./SocialPublishing";
 import { insertResourceSchema, insertBlogPostSchema, insertJobSchema } from "@shared/schema";
+import { INTRO_TRUNCATE_LENGTH } from "@shared/constants";
+import { tokenize } from "@/lib/linkify";
 import { z } from "zod";
 import { formatDistanceToNow, format } from "date-fns";
 
@@ -1348,7 +1350,8 @@ function BlogTab() {
 
 const resourceFormSchema = insertResourceSchema.extend({
   title: z.string().min(3, "Title required"),
-  content: z.string().min(10, "Content required"),
+  introText: z.string().optional(),
+  bodyText: z.string().optional(),
 });
 
 function ResourcesTab() {
@@ -1357,12 +1360,12 @@ function ResourcesTab() {
   const { data: resources, isLoading } = useQuery<Resource[]>({ queryKey: ["/api/resources"] });
   const [showForm, setShowForm] = useState(false);
   const [editResource, setEditResource] = useState<Resource | null>(null);
-  const [editForm, setEditForm] = useState({ title: "", content: "", targetAudience: "both", requiredTier: "free", isPublished: false as boolean });
+  const [editForm, setEditForm] = useState({ title: "", introText: "", bodyText: "", targetAudience: "both", requiredTier: "free", isPublished: false as boolean });
   const [shareResource, setShareResource] = useState<Resource | null>(null);
 
   const form = useForm<z.infer<typeof resourceFormSchema>>({
     resolver: zodResolver(resourceFormSchema),
-    defaultValues: { title: "", content: "", targetAudience: "both", requiredTier: "free" },
+    defaultValues: { title: "", introText: "", bodyText: "", targetAudience: "both", requiredTier: "free" },
   });
 
   const createMutation = useMutation({
@@ -1397,7 +1400,7 @@ function ResourcesTab() {
   });
 
   const openEdit = (r: Resource) => {
-    setEditForm({ title: r.title, content: r.content, targetAudience: r.targetAudience, requiredTier: r.requiredTier, isPublished: r.isPublished ?? false });
+    setEditForm({ title: r.title, introText: r.introText || "", bodyText: r.bodyText || "", targetAudience: r.targetAudience, requiredTier: r.requiredTier, isPublished: r.isPublished ?? false });
     setEditResource(r);
   };
 
@@ -1426,10 +1429,19 @@ function ResourcesTab() {
                   <FormMessage />
                 </FormItem>
               )} />
-              <FormField control={form.control} name="content" render={({ field }) => (
+              <FormField control={form.control} name="introText" render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Content *</FormLabel>
-                  <FormControl><Textarea className="min-h-[120px]" data-testid="textarea-resource-content" {...field} /></FormControl>
+                  <FormLabel>Card Intro</FormLabel>
+                  <FormControl><Textarea className="min-h-[80px]" data-testid="textarea-resource-intro" placeholder="Short preview shown on resource cards" {...field} /></FormControl>
+                  <div className="text-xs text-muted-foreground mt-1">{(field.value || "").length} characters</div>
+                  <FormMessage />
+                </FormItem>
+              )} />
+              <FormField control={form.control} name="bodyText" render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Full Body</FormLabel>
+                  <FormControl><Textarea className="min-h-[120px]" data-testid="textarea-resource-body" placeholder="Full resource content shown on the detail page" {...field} /></FormControl>
+                  <div className="text-xs text-muted-foreground mt-1">{(field.value || "").length} characters</div>
                   <FormMessage />
                 </FormItem>
               )} />
@@ -1478,7 +1490,7 @@ function ResourcesTab() {
             <div className="flex items-start justify-between gap-4">
               <div className="flex-1">
                 <h3 className="font-semibold mb-1">{r.title}</h3>
-                <p className="text-sm text-muted-foreground line-clamp-2">{r.content}</p>
+                <p className="text-sm text-muted-foreground line-clamp-2">{r.introText || r.content || ""}</p>
                 <div className="flex gap-2 mt-3">
                   <Badge variant="outline" className="text-xs capitalize">{r.targetAudience.replace("_", " ")}</Badge>
                   <Badge variant="outline" className="text-xs capitalize">{r.requiredTier} tier</Badge>
@@ -1502,56 +1514,97 @@ function ResourcesTab() {
       </div>
 
       <Dialog open={!!editResource} onOpenChange={() => setEditResource(null)}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
           <DialogHeader><DialogTitle>Edit Resource</DialogTitle></DialogHeader>
-          <div className="space-y-4">
-            <div><Label>Title</Label><Input value={editForm.title} onChange={e => setEditForm(f => ({ ...f, title: e.target.value }))} data-testid="input-edit-resource-title" /></div>
-            <div><Label>Content</Label><Textarea value={editForm.content} onChange={e => setEditForm(f => ({ ...f, content: e.target.value }))} className="min-h-[120px]" data-testid="textarea-edit-resource-content" /></div>
-            <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div className="space-y-4">
+              <div><Label>Title</Label><Input value={editForm.title} onChange={e => setEditForm(f => ({ ...f, title: e.target.value }))} data-testid="input-edit-resource-title" /></div>
               <div>
-                <Label>Audience</Label>
-                <Select value={editForm.targetAudience} onValueChange={v => setEditForm(f => ({ ...f, targetAudience: v }))}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="both">Everyone</SelectItem>
-                    <SelectItem value="employer">Employers</SelectItem>
-                    <SelectItem value="job_seeker">Job Seekers</SelectItem>
-                  </SelectContent>
-                </Select>
+                <Label>Card Intro</Label>
+                <Textarea value={editForm.introText} onChange={e => setEditForm(f => ({ ...f, introText: e.target.value }))} className="min-h-[80px]" data-testid="textarea-edit-resource-intro" placeholder="Short preview shown on resource cards" />
+                <div className="text-xs text-muted-foreground mt-1">{editForm.introText.length} characters</div>
               </div>
               <div>
-                <Label>Required Tier</Label>
-                <Select value={editForm.requiredTier} onValueChange={v => setEditForm(f => ({ ...f, requiredTier: v }))}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="free">Free</SelectItem>
-                    <SelectItem value="basic">Basic</SelectItem>
-                    <SelectItem value="premium">Premium</SelectItem>
-                  </SelectContent>
-                </Select>
+                <Label>Full Body</Label>
+                <Textarea value={editForm.bodyText} onChange={e => setEditForm(f => ({ ...f, bodyText: e.target.value }))} className="min-h-[120px]" data-testid="textarea-edit-resource-body" placeholder="Full resource content shown on the detail page" />
+                <div className="text-xs text-muted-foreground mt-1">{editForm.bodyText.length} characters</div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label>Audience</Label>
+                  <Select value={editForm.targetAudience} onValueChange={v => setEditForm(f => ({ ...f, targetAudience: v }))}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="both">Everyone</SelectItem>
+                      <SelectItem value="employer">Employers</SelectItem>
+                      <SelectItem value="job_seeker">Job Seekers</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label>Required Tier</Label>
+                  <Select value={editForm.requiredTier} onValueChange={v => setEditForm(f => ({ ...f, requiredTier: v }))}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="free">Free</SelectItem>
+                      <SelectItem value="basic">Basic</SelectItem>
+                      <SelectItem value="premium">Premium</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <div className="flex items-center justify-between py-2 px-1 border rounded-lg">
+                <Label className="font-medium">Published</Label>
+                <Switch
+                  checked={editForm.isPublished ?? false}
+                  onCheckedChange={v => setEditForm(f => ({ ...f, isPublished: v }))}
+                  data-testid="switch-resource-published"
+                />
+              </div>
+              <div className="flex gap-2">
+                <Button className="flex-1" disabled={updateMutation.isPending} onClick={() => {
+                  if (!editResource) return;
+                  const updates: Record<string, any> = { ...editForm };
+                  if (updates.isPublished && !editResource.isPublished) updates.publishedAt = new Date().toISOString();
+                  if (!updates.isPublished && editResource.isPublished) updates.publishedAt = null;
+                  updateMutation.mutate({ id: editResource.id, ...updates });
+                }} data-testid="button-save-edit-resource">
+                  {updateMutation.isPending ? "Saving..." : "Save Changes"}
+                </Button>
+                <Button variant="outline" onClick={() => { if (editResource) setShareResource(editResource); }} data-testid="button-share-from-edit-resource">
+                  <Share2 size={15} className="mr-1.5" /> Share
+                </Button>
               </div>
             </div>
-            <div className="flex items-center justify-between py-2 px-1 border rounded-lg">
-              <Label className="font-medium">Published</Label>
-              <Switch
-                checked={editForm.isPublished ?? false}
-                onCheckedChange={v => setEditForm(f => ({ ...f, isPublished: v }))}
-                data-testid="switch-resource-published"
-              />
-            </div>
-            <div className="flex gap-2">
-              <Button className="flex-1" disabled={updateMutation.isPending} onClick={() => {
-                if (!editResource) return;
-                const updates: Record<string, any> = { ...editForm };
-                if (updates.isPublished && !editResource.isPublished) updates.publishedAt = new Date().toISOString();
-                if (!updates.isPublished && editResource.isPublished) updates.publishedAt = null;
-                updateMutation.mutate({ id: editResource.id, ...updates });
-              }} data-testid="button-save-edit-resource">
-                {updateMutation.isPending ? "Saving..." : "Save Changes"}
-              </Button>
-              <Button variant="outline" onClick={() => { if (editResource) setShareResource(editResource); }} data-testid="button-share-from-edit-resource">
-                <Share2 size={15} className="mr-1.5" /> Share
-              </Button>
+            <div className="space-y-4">
+              <Label className="text-sm font-semibold">Preview</Label>
+              <div className="bg-slate-50 dark:bg-slate-800 rounded-xl border border-border p-4 space-y-4">
+                <div>
+                  <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Card Preview</span>
+                  <div className="mt-2 bg-white dark:bg-slate-900 rounded-lg border border-border p-4">
+                    <h4 className="font-bold text-sm mb-1">{editForm.title || "Untitled"}</h4>
+                    <p className="text-xs text-muted-foreground" data-testid="text-admin-intro-preview">
+                      {editForm.introText.length > INTRO_TRUNCATE_LENGTH ? editForm.introText.slice(0, INTRO_TRUNCATE_LENGTH).trimEnd() + "\u2026" : editForm.introText || "No intro text"}
+                    </p>
+                  </div>
+                </div>
+                <div>
+                  <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Body Preview</span>
+                  <div className="mt-2 bg-white dark:bg-slate-900 rounded-lg border border-border p-4 max-h-60 overflow-y-auto">
+                    {editForm.bodyText ? editForm.bodyText.split("\n\n").map((para, i) => (
+                      <p key={i} className="text-xs text-muted-foreground mb-2 last:mb-0">
+                        {tokenize(para).map((token, j) =>
+                          token.type === "url" ? (
+                            <a key={j} href={token.value} target="_blank" rel="noopener noreferrer" className="text-primary underline break-all">{token.value}</a>
+                          ) : (
+                            <span key={j}>{token.value}</span>
+                          )
+                        )}
+                      </p>
+                    )) : <p className="text-xs text-muted-foreground italic">No body text</p>}
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </DialogContent>

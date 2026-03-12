@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { ArrowLeft, BookOpen, Briefcase, Users } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import type { Resource } from "@shared/schema";
+import { tokenize } from "@/lib/linkify";
 
 const audienceLabel: Record<string, string> = {
   employer: "Employers",
@@ -18,6 +19,30 @@ const tierColors: Record<string, string> = {
   basic: "bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-900/30 dark:text-blue-300 dark:border-blue-800",
   premium: "bg-purple-100 text-purple-700 border-purple-200 dark:bg-purple-900/30 dark:text-purple-300 dark:border-purple-800",
 };
+
+function LinkifiedText({ text }: { text: string }) {
+  const tokens = tokenize(text);
+  return (
+    <>
+      {tokens.map((token, i) =>
+        token.type === "url" ? (
+          <a
+            key={i}
+            href={token.value}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-primary underline hover:text-primary/80 break-all"
+            data-testid={`link-url-${i}`}
+          >
+            {token.value}
+          </a>
+        ) : (
+          <span key={i}>{token.value}</span>
+        )
+      )}
+    </>
+  );
+}
 
 export default function ResourceDetail() {
   const { id } = useParams<{ id: string }>();
@@ -61,6 +86,9 @@ export default function ResourceDetail() {
     );
   }
 
+  const introContent = resource.introText || "";
+  const bodyContent = resource.bodyText || resource.content || "";
+
   return (
     <div className="min-h-screen flex flex-col font-sans">
       <Navbar />
@@ -98,13 +126,25 @@ export default function ResourceDetail() {
                 {resource.title}
               </h1>
 
-              <div className="space-y-4" data-testid="text-resource-content">
-                {resource.content.split("\n\n").map((para, i) => (
-                  <p key={i} className="text-muted-foreground leading-relaxed">
-                    {para}
-                  </p>
-                ))}
-              </div>
+              {introContent && (
+                <div className="space-y-4 mb-8" data-testid="text-resource-intro">
+                  {introContent.split("\n\n").map((para, i) => (
+                    <p key={i} className="text-muted-foreground leading-relaxed text-lg">
+                      {para}
+                    </p>
+                  ))}
+                </div>
+              )}
+
+              {bodyContent && (
+                <div className="space-y-4" data-testid="text-resource-body">
+                  {bodyContent.split("\n\n").map((para, i) => (
+                    <p key={i} className="text-muted-foreground leading-relaxed">
+                      <LinkifiedText text={para} />
+                    </p>
+                  ))}
+                </div>
+              )}
 
               <div className="mt-10 pt-8 border-t border-border">
                 <Button variant="outline" onClick={() => setLocation("/resources")} data-testid="button-back-resources-bottom">

@@ -1,0 +1,1 @@
+export const INTRO_TRUNCATE_LENGTH = 280;
