@@ -1,4 +1,4 @@
-CREATE TABLE "applications" (
+CREATE TABLE IF NOT EXISTS "applications" (
 	"id" serial PRIMARY KEY NOT NULL,
 	"job_id" integer NOT NULL,
 	"job_seeker_id" integer NOT NULL,
@@ -7,7 +7,7 @@ CREATE TABLE "applications" (
 	"created_at" timestamp DEFAULT now()
 );
 --> statement-breakpoint
-CREATE TABLE "blog_posts" (
+CREATE TABLE IF NOT EXISTS "blog_posts" (
 	"id" serial PRIMARY KEY NOT NULL,
 	"author_id" integer NOT NULL,
 	"title" text NOT NULL,
@@ -17,14 +17,14 @@ CREATE TABLE "blog_posts" (
 	"published_at" timestamp DEFAULT now()
 );
 --> statement-breakpoint
-CREATE TABLE "categories" (
+CREATE TABLE IF NOT EXISTS "categories" (
 	"id" serial PRIMARY KEY NOT NULL,
 	"name" text NOT NULL,
 	"type" text NOT NULL,
 	"created_at" timestamp DEFAULT now()
 );
 --> statement-breakpoint
-CREATE TABLE "coupons" (
+CREATE TABLE IF NOT EXISTS "coupons" (
 	"id" serial PRIMARY KEY NOT NULL,
 	"code" text NOT NULL,
 	"discount_type" text NOT NULL,
@@ -38,7 +38,7 @@ CREATE TABLE "coupons" (
 	CONSTRAINT "coupons_code_unique" UNIQUE("code")
 );
 --> statement-breakpoint
-CREATE TABLE "import_artifacts" (
+CREATE TABLE IF NOT EXISTS "import_artifacts" (
 	"id" serial PRIMARY KEY NOT NULL,
 	"run_id" integer NOT NULL,
 	"filename" text NOT NULL,
@@ -46,7 +46,7 @@ CREATE TABLE "import_artifacts" (
 	"data" text NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "import_runs" (
+CREATE TABLE IF NOT EXISTS "import_runs" (
 	"id" serial PRIMARY KEY NOT NULL,
 	"employer_id" integer NOT NULL,
 	"uploaded_by" integer NOT NULL,
@@ -59,7 +59,7 @@ CREATE TABLE "import_runs" (
 	"status" text DEFAULT 'Processing' NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "jobs" (
+CREATE TABLE IF NOT EXISTS "jobs" (
 	"id" serial PRIMARY KEY NOT NULL,
 	"employer_id" integer NOT NULL,
 	"external_job_key" text,
@@ -84,7 +84,7 @@ CREATE TABLE "jobs" (
 	"created_at" timestamp DEFAULT now()
 );
 --> statement-breakpoint
-CREATE TABLE "pages" (
+CREATE TABLE IF NOT EXISTS "pages" (
 	"id" serial PRIMARY KEY NOT NULL,
 	"title" text NOT NULL,
 	"slug" text NOT NULL,
@@ -97,7 +97,7 @@ CREATE TABLE "pages" (
 	CONSTRAINT "pages_slug_unique" UNIQUE("slug")
 );
 --> statement-breakpoint
-CREATE TABLE "registry_events" (
+CREATE TABLE IF NOT EXISTS "registry_events" (
 	"id" serial PRIMARY KEY NOT NULL,
 	"environment" text NOT NULL,
 	"registry_name" text NOT NULL,
@@ -112,7 +112,7 @@ CREATE TABLE "registry_events" (
 	"created_at" timestamp DEFAULT now()
 );
 --> statement-breakpoint
-CREATE TABLE "registry_snapshots" (
+CREATE TABLE IF NOT EXISTS "registry_snapshots" (
 	"id" serial PRIMARY KEY NOT NULL,
 	"environment" text NOT NULL,
 	"registry_name" text NOT NULL,
@@ -126,7 +126,7 @@ CREATE TABLE "registry_snapshots" (
 	"created_at" timestamp DEFAULT now()
 );
 --> statement-breakpoint
-CREATE TABLE "resources" (
+CREATE TABLE IF NOT EXISTS "resources" (
 	"id" serial PRIMARY KEY NOT NULL,
 	"title" text NOT NULL,
 	"content" text DEFAULT '' NOT NULL,
@@ -140,7 +140,7 @@ CREATE TABLE "resources" (
 	"updated_at" timestamp DEFAULT now()
 );
 --> statement-breakpoint
-CREATE TABLE "resumes" (
+CREATE TABLE IF NOT EXISTS "resumes" (
 	"id" serial PRIMARY KEY NOT NULL,
 	"job_seeker_id" integer NOT NULL,
 	"content" text NOT NULL,
@@ -148,19 +148,19 @@ CREATE TABLE "resumes" (
 	"created_at" timestamp DEFAULT now()
 );
 --> statement-breakpoint
-CREATE TABLE "session" (
+CREATE TABLE IF NOT EXISTS "session" (
 	"sid" text PRIMARY KEY NOT NULL,
 	"sess" jsonb NOT NULL,
 	"expire" timestamp NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "site_settings" (
+CREATE TABLE IF NOT EXISTS "site_settings" (
 	"id" serial PRIMARY KEY NOT NULL,
 	"settings" jsonb NOT NULL,
 	"updated_at" timestamp DEFAULT now()
 );
 --> statement-breakpoint
-CREATE TABLE "social_posts" (
+CREATE TABLE IF NOT EXISTS "social_posts" (
 	"id" serial PRIMARY KEY NOT NULL,
 	"entity_type" text NOT NULL,
 	"entity_id" integer NOT NULL,
@@ -183,7 +183,7 @@ CREATE TABLE "social_posts" (
 	"updated_at" timestamp DEFAULT now()
 );
 --> statement-breakpoint
-CREATE TABLE "users" (
+CREATE TABLE IF NOT EXISTS "users" (
 	"id" serial PRIMARY KEY NOT NULL,
 	"email" text NOT NULL,
 	"password" text NOT NULL,
@@ -210,4 +210,4 @@ CREATE TABLE "users" (
 	CONSTRAINT "users_email_unique" UNIQUE("email")
 );
 --> statement-breakpoint
-CREATE UNIQUE INDEX "jobs_employer_external_key_idx" ON "jobs" USING btree ("employer_id","external_job_key") WHERE "jobs"."external_job_key" IS NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS "jobs_employer_external_key_idx" ON "jobs" USING btree ("employer_id","external_job_key") WHERE "jobs"."external_job_key" IS NOT NULL;
