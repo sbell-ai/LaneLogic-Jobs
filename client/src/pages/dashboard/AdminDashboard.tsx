@@ -22,7 +22,7 @@ import {
   Upload, CheckCircle2, Copy, Eye, EyeOff, UserPlus,
   AlertCircle, Download, Pencil, X, Tag, Ticket, ExternalLink,
   FilePlus2, Globe, Search as SearchIcon, Share2, PlusCircle, ArrowLeft,
-  FileEdit, LayoutList
+  FileEdit, LayoutList, UserCircle
 } from "lucide-react";
 import { ImageUpload } from "@/components/ui/image-upload";
 import { RichTextEditor } from "@/components/ui/rich-text-editor";
@@ -2873,6 +2873,59 @@ function PagesResourcesTab() {
   );
 }
 
+// ─── USERS LANDING TAB ────────────────────────────────────────────────────────
+
+function UsersLandingTab() {
+  const [, navigate] = useLocation();
+
+  const sections = [
+    {
+      title: "All Users",
+      description: "View and manage all registered users across every role.",
+      icon: Users,
+      path: "/dashboard/admin/users/all",
+      color: "text-blue-600 bg-blue-50 dark:bg-blue-900/20",
+    },
+    {
+      title: "Job Seeker Users",
+      description: "Browse and manage users registered as job seekers.",
+      icon: UserCircle,
+      path: "/dashboard/admin/users/job-seekers",
+      color: "text-green-600 bg-green-50 dark:bg-green-900/20",
+    },
+    {
+      title: "Employer Users",
+      description: "Browse and manage users registered as employers.",
+      icon: Briefcase,
+      path: "/dashboard/admin/users/employers",
+      color: "text-purple-600 bg-purple-50 dark:bg-purple-900/20",
+    },
+  ];
+
+  return (
+    <div>
+      <h2 className="text-2xl font-bold font-display mb-2" data-testid="heading-users">Users</h2>
+      <p className="text-muted-foreground mb-6">Manage your platform's users by role.</p>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        {sections.map((s) => (
+          <button
+            key={s.path}
+            onClick={() => navigate(s.path)}
+            className="bg-white dark:bg-slate-900 rounded-2xl border border-border p-6 text-left hover:border-primary/40 hover:shadow-md transition-all group"
+            data-testid={`card-${s.title.toLowerCase().replace(/\s+/g, "-")}`}
+          >
+            <div className={`w-12 h-12 rounded-xl flex items-center justify-center mb-4 ${s.color}`}>
+              <s.icon size={24} />
+            </div>
+            <h3 className="font-semibold text-lg mb-2 group-hover:text-primary transition-colors">{s.title}</h3>
+            <p className="text-sm text-muted-foreground">{s.description}</p>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // ─── ROOT EXPORT ──────────────────────────────────────────────────────────────
 
 export default function AdminDashboard({ section, subsection }: { section?: string; subsection?: string }) {
@@ -2880,11 +2933,12 @@ export default function AdminDashboard({ section, subsection }: { section?: stri
   if (!user) return null;
 
   const content = () => {
+    if (section === "users" && subsection === "all") return <UsersTab />;
     if (section === "users" && subsection === "job-seekers") return <FilteredUsersTab role="job_seeker" />;
     if (section === "users" && subsection === "employers") return <FilteredUsersTab role="employer" />;
 
     switch (section) {
-      case "users": return <UsersTab />;
+      case "users": return <UsersLandingTab />;
       case "jobs": return <AllJobsTab />;
       case "post-job": return <PostJobTab userId={user.id} />;
       case "upload-jobs": return <UploadJobsTab userId={user.id} />;
@@ -2899,7 +2953,7 @@ export default function AdminDashboard({ section, subsection }: { section?: stri
       case "site-pages": return <SitePagesTab />;
       case "custom-pages": return <CustomPagesTab />;
       case "social": return <SocialPublishing />;
-      default: return <UsersTab />;
+      default: return <UsersLandingTab />;
     }
   };
 
