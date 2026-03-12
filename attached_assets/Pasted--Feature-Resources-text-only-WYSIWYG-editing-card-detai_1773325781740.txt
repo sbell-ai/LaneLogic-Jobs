@@ -1,0 +1,219 @@
+## Feature: Resources — text-only “WYSIWYG” editing + card → detail pages
+
+### Objective
+
+1) Admins can edit **Resource card intro text** and **Resource full body text** using a friendly editor experience (text-only, no HTML stored).  
+
+2) Public “Resources” cards act as intros and **link to a full Resource detail page**.  
+
+3) Resource detail pages use the canonical path **`/resources/:id`**.  
+
+4) Links inside `bodyText` render clickable and open in a **new tab** with safe attributes.  
+
+5) **Publish gating** applies: `GET /api/resources/:id` returns **404 unless `isPublished=true`** (and list endpoint only returns published). This is consistent with the existing publish gating approach and the Resources detail page decision.
+
+---
+
+## Scope (explicit)
+
+### In scope
+
+- Add/standardize resource fields to support intro + body
+- Admin create/edit UI for resources with text-only inputs
+- Public resources index page renders cards with intros and links to detail pages
+- Public resource detail page renders body text and linkifies URLs
+- Publish/unpublish gating rules
+
+### Out of scope (do not implement)
+
+- Rich text formatting (bold, headings, embedded images)
+- Uploading images inside the editor
+- Slug-based URLs for resources (use `/resources/:id`)
+- Search indexing changes (unless already required for the list endpoint)
+
+---
+
+## Data model requirements
+
+### Resource fields
+
+Ensure the `resources` table/model includes:
+
+- `id` (int/uuid)
+- `title` (string, required)
+- `introText` (text, required)
+- `bodyText` (text, required to publish)
+- `isPublished` (boolean, required; default false)
+- `publishedAt` (datetime nullable; metadata only)
+- `createdAt` (datetime)
+- `updatedAt` (datetime)
+
+### Validation rules
+
+- Create/update draft:
+    - `title` required
+    - `introText` required
+    - `bodyText` may be empty if `isPublished=false`
+- Publish:
+    - `title`, `introText`, and `bodyText` must be non-empty
+- Storage:
+    - **Store as plain text only** (no HTML). If HTML is submitted, strip tags or reject (prefer reject for clarity).
+
+---
+
+## API requirements
+
+### Public endpoints
+
+1) `GET /api/resources`
+
+- Returns **only published** resources (`isPublished=true`)
+- Response includes at minimum: `id`, `title`, `introText`
+- Sort order: newest first (`publishedAt desc` then `id desc`) or `createdAt desc` if `publishedAt` missing.
+
+2) `GET /api/resources/:id`
+
+- If resource not found: 404
+- If `isPublished=false`: **404** (do not leak drafts)
+- If published: return `id`, `title`, `introText`, `bodyText`, optionally `publishedAt`
+
+### Admin endpoints (examples; match existing conventions)
+
+- `POST /api/admin/resources`
+- `PUT /api/admin/resources/:id`
+- `POST /api/admin/resources/:id/publish`
+- `POST /api/admin/resources/:id/unpublish`
+
+Admin endpoints can return drafts. Public endpoints must not.
+
+---
+
+## Frontend requirements (public)
+
+### Resources index page (`/resources`)
+
+- Render a grid/list of “Resource cards”
+- Each card shows:
+    - Title
+    - Intro preview text (truncated)
+    - A “Read more” CTA
+- Entire card clickable → navigates to `/resources/:id`
+
+#### Truncation rules for intro cards
+
+- Do **not** linkify `introText` on cards.
+- Render `introText` as plain text, truncated safely:
+    - Recommended: 220–320 characters
+    - Preserve readability: trim trailing whitespace
+    - Optionally append `…`
+
+### Resource detail page (`/resources/:id`)
+
+- Fetch `GET /api/resources/:id`
+- Render:
+    - Title
+    - Intro text (optional but recommended at top)
+    - Body text (full)
+- Convert text to paragraphs/line breaks.
+- **Linkify URLs in `bodyText`**:
+    - Detect `http://` and `https://` only
+    - Render as `<a href="...">...</a>`
+    - Set `target="_blank"` and `rel="noopener noreferrer"` (required)
+    - Do not allow `javascript:` links
+- If API returns 404, show the normal Not Found page.
+
+---
+
+## Frontend requirements (admin)
+
+### Admin resource editor UI
+
+- Fields:
+    - Title (single line)
+    - Card Intro (multiline text area)
+    - Full Body (multiline text area)
+    - Publish toggle/status (Draft/Published)
+- Provide a “Preview” panel (recommended):
+    - Shows exactly how the intro will appear on a card
+    - Shows exactly how the body will appear on the detail page (including linkification)
+- Editor experience (“text-only WYSIWYG”)
+    - Use a high-quality textarea component:
+        - autosize
+        - character counts
+        - basic whitespace normalization on save
+    - No formatting toolbar (since text-only)
+
+---
+
+## Linkification implementation (required)
+
+### Requirements
+
+- Only linkify plain-text URLs that start with `http://` or `https://`
+- Open in new tab:
+    - `target="_blank"`
+    - `rel="noopener noreferrer"`
+- Escape/render everything else as text (no HTML injection)
+
+### Recommended approach (React)
+
+- Use a library like `linkify-it` or `linkifyjs` to detect URLs.
+- Build a helper that:
+    
+    1) Splits text into tokens: plain text segments and URL segments
+    
+    2) Renders plain segments as text
+    
+    3) Renders URL segments as `<a>` with the required attributes
+    
+- Apply the helper to **bodyText only** on the detail page (and admin preview).
+
+---
+
+## Publish gating requirements (must match existing platform rules)
+
+- Public visibility is controlled by `isPublished=true` only.
+- `publishedAt` is metadata and must not be used as the gate.
+- Unpublished resources must behave like they do not exist on public endpoints (404).
+
+---
+
+## Testing checklist (Definition of Done)
+
+### API
+
+- `GET /api/resources` returns only published resources
+- `GET /api/resources/:id` returns 404 for:
+    - nonexistent id
+    - `isPublished=false`
+- Publishing fails with a clear error if `bodyText` is empty
+
+### UI
+
+- Resources index renders cards with title + intro preview
+- Clicking a card opens `/resources/:id`
+- Draft resources do not appear in public list
+- Body text URLs are clickable on detail page and open in a new tab
+- Linkification does not create unsafe links (no `javascript:`)
+
+---
+
+## Deliverables
+
+1) DB migration (if needed) adding `introText` and `bodyText` and `isPublished` defaults
+
+2) Updated API routes for list + detail + admin CRUD/publish
+
+3) Public `/resources` index page + card component linking to `/resources/:id`
+
+4) Public resource detail page with newline rendering + safe linkification
+
+5) Admin editor page with intro/body textareas and preview
+
+---
+
+## Notes / guardrails
+
+- Do not store HTML in the database for intro/body content.
+- Escape all text on render; linkify should only convert approved URL patterns to anchors.
+- Keep cards simple: intro preview is plain text and truncated; full linkification happens on the detail page body only.
