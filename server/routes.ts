@@ -678,7 +678,8 @@ export async function registerRoutes(
       const resource = await storage.updateResource(Number(req.params.id), req.body);
       res.json(resource);
     } catch (err) {
-      res.status(400).json({ message: "Update failed" });
+      console.error("Resource update error:", err);
+      res.status(400).json({ message: "Update failed", error: (err as Error).message });
     }
   });
 
