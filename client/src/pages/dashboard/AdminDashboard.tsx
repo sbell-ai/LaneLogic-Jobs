@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { DashboardLayout } from "./DashboardLayout";
 import { useAuth } from "@/hooks/use-auth";
+import { Link, useLocation } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
@@ -20,7 +21,8 @@ import {
   Users, Briefcase, BookOpen, FileText, Plus, Trash2,
   Upload, CheckCircle2, Copy, Eye, EyeOff, UserPlus,
   AlertCircle, Download, Pencil, X, Tag, Ticket, ExternalLink,
-  FilePlus2, Globe, Search as SearchIcon, Share2
+  FilePlus2, Globe, Search as SearchIcon, Share2, PlusCircle, ArrowLeft,
+  FileEdit, LayoutList
 } from "lucide-react";
 import { ImageUpload } from "@/components/ui/image-upload";
 import { RichTextEditor } from "@/components/ui/rich-text-editor";
@@ -345,6 +347,19 @@ function AllJobsTab() {
       <div className="flex flex-wrap justify-between items-center gap-3 mb-6">
         <h2 className="text-2xl font-bold font-display">All Jobs ({jobs?.length || 0})</h2>
         <div className="flex gap-2 flex-wrap">
+          <Link href="/dashboard/admin/post-job">
+            <Button size="sm" data-testid="button-go-post-job">
+              <PlusCircle size={14} className="mr-1.5" /> Post a Job
+            </Button>
+          </Link>
+          <Link href="/dashboard/admin/upload-jobs">
+            <Button size="sm" variant="outline" data-testid="button-go-upload-jobs">
+              <Upload size={14} className="mr-1.5" /> Upload Jobs (CSV)
+            </Button>
+          </Link>
+        </div>
+      </div>
+      <div className="flex gap-2 flex-wrap mb-6">
           {jobCats.length > 0 && (
             <Select value={catFilter} onValueChange={setCatFilter}>
               <SelectTrigger className="w-36"><SelectValue placeholder="Category" /></SelectTrigger>
@@ -364,7 +379,6 @@ function AllJobsTab() {
             </Select>
           )}
           <Input placeholder="Search jobs..." className="w-56" value={search} onChange={e => setSearch(e.target.value)} data-testid="input-jobs-search" />
-        </div>
       </div>
       {selectedIds.size > 0 && (
         <div className="mb-4 flex items-center gap-3 bg-primary/5 border border-primary/20 rounded-xl px-5 py-3" data-testid="bulk-action-bar">
@@ -2613,13 +2627,262 @@ function SitePagesTab() {
   );
 }
 
+// ─── FILTERED USERS TAB ──────────────────────────────────────────────────────
+
+function FilteredUsersTab({ role }: { role: "job_seeker" | "employer" }) {
+  const { data: users, isLoading } = useQuery<User[]>({ queryKey: ["/api/users"] });
+  const { data: jobs } = useQuery<Job[]>({ queryKey: ["/api/jobs"] });
+  const { data: applications } = useQuery<import("@shared/schema").Application[]>({ queryKey: ["/api/applications"] });
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  const [search, setSearch] = useState("");
+  const [editUser, setEditUser] = useState<User | null>(null);
+  const [viewUser, setViewUser] = useState<User | null>(null);
+  const [showInvite, setShowInvite] = useState(false);
+  const [editForm, setEditForm] = useState({ firstName: "", lastName: "", email: "", companyName: "", role: "", membershipTier: "" });
+
+  const isEmployer = role === "employer";
+  const label = isEmployer ? "Employer" : "Job Seeker";
+  const labelPlural = isEmployer ? "Employer Users" : "Job Seeker Users";
+
+  const updateMutation = useMutation({
+    mutationFn: ({ id, ...updates }: { id: number; [key: string]: any }) =>
+      apiRequest("PUT", `/api/users/${id}`, updates),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/users"] });
+      setEditUser(null);
+      toast({ title: "User updated" });
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: number) => apiRequest("DELETE", `/api/users/${id}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/users"] });
+      toast({ title: "User deleted" });
+    },
+  });
+
+  const openEdit = (u: User) => {
+    setEditForm({
+      firstName: u.firstName || "", lastName: u.lastName || "",
+      email: u.email, companyName: u.companyName || "",
+      role: u.role, membershipTier: u.membershipTier,
+    });
+    setEditUser(u);
+  };
+
+  const filtered = (users || []).filter(u => {
+    if (u.role !== role) return false;
+    if (!search) return true;
+    return `${u.email} ${u.firstName} ${u.lastName} ${u.companyName}`.toLowerCase().includes(search.toLowerCase());
+  });
+
+  if (isLoading) return <div className="animate-pulse h-40 bg-slate-100 dark:bg-slate-800 rounded-xl" />;
+
+  if (showInvite) {
+    return (
+      <div>
+        <Button variant="ghost" size="sm" className="mb-4" onClick={() => setShowInvite(false)} data-testid="button-back-to-users">
+          <ArrowLeft size={14} className="mr-1.5" /> Back to {labelPlural}
+        </Button>
+        <InviteUserTab targetRole={role} />
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <div className="flex justify-between items-center mb-6">
+        <h2 className="text-2xl font-bold font-display" data-testid={`heading-${role}-users`}>{labelPlural} ({filtered.length})</h2>
+        <div className="flex gap-3">
+          <Button size="sm" onClick={() => setShowInvite(true)} data-testid={`button-invite-${role}`}>
+            <UserPlus size={14} className="mr-1.5" /> Invite {label}
+          </Button>
+          <Input placeholder={`Search ${labelPlural.toLowerCase()}...`} className="w-64" value={search} onChange={e => setSearch(e.target.value)} data-testid={`input-${role}-search`} />
+        </div>
+      </div>
+      <div className="bg-white dark:bg-slate-900 rounded-2xl border border-border overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm min-w-[800px]">
+            <thead className="bg-slate-50 dark:bg-slate-800 border-b border-border">
+              <tr>
+                <th className="text-left px-5 py-3 font-semibold text-muted-foreground">User</th>
+                <th className="text-left px-5 py-3 font-semibold text-muted-foreground">Joined</th>
+                <th className="text-left px-5 py-3 font-semibold text-muted-foreground">Tier</th>
+                <th className="text-right px-5 py-3 font-semibold text-muted-foreground">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-border">
+              {filtered.map((user) => (
+                <tr key={user.id} data-testid={`row-${role}-user-${user.id}`} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
+                  <td className="px-5 py-4">
+                    <p className="font-medium">{user.firstName} {user.lastName}{user.companyName && ` · ${user.companyName}`}</p>
+                    <p className="text-xs text-muted-foreground">{user.email}</p>
+                  </td>
+                  <td className="px-5 py-4 text-xs text-muted-foreground">
+                    {user.createdAt ? formatDistanceToNow(new Date(user.createdAt), { addSuffix: true }) : "—"}
+                  </td>
+                  <td className="px-5 py-4">
+                    <Badge variant="outline" className="capitalize text-xs">{user.membershipTier}</Badge>
+                  </td>
+                  <td className="px-5 py-4 text-right">
+                    <div className="flex gap-1 justify-end">
+                      <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setViewUser(user)} data-testid={`button-view-${role}-user-${user.id}`}><Eye size={15} /></Button>
+                      <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEdit(user)} data-testid={`button-edit-${role}-user-${user.id}`}><Pencil size={15} /></Button>
+                      <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => { if (confirm("Delete this user?")) deleteMutation.mutate(user.id); }} data-testid={`button-delete-${role}-user-${user.id}`}><Trash2 size={15} /></Button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        {filtered.length === 0 && <div className="py-12 text-center text-muted-foreground">No {labelPlural.toLowerCase()} found.</div>}
+      </div>
+
+      <Dialog open={!!editUser} onOpenChange={() => setEditUser(null)}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Edit User</DialogTitle></DialogHeader>
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-3">
+              <div><Label>First Name</Label><Input value={editForm.firstName} onChange={e => setEditForm(f => ({ ...f, firstName: e.target.value }))} /></div>
+              <div><Label>Last Name</Label><Input value={editForm.lastName} onChange={e => setEditForm(f => ({ ...f, lastName: e.target.value }))} /></div>
+            </div>
+            <div><Label>Email</Label><Input value={editForm.email} onChange={e => setEditForm(f => ({ ...f, email: e.target.value }))} /></div>
+            {isEmployer && <div><Label>Company Name</Label><Input value={editForm.companyName} onChange={e => setEditForm(f => ({ ...f, companyName: e.target.value }))} /></div>}
+            <div>
+              <Label>Membership Tier</Label>
+              <Select value={editForm.membershipTier} onValueChange={v => setEditForm(f => ({ ...f, membershipTier: v }))}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="free">Free</SelectItem>
+                  <SelectItem value="basic">Basic</SelectItem>
+                  <SelectItem value="premium">Premium</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <Button className="w-full" disabled={updateMutation.isPending} onClick={() => editUser && updateMutation.mutate({ id: editUser.id, ...editForm })}>
+              {updateMutation.isPending ? "Saving..." : "Save Changes"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!viewUser} onOpenChange={() => setViewUser(null)}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader><DialogTitle>User Details</DialogTitle></DialogHeader>
+          {viewUser && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4 text-sm">
+                <div><p className="text-muted-foreground">Name</p><p className="font-medium">{viewUser.firstName} {viewUser.lastName}</p></div>
+                <div><p className="text-muted-foreground">Email</p><p className="font-medium">{viewUser.email}</p></div>
+                <div><p className="text-muted-foreground">Tier</p><Badge variant="outline" className="capitalize">{viewUser.membershipTier}</Badge></div>
+                {viewUser.companyName && <div><p className="text-muted-foreground">Company</p><p className="font-medium">{viewUser.companyName}</p></div>}
+                <div className="col-span-2"><p className="text-muted-foreground">Joined</p><p className="font-medium">{viewUser.createdAt ? format(new Date(viewUser.createdAt), "PPP") : "—"}</p></div>
+              </div>
+              {viewUser.role === "employer" && (
+                <div>
+                  <h4 className="font-semibold mb-2">Job Listings ({(jobs || []).filter(j => j.employerId === viewUser.id).length})</h4>
+                  <div className="space-y-2 max-h-40 overflow-y-auto">
+                    {(jobs || []).filter(j => j.employerId === viewUser.id).map(j => (
+                      <div key={j.id} className="text-sm bg-slate-50 dark:bg-slate-800 rounded-lg p-3">
+                        <p className="font-medium">{j.title}</p>
+                        <p className="text-muted-foreground text-xs">{[j.locationCity, j.locationState].filter(Boolean).join(", ")}</p>
+                      </div>
+                    ))}
+                    {(jobs || []).filter(j => j.employerId === viewUser.id).length === 0 && <p className="text-sm text-muted-foreground">No jobs posted.</p>}
+                  </div>
+                </div>
+              )}
+              {viewUser.role === "job_seeker" && (
+                <div>
+                  <h4 className="font-semibold mb-2">Applications ({(applications || []).filter(a => a.jobSeekerId === viewUser.id).length})</h4>
+                  <div className="space-y-2 max-h-40 overflow-y-auto">
+                    {(applications || []).filter(a => a.jobSeekerId === viewUser.id).map(a => {
+                      const job = (jobs || []).find(j => j.id === a.jobId);
+                      return (
+                        <div key={a.id} className="text-sm bg-slate-50 dark:bg-slate-800 rounded-lg p-3 flex justify-between">
+                          <p className="font-medium">{job?.title || `Job #${a.jobId}`}</p>
+                          <Badge variant="outline" className="capitalize text-xs">{a.status}</Badge>
+                        </div>
+                      );
+                    })}
+                    {(applications || []).filter(a => a.jobSeekerId === viewUser.id).length === 0 && <p className="text-sm text-muted-foreground">No applications.</p>}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
+
+// ─── PAGES & RESOURCES LANDING ───────────────────────────────────────────────
+
+function PagesResourcesTab() {
+  const [, navigate] = useLocation();
+
+  const sections = [
+    {
+      title: "Site Pages",
+      description: "Manage the content of built-in pages like Home, About, Pricing, and Contact.",
+      icon: FileEdit,
+      path: "/dashboard/admin/site-pages",
+      color: "text-blue-600 bg-blue-50 dark:bg-blue-900/20",
+    },
+    {
+      title: "Custom Pages",
+      description: "Create and manage custom CMS pages with unique URLs and rich content.",
+      icon: FilePlus2,
+      path: "/dashboard/admin/custom-pages",
+      color: "text-purple-600 bg-purple-50 dark:bg-purple-900/20",
+    },
+    {
+      title: "Resources",
+      description: "Manage resource articles, guides, and downloadable content for users.",
+      icon: BookOpen,
+      path: "/dashboard/admin/resources",
+      color: "text-green-600 bg-green-50 dark:bg-green-900/20",
+    },
+  ];
+
+  return (
+    <div>
+      <h2 className="text-2xl font-bold font-display mb-2" data-testid="heading-pages-resources">Pages & Resources</h2>
+      <p className="text-muted-foreground mb-6">Manage your site's pages and resource content.</p>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        {sections.map((s) => (
+          <button
+            key={s.path}
+            onClick={() => navigate(s.path)}
+            className="bg-white dark:bg-slate-900 rounded-2xl border border-border p-6 text-left hover:border-primary/40 hover:shadow-md transition-all group"
+            data-testid={`card-${s.title.toLowerCase().replace(/\s+/g, "-")}`}
+          >
+            <div className={`w-12 h-12 rounded-xl flex items-center justify-center mb-4 ${s.color}`}>
+              <s.icon size={24} />
+            </div>
+            <h3 className="font-semibold text-lg mb-2 group-hover:text-primary transition-colors">{s.title}</h3>
+            <p className="text-sm text-muted-foreground">{s.description}</p>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // ─── ROOT EXPORT ──────────────────────────────────────────────────────────────
 
-export default function AdminDashboard({ section }: { section?: string }) {
+export default function AdminDashboard({ section, subsection }: { section?: string; subsection?: string }) {
   const { user } = useAuth();
   if (!user) return null;
 
   const content = () => {
+    if (section === "users" && subsection === "job-seekers") return <FilteredUsersTab role="job_seeker" />;
+    if (section === "users" && subsection === "employers") return <FilteredUsersTab role="employer" />;
+
     switch (section) {
       case "users": return <UsersTab />;
       case "jobs": return <AllJobsTab />;
@@ -2629,8 +2892,10 @@ export default function AdminDashboard({ section }: { section?: string }) {
       case "invite-employer": return <InviteUserTab targetRole="employer" />;
       case "blog": return <BlogTab />;
       case "resources": return <ResourcesTab />;
-      case "categories": return <CategoriesTab />;
+      case "categories":
+      case "database": return <CategoriesTab />;
       case "coupons": return <CouponsTab />;
+      case "pages-resources": return <PagesResourcesTab />;
       case "site-pages": return <SitePagesTab />;
       case "custom-pages": return <CustomPagesTab />;
       case "social": return <SocialPublishing />;

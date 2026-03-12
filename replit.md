@@ -24,7 +24,7 @@ The platform utilizes React with TypeScript, Wouter for routing, and a combinati
 ### Feature Specifications
 - **Job Listings**: Comprehensive job posts with internal/external apply options. Job descriptions support Markdown rendering via `react-markdown` + `remark-gfm` (component: `client/src/components/MarkdownDescription.tsx`); raw HTML is disallowed; plain-text descriptions get a pretty-print fallback that converts common labels to headings.
 - **Membership Gating**: Access to resources is restricted based on membership tiers.
-- **User Dashboards**: Role-specific dashboards for job seekers (applications, resume, membership), employers (post jobs, manage jobs, applicants, CSV upload), and administrators (users, jobs, resources, blog, custom pages management).
+- **User Dashboards**: Role-specific dashboards for job seekers (applications, resume, membership), employers (post jobs, manage jobs, applicants, CSV upload), and administrators. Admin sidebar has 8 top-level items: Users (with collapsible sub-items for Job Seeker Users and Employer Users), All Jobs (with Post a Job and Upload Jobs CSV buttons on page), Pages & Resources (landing page linking to Site Pages, Custom Pages, Resources), Blog Posts, Database (categories/industries), Coupons, Design Settings, Social Publishing. Routes: `/dashboard/admin/:section` and `/dashboard/admin/:section/:subsection`.
 - **Stripe Integration**: Handles subscription-based memberships and one-time add-on purchases (Resume Access, Featured Employer). The system uses `stripe-replit-sync` for webhook management and database synchronization.
 - **Resume Management**: Job seekers can create text-based resumes.
 - **Blog and Resources**: Content management for blog posts and a member-gated resource library.

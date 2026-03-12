@@ -1,11 +1,26 @@
+import { useState } from "react";
 import { SidebarProvider, SidebarTrigger, Sidebar, SidebarContent, SidebarGroup, SidebarGroupLabel, SidebarGroupContent, SidebarMenu, SidebarMenuItem, SidebarMenuButton } from "@/components/ui/sidebar";
 import { useAuth } from "@/hooks/use-auth";
 import { Link, useLocation } from "wouter";
-import { Briefcase, LayoutDashboard, FileText, LogOut, Users, BookOpen, Upload, CreditCard, UserPlus, PlusCircle, Palette, FileEdit, Tag, Ticket, UserCircle, FilePlus2, Share2 } from "lucide-react";
+import { Briefcase, LayoutDashboard, FileText, LogOut, Users, BookOpen, Upload, CreditCard, UserPlus, PlusCircle, Palette, FileEdit, Tag, Ticket, UserCircle, FilePlus2, Share2, ChevronDown, ChevronRight, Database } from "lucide-react";
 import { Button } from "@/components/ui/button";
+
+interface AdminLink {
+  title: string;
+  path: string;
+  icon: any;
+  children?: { title: string; path: string; icon: any }[];
+}
 
 function AppSidebar({ role }: { role: string }) {
   const [location] = useLocation();
+  const [expandedMenus, setExpandedMenus] = useState<Set<string>>(() => {
+    const initial = new Set<string>();
+    if (location.startsWith("/dashboard/admin/users")) {
+      initial.add("Users");
+    }
+    return initial;
+  });
 
   const seekerLinks = [
     { title: "Overview", path: "/dashboard", icon: LayoutDashboard },
@@ -24,24 +39,149 @@ function AppSidebar({ role }: { role: string }) {
     { title: "Membership", path: "/dashboard/membership", icon: CreditCard },
   ];
 
-  const adminLinks = [
-    { title: "All Users", path: "/dashboard/admin/users", icon: Users },
+  const adminLinks: AdminLink[] = [
+    {
+      title: "Users", path: "/dashboard/admin/users", icon: Users,
+      children: [
+        { title: "Job Seeker Users", path: "/dashboard/admin/users/job-seekers", icon: UserCircle },
+        { title: "Employer Users", path: "/dashboard/admin/users/employers", icon: Briefcase },
+      ],
+    },
     { title: "All Jobs", path: "/dashboard/admin/jobs", icon: Briefcase },
-    { title: "Post a Job", path: "/dashboard/admin/post-job", icon: PlusCircle },
-    { title: "Upload Jobs (CSV)", path: "/dashboard/admin/upload-jobs", icon: Upload },
-    { title: "Invite Job Seeker", path: "/dashboard/admin/invite-seeker", icon: UserPlus },
-    { title: "Invite Employer", path: "/dashboard/admin/invite-employer", icon: UserPlus },
+    { title: "Pages & Resources", path: "/dashboard/admin/pages-resources", icon: FileEdit },
     { title: "Blog Posts", path: "/dashboard/admin/blog", icon: FileText },
-    { title: "Resources", path: "/dashboard/admin/resources", icon: BookOpen },
-    { title: "Categories", path: "/dashboard/admin/categories", icon: Tag },
+    { title: "Database", path: "/dashboard/admin/database", icon: Database },
     { title: "Coupons", path: "/dashboard/admin/coupons", icon: Ticket },
     { title: "Design Settings", path: "/dashboard/admin/design", icon: Palette },
-    { title: "Site Pages", path: "/dashboard/admin/site-pages", icon: FileEdit },
-    { title: "Custom Pages", path: "/dashboard/admin/custom-pages", icon: FilePlus2 },
     { title: "Social Publishing", path: "/dashboard/admin/social", icon: Share2 },
   ];
 
-  const links = role === "admin" ? adminLinks : role === "employer" ? employerLinks : seekerLinks;
+  const toggleExpanded = (title: string) => {
+    setExpandedMenus(prev => {
+      const next = new Set(prev);
+      if (next.has(title)) next.delete(title); else next.add(title);
+      return next;
+    });
+  };
+
+  const isChildActive = (item: AdminLink) => {
+    if (item.children) {
+      return item.children.some(c => location === c.path) || location === item.path;
+    }
+    return location === item.path;
+  };
+
+  const pagesResourcesPaths = ["/dashboard/admin/pages-resources", "/dashboard/admin/site-pages", "/dashboard/admin/custom-pages", "/dashboard/admin/resources"];
+  const isActiveForItem = (item: AdminLink) => {
+    if (item.path === "/dashboard/admin/pages-resources") {
+      return pagesResourcesPaths.includes(location);
+    }
+    if (item.children) {
+      return isChildActive(item);
+    }
+    return location === item.path;
+  };
+
+  if (role === "admin") {
+    return (
+      <Sidebar className="border-r border-border bg-card">
+        <SidebarContent>
+          <div className="p-4 py-6 border-b border-border">
+            <Link href="/" className="flex items-center gap-2 font-display font-bold text-xl tracking-tight">
+              Transpo<span className="text-primary">Jobs</span>
+            </Link>
+          </div>
+          <SidebarGroup>
+            <SidebarGroupLabel className="text-xs uppercase tracking-wider text-muted-foreground font-semibold mt-4 mb-2 px-2">
+              Admin Panel
+            </SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu className="space-y-1 px-1">
+                {adminLinks.map((item) => {
+                  const active = isActiveForItem(item);
+                  const hasChildren = !!item.children;
+                  const isExpanded = expandedMenus.has(item.title);
+
+                  return (
+                    <SidebarMenuItem key={item.title}>
+                      <SidebarMenuButton asChild isActive={active}>
+                        {hasChildren ? (
+                          <div className="flex flex-col w-full">
+                            <div className="flex items-center w-full">
+                              <Link
+                                href={item.path}
+                                className={`flex items-center gap-3 px-3 py-2 rounded-lg font-medium transition-colors text-sm flex-1 ${
+                                  active
+                                    ? "bg-primary text-primary-foreground border border-primary"
+                                    : "bg-white text-gray-700 border border-gray-400 hover:bg-gray-50 hover:border-gray-500"
+                                }`}
+                                data-testid={`nav-${item.title.toLowerCase().replace(/\s+/g, "-")}`}
+                              >
+                                <item.icon size={18} />
+                                <span className="flex-1">{item.title}</span>
+                              </Link>
+                              <button
+                                onClick={(e) => { e.preventDefault(); toggleExpanded(item.title); }}
+                                className={`ml-1 p-1.5 rounded-md transition-colors ${
+                                  active
+                                    ? "text-primary-foreground hover:bg-primary/80"
+                                    : "text-gray-500 hover:bg-gray-100"
+                                }`}
+                                data-testid={`toggle-${item.title.toLowerCase().replace(/\s+/g, "-")}`}
+                              >
+                                {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                              </button>
+                            </div>
+                            {isExpanded && item.children && (
+                              <div className="ml-6 mt-1 space-y-1">
+                                {item.children.map((child) => {
+                                  const childActive = location === child.path;
+                                  return (
+                                    <Link
+                                      key={child.path}
+                                      href={child.path}
+                                      className={`flex items-center gap-2.5 px-3 py-1.5 rounded-md font-medium transition-colors text-xs ${
+                                        childActive
+                                          ? "bg-primary/10 text-primary border border-primary/30"
+                                          : "text-gray-600 hover:bg-gray-50 hover:text-gray-800 border border-transparent"
+                                      }`}
+                                      data-testid={`nav-${child.title.toLowerCase().replace(/\s+/g, "-")}`}
+                                    >
+                                      <child.icon size={14} />
+                                      <span>{child.title}</span>
+                                    </Link>
+                                  );
+                                })}
+                              </div>
+                            )}
+                          </div>
+                        ) : (
+                          <Link
+                            href={item.path}
+                            className={`flex items-center gap-3 px-3 py-2 rounded-lg font-medium transition-colors text-sm ${
+                              active
+                                ? "bg-primary text-primary-foreground border border-primary"
+                                : "bg-white text-gray-700 border border-gray-400 hover:bg-gray-50 hover:border-gray-500"
+                            }`}
+                            data-testid={`nav-${item.title.toLowerCase().replace(/\s+/g, "-")}`}
+                          >
+                            <item.icon size={18} />
+                            <span>{item.title}</span>
+                          </Link>
+                        )}
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  );
+                })}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        </SidebarContent>
+      </Sidebar>
+    );
+  }
+
+  const links = role === "employer" ? employerLinks : seekerLinks;
 
   return (
     <Sidebar className="border-r border-border bg-card">
@@ -53,7 +193,7 @@ function AppSidebar({ role }: { role: string }) {
         </div>
         <SidebarGroup>
           <SidebarGroupLabel className="text-xs uppercase tracking-wider text-muted-foreground font-semibold mt-4 mb-2 px-2">
-            {role === "admin" ? "Admin Panel" : "Dashboard Menu"}
+            Dashboard Menu
           </SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu className="space-y-1 px-1">

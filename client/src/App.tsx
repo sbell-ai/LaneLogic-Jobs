@@ -59,6 +59,10 @@ function AdminSectionRouter({ params }: { params: { section: string } }) {
   return <AdminDashboard section={params.section} />;
 }
 
+function AdminSubSectionRouter({ params }: { params: { section: string; subsection: string } }) {
+  return <AdminDashboard section={params.section} subsection={params.subsection} />;
+}
+
 function JobDetailOrSeoPage() {
   const routeParams = useParams<{ id: string }>();
   const param = routeParams.id || "";
@@ -172,6 +176,7 @@ function Router() {
 
       <Route path="/dashboard" component={DashboardRouter} />
       <Route path="/dashboard/:section" component={DashboardSectionRouter} />
+      <Route path="/dashboard/admin/:section/:subsection" component={AdminSubSectionRouter} />
       <Route path="/dashboard/admin/:section" component={AdminSectionRouter} />
 
       <Route path="/:seoSlug" component={LegacySeoRedirect} />
