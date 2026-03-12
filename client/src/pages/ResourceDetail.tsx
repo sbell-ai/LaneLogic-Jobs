@@ -195,7 +195,7 @@ export default function ResourceDetail() {
 
   const introContent = resource.introText || "";
   const bodyContent = resource.bodyText || resource.content || "";
-  const hasLinkedPage = !!linkedPage?.content;
+  const hasLinkedPage = !!resource.pageId && !!linkedPage;
 
   return (
     <div className="min-h-screen flex flex-col font-sans">
