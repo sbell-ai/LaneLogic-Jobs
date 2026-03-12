@@ -77,6 +77,7 @@ export const resources = pgTable("resources", {
   requiredTier: text("required_tier").notNull().default("free"),
   isPublished: boolean("is_published").notNull().default(false),
   publishedAt: timestamp("published_at"),
+  pageId: integer("page_id"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });

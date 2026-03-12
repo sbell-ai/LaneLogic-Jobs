@@ -165,6 +165,7 @@ async function startServer() {
   await seedDatabaseIfEmpty();
   await runParagraphizeMigration();
   await runResourceContentBackfill();
+  await runResourcePageBackfill();
 
   httpServer.listen(
     { port, host: "0.0.0.0", reusePort: true },
@@ -325,6 +326,67 @@ async function runResourceContentBackfill() {
     log("Resource content backfill migration complete");
   } catch (err) {
     console.error("Resource content backfill migration error:", err);
+  }
+}
+
+async function runResourcePageBackfill() {
+  try {
+    const { db } = await import("./db");
+    const { sql } = await import("drizzle-orm");
+
+    const flagCheck = await db.execute(sql`
+      SELECT settings->>'migration_resource_page_backfill_done' as flag FROM site_settings LIMIT 1
+    `);
+    if (flagCheck.rows.length > 0 && flagCheck.rows[0].flag === "true") {
+      return;
+    }
+
+    log("Running one-time resource page backfill migration...");
+    const { resources, pages } = await import("../shared/schema");
+    const { eq, isNull } = await import("drizzle-orm");
+
+    const allResources = await db.select().from(resources).where(isNull(resources.pageId));
+
+    for (const resource of allResources) {
+      try {
+        const introText = resource.introText || "";
+        const bodyText = resource.bodyText || resource.content || "";
+        const esc = (t: string) => t.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+        const parts: string[] = [];
+        if (introText.trim()) {
+          parts.push(introText.trim().split("\n\n").map((p: string) => `<p>${esc(p).replace(/\n/g, "<br>")}</p>`).join("\n"));
+        }
+        if (bodyText.trim()) {
+          parts.push(bodyText.trim().split("\n\n").map((p: string) => `<p>${esc(p).replace(/\n/g, "<br>")}</p>`).join("\n"));
+        }
+        const content = parts.join("\n");
+
+        const slug = `resources-${resource.id}`;
+        const existing = await db.select().from(pages).where(eq(pages.slug, slug));
+        if (existing.length > 0) {
+          await db.update(resources).set({ pageId: existing[0].id }).where(eq(resources.id, resource.id));
+          continue;
+        }
+
+        const [page] = await db.insert(pages).values({
+          title: resource.title,
+          slug,
+          content,
+          isPublished: resource.isPublished ?? false,
+        }).returning();
+
+        await db.update(resources).set({ pageId: page.id }).where(eq(resources.id, resource.id));
+      } catch (e) {
+        console.error(`Failed to backfill page for resource ${resource.id}:`, e);
+      }
+    }
+
+    await db.execute(sql`
+      UPDATE site_settings SET settings = settings || '{"migration_resource_page_backfill_done": true}'::jsonb
+    `);
+    log("Resource page backfill migration complete");
+  } catch (err) {
+    console.error("Resource page backfill migration error:", err);
   }
 }
 

@@ -1,11 +1,15 @@
+import { useMemo } from "react";
 import { useParams, useLocation } from "wouter";
+import { Link } from "wouter";
+import { MapPin } from "lucide-react";
 import { Navbar } from "@/components/layout/Navbar";
 import { Footer } from "@/components/layout/Footer";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ArrowLeft, BookOpen, Briefcase, Users } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
-import type { Resource } from "@shared/schema";
+import { useJobs } from "@/hooks/use-jobs";
+import type { Resource, Page } from "@shared/schema";
 import { tokenize } from "@/lib/linkify";
 
 const audienceLabel: Record<string, string> = {
@@ -44,6 +48,91 @@ function LinkifiedText({ text }: { text: string }) {
   );
 }
 
+type ContentSegment =
+  | { type: "html"; html: string }
+  | { type: "jobFeed"; category: string };
+
+function parseContentWithBlocks(html: string): ContentSegment[] {
+  const regex = /<div\s+data-job-feed=["']([^"']+)["'][^>]*>(\s*<\/div>)?/gi;
+  const segments: ContentSegment[] = [];
+  let lastIndex = 0;
+  let match;
+  while ((match = regex.exec(html)) !== null) {
+    if (match.index > lastIndex) {
+      segments.push({ type: "html", html: html.slice(lastIndex, match.index) });
+    }
+    segments.push({ type: "jobFeed", category: match[1] });
+    lastIndex = match.index + match[0].length;
+  }
+  if (lastIndex < html.length) {
+    segments.push({ type: "html", html: html.slice(lastIndex) });
+  }
+  return segments;
+}
+
+const proseClasses = `prose prose-slate dark:prose-invert max-w-none
+  prose-headings:font-display prose-headings:font-bold
+  prose-h2:text-2xl prose-h2:mt-8 prose-h2:mb-4
+  prose-h3:text-xl prose-h3:mt-6 prose-h3:mb-3
+  prose-p:text-base prose-p:leading-relaxed prose-p:mb-4
+  prose-a:text-primary prose-a:underline hover:prose-a:no-underline
+  prose-ul:list-disc prose-ul:pl-6 prose-ul:mb-4
+  prose-ol:list-decimal prose-ol:pl-6 prose-ol:mb-4
+  prose-li:mb-1
+  prose-blockquote:border-l-4 prose-blockquote:border-primary/30 prose-blockquote:pl-4 prose-blockquote:italic
+  prose-strong:font-bold
+  prose-img:rounded-xl prose-img:shadow-md`;
+
+function JobCard({ job }: { job: any }) {
+  return (
+    <Link href={`/jobs/${job.id}`} data-testid={`card-job-${job.id}`}>
+      <div className="bg-card rounded-2xl p-5 border border-border shadow-sm hover:shadow-lg hover:border-primary/40 transition-all duration-300 h-full flex flex-col group cursor-pointer">
+        <div className="flex items-start justify-between mb-3">
+          {job.employerLogo ? (
+            <img src={job.employerLogo} alt={job.companyName || ""} className="w-10 h-10 rounded-xl object-contain bg-white dark:bg-slate-800 border border-border shrink-0" />
+          ) : (
+            <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center text-lg font-bold text-primary shrink-0">
+              {(job.companyName || job.title).charAt(0).toUpperCase()}
+            </div>
+          )}
+          {job.jobType && (
+            <span className="px-2.5 py-0.5 bg-primary/10 text-primary text-xs font-semibold rounded-full">
+              {job.jobType}
+            </span>
+          )}
+        </div>
+        <h3 className="text-base font-bold font-display mb-1 group-hover:text-primary transition-colors line-clamp-1">{job.title}</h3>
+        {job.companyName && <p className="text-sm text-muted-foreground mb-2">{job.companyName}</p>}
+        <div className="flex items-center text-muted-foreground text-xs mb-3">
+          <MapPin size={14} className="mr-1 shrink-0" />
+          <span className="line-clamp-1">{[job.locationCity, job.locationState].filter(Boolean).join(", ") || "Remote / TBD"}</span>
+        </div>
+        <div className="flex items-center gap-2 mt-auto">
+          {job.salary && <span className="text-sm font-semibold text-green-600 dark:text-green-400">{job.salary}</span>}
+        </div>
+      </div>
+    </Link>
+  );
+}
+
+function InlineJobFeed({ category, jobs }: { category: string; jobs: any[] | undefined }) {
+  const filtered = useMemo(() => {
+    if (!jobs) return [];
+    if (category.toLowerCase() === "all") return jobs.slice(0, 6);
+    return jobs.filter((job: any) => job.category?.toLowerCase().includes(category.toLowerCase())).slice(0, 6);
+  }, [jobs, category]);
+  if (filtered.length === 0) return null;
+  const label = category.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+  return (
+    <div className="not-prose my-8" data-testid={`section-job-feed-${category}`}>
+      <h2 className="text-2xl font-bold font-display mb-6 text-foreground">Latest {label} Jobs</h2>
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
+        {filtered.map((job: any) => <JobCard key={job.id} job={job} />)}
+      </div>
+    </div>
+  );
+}
+
 export default function ResourceDetail() {
   const { id } = useParams<{ id: string }>();
   const [, setLocation] = useLocation();
@@ -56,6 +145,24 @@ export default function ResourceDetail() {
       return res.json();
     },
   });
+
+  const { data: linkedPage } = useQuery<Page>({
+    queryKey: ["/api/pages", resource?.pageId],
+    queryFn: async () => {
+      const res = await fetch(`/api/pages/${resource!.pageId}`);
+      if (!res.ok) throw new Error("Page not found");
+      return res.json();
+    },
+    enabled: !!resource?.pageId,
+  });
+
+  const segments = useMemo(
+    () => (linkedPage?.content ? parseContentWithBlocks(linkedPage.content) : []),
+    [linkedPage?.content]
+  );
+
+  const hasJobFeeds = segments.some((s) => s.type === "jobFeed");
+  const { data: jobs } = useJobs(hasJobFeeds);
 
   if (isLoading) {
     return (
@@ -88,6 +195,7 @@ export default function ResourceDetail() {
 
   const introContent = resource.introText || "";
   const bodyContent = resource.bodyText || resource.content || "";
+  const hasLinkedPage = !!linkedPage?.content;
 
   return (
     <div className="min-h-screen flex flex-col font-sans">
@@ -126,24 +234,42 @@ export default function ResourceDetail() {
                 {resource.title}
               </h1>
 
-              {introContent && (
-                <div className="space-y-4 mb-8" data-testid="text-resource-intro">
-                  {introContent.split("\n\n").map((para, i) => (
-                    <p key={i} className="text-muted-foreground leading-relaxed text-lg">
-                      {para}
-                    </p>
-                  ))}
+              {hasLinkedPage ? (
+                <div data-testid="resource-page-content">
+                  {segments.map((segment, i) =>
+                    segment.type === "html" ? (
+                      <div
+                        key={i}
+                        className={proseClasses}
+                        dangerouslySetInnerHTML={{ __html: segment.html }}
+                      />
+                    ) : (
+                      <InlineJobFeed key={i} category={segment.category} jobs={jobs} />
+                    )
+                  )}
                 </div>
-              )}
+              ) : (
+                <>
+                  {introContent && (
+                    <div className="space-y-4 mb-8" data-testid="text-resource-intro">
+                      {introContent.split("\n\n").map((para, i) => (
+                        <p key={i} className="text-muted-foreground leading-relaxed text-lg">
+                          {para}
+                        </p>
+                      ))}
+                    </div>
+                  )}
 
-              {bodyContent && (
-                <div className="space-y-4" data-testid="text-resource-body">
-                  {bodyContent.split("\n\n").map((para, i) => (
-                    <p key={i} className="text-muted-foreground leading-relaxed">
-                      <LinkifiedText text={para} />
-                    </p>
-                  ))}
-                </div>
+                  {bodyContent && (
+                    <div className="space-y-4" data-testid="text-resource-body">
+                      {bodyContent.split("\n\n").map((para, i) => (
+                        <p key={i} className="text-muted-foreground leading-relaxed">
+                          <LinkifiedText text={para} />
+                        </p>
+                      ))}
+                    </div>
+                  )}
+                </>
               )}
 
               <div className="mt-10 pt-8 border-t border-border">
