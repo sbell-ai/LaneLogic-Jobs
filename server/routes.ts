@@ -529,6 +529,8 @@ export async function registerRoutes(
       const body = { ...req.body };
       if (body.expiresAt && typeof body.expiresAt === "string") body.expiresAt = new Date(body.expiresAt);
       if (body.expiresAt === null || body.expiresAt === "") body.expiresAt = null;
+      if (body.publishedAt && typeof body.publishedAt === "string") body.publishedAt = new Date(body.publishedAt);
+      if (body.publishedAt === null || body.publishedAt === "") body.publishedAt = null;
       const input = api.jobs.update.input.parse(body);
       const job = await storage.updateJob(jobId, input);
       res.json(job);
@@ -675,7 +677,11 @@ export async function registerRoutes(
       return res.status(403).json({ message: "Forbidden" });
     }
     try {
-      const resource = await storage.updateResource(Number(req.params.id), req.body);
+      const updates = { ...req.body };
+      if (updates.publishedAt && typeof updates.publishedAt === "string") {
+        updates.publishedAt = new Date(updates.publishedAt);
+      }
+      const resource = await storage.updateResource(Number(req.params.id), updates);
       res.json(resource);
     } catch (err) {
       console.error("Resource update error:", err);
@@ -697,7 +703,11 @@ export async function registerRoutes(
       return res.status(403).json({ message: "Forbidden" });
     }
     try {
-      const post = await storage.updateBlogPost(Number(req.params.id), req.body);
+      const updates = { ...req.body };
+      if (updates.publishedAt && typeof updates.publishedAt === "string") {
+        updates.publishedAt = new Date(updates.publishedAt);
+      }
+      const post = await storage.updateBlogPost(Number(req.params.id), updates);
       res.json(post);
     } catch (err) {
       res.status(400).json({ message: "Update failed" });
