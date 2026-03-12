@@ -656,7 +656,7 @@ export async function registerRoutes(
           content: pageContent,
           isPublished: resource.isPublished ?? false,
         });
-        await storage.updateResource(resource.id, { pageId: page.id } as any);
+        await storage.updateResource(resource.id, { pageId: page.id });
         resource.pageId = page.id;
       } catch (pageErr) {
         console.error("Failed to auto-create page for resource:", pageErr);
