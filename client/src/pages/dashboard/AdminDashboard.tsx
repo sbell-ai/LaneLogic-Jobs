@@ -1498,9 +1498,6 @@ function ResourcesTab() {
                 </div>
               </div>
               <div className="flex gap-1 shrink-0">
-                {r.pageId && (
-                  <Button variant="ghost" size="icon" className="h-8 w-8" title="View linked page" onClick={() => window.open(`/pages/resources-${r.id}`, '_blank')} data-testid={`button-view-page-resource-${r.id}`}><Globe size={15} /></Button>
-                )}
                 <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEdit(r)} data-testid={`button-edit-resource-${r.id}`}><Pencil size={15} /></Button>
                 <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setShareResource(r)} data-testid={`button-share-resource-${r.id}`}><Share2 size={15} /></Button>
                 <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => { if (confirm("Delete this resource?")) deleteMutation.mutate(r.id); }} data-testid={`button-delete-resource-${r.id}`}><Trash2 size={15} /></Button>

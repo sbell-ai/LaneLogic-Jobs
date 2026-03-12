@@ -87,26 +87,6 @@ function paragraphize(text: string): string {
   return text.replace(/([.?!])\s+/g, "$1\n\n");
 }
 
-function escapeHtml(text: string): string {
-  return text
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#039;");
-}
-
-function buildResourcePageContent(introText: string | null, bodyText: string | null): string {
-  const parts: string[] = [];
-  if (introText && introText.trim()) {
-    parts.push(introText.trim().split("\n\n").map(p => `<p>${escapeHtml(p).replace(/\n/g, "<br>")}</p>`).join("\n"));
-  }
-  if (bodyText && bodyText.trim()) {
-    parts.push(bodyText.trim().split("\n\n").map(p => `<p>${escapeHtml(p).replace(/\n/g, "<br>")}</p>`).join("\n"));
-  }
-  return parts.join("\n");
-}
-
 function validateAndMapCsvRow(
   record: Record<string, string>,
   rowNumber: number,
@@ -648,20 +628,6 @@ export async function registerRoutes(
       }
       const resource = await storage.createResource(input);
 
-      try {
-        const pageContent = buildResourcePageContent(resource.introText, resource.bodyText);
-        const page = await storage.createPage({
-          title: resource.title,
-          slug: `resources-${resource.id}`,
-          content: pageContent,
-          isPublished: resource.isPublished ?? false,
-        });
-        await storage.updateResource(resource.id, { pageId: page.id });
-        resource.pageId = page.id;
-      } catch (pageErr) {
-        console.error("Failed to auto-create page for resource:", pageErr);
-      }
-
       res.status(201).json(resource);
     } catch (err) {
       res.status(400).json({ message: "Validation error" });
@@ -737,10 +703,6 @@ export async function registerRoutes(
   app.delete("/api/resources/:id", async (req, res) => {
     if (!req.isAuthenticated() || (req.user as any).role !== "admin") {
       return res.status(403).json({ message: "Forbidden" });
-    }
-    const resource = await storage.getResource(Number(req.params.id));
-    if (resource?.pageId) {
-      try { await storage.deletePage(resource.pageId); } catch (e) { /* ignore */ }
     }
     await storage.deleteResource(Number(req.params.id));
     res.json({ message: "Deleted" });
