@@ -50,3 +50,7 @@ defaultBucketID = "replit-objstore-2867afba-651c-4e90-abc4-fb66cfeb8219"
 
 [userenv.shared]
 BASE_URL = "https://lanelogicjobs.com"
+
+[postMerge]
+path = "scripts/post-merge.sh"
+timeoutMs = 20000
