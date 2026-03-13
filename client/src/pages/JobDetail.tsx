@@ -1,4 +1,4 @@
-import { useParams, useLocation } from "wouter";
+import { useParams, useLocation, Link } from "wouter";
 import { Navbar } from "@/components/layout/Navbar";
 import { Footer } from "@/components/layout/Footer";
 import { Button } from "@/components/ui/button";
@@ -73,10 +73,14 @@ export default function JobDetail() {
     return (
       <div className="min-h-screen flex flex-col">
         <Navbar />
-        <div className="flex-grow flex flex-col items-center justify-center">
+        <div className="flex-grow flex flex-col items-center justify-center px-4 text-center">
           <Briefcase className="text-muted-foreground mb-4" size={48} />
-          <h1 className="text-2xl font-bold font-display mb-2">Job Not Found</h1>
-          <Button variant="outline" onClick={() => setLocation("/jobs")}>Back to Jobs</Button>
+          <h1 className="text-2xl font-bold font-display mb-4" data-testid="text-job-not-found">
+            That job no longer exists.
+          </h1>
+          <p className="text-lg mb-2">
+            Search new jobs here: <Link href="/jobs" className="inline-flex items-center gap-1 text-primary underline font-semibold" data-testid="link-search-jobs">🔶➡️</Link>
+          </p>
         </div>
         <Footer />
       </div>

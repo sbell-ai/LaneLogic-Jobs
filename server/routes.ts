@@ -476,7 +476,15 @@ export async function registerRoutes(
   app.get(api.jobs.list.path, async (req, res) => {
     const isAdmin = req.isAuthenticated() && (req.user as any).role === "admin";
     const allJobs = await storage.getJobs();
-    const visibleJobs = isAdmin ? allJobs : allJobs.filter(j => j.isPublished);
+    const now = new Date();
+    const visibleJobs = isAdmin ? allJobs : allJobs.filter(j => {
+      if (!j.isPublished) return false;
+      if (j.expiresAt) {
+        const expires = typeof j.expiresAt === "string" ? new Date(j.expiresAt) : j.expiresAt;
+        if (expires < now) return false;
+      }
+      return true;
+    });
     const allUsers = await storage.getUsers();
     const employerMap = new Map(allUsers.filter(u => u.role === "employer").map(u => [u.id, u]));
     const enriched = visibleJobs.map(job => ({
@@ -491,6 +499,10 @@ export async function registerRoutes(
     if (!job) return res.status(404).json({ message: "Not found" });
     const isAdmin = req.isAuthenticated() && (req.user as any).role === "admin";
     if (!isAdmin && !job.isPublished) return res.status(404).json({ message: "Not found" });
+    if (!isAdmin && job.expiresAt) {
+      const expires = typeof job.expiresAt === "string" ? new Date(job.expiresAt) : job.expiresAt;
+      if (expires < new Date()) return res.status(404).json({ message: "Not found" });
+    }
     const employer = await storage.getUser(job.employerId);
     res.json({ ...job, employerLogo: employer?.companyLogo || null });
   });
@@ -1532,6 +1544,38 @@ ${urls.join("\n")}
   const getPlatformWebhookUrl = (platform: string): string | undefined =>
     ZAPIER_PLATFORM_URLS[platform] || ZAPIER_WEBHOOK_URL;
 
+  app.get("/share/jobs/:id.png", async (req, res) => {
+    try {
+      const jobId = Number(req.params.id);
+      const job = await storage.getJob(jobId);
+      if (!job) return res.status(404).json({ message: "Not found" });
+
+      const { checkShareable } = await import("./socialHelpers");
+      const shareCheck = checkShareable("job", job);
+      if (!shareCheck.shareable) return res.status(404).json({ message: "Not found" });
+
+      const variantParam = (req.query.variant as string) || "og";
+      const variant = variantParam === "square" ? "square" : "og";
+      const width = variant === "square" ? 1080 : 1200;
+      const height = variant === "square" ? 1080 : 628;
+
+      const { buildJobShareCard } = await import("./shareTemplates/jobShareCard");
+      const { renderShareImage, getCacheKey, getJobContentHash } = await import("./utils/renderShareImage");
+
+      const contentHash = getJobContentHash(job);
+      const cacheKey = getCacheKey(jobId, contentHash, variant);
+      const template = buildJobShareCard(job, variant);
+      const pngBuffer = await renderShareImage(template, width, height, cacheKey);
+
+      res.setHeader("Content-Type", "image/png");
+      res.setHeader("Cache-Control", "public, max-age=3600");
+      res.send(pngBuffer);
+    } catch (err: any) {
+      console.error("Share image error:", err);
+      res.status(500).json({ message: "Failed to generate share image" });
+    }
+  });
+
   app.get("/api/admin/social-posts/webhook-status", async (req, res) => {
     if (!req.isAuthenticated() || (req.user as any).role !== "admin") return res.status(403).json({ message: "Forbidden" });
     const anyConfigured = !!(ZAPIER_WEBHOOK_URL || Object.values(ZAPIER_PLATFORM_URLS).some(Boolean));
@@ -1677,7 +1721,8 @@ ${urls.join("\n")}
     const { generateDefaultCopy, buildLinkUrl } = await import("../shared/socialUtils");
     const siteSettings = await storage.getSiteSettings();
     const siteName = (siteSettings as any).siteName || "LaneLogic Jobs";
-    const baseUrl = process.env.BASE_URL || req.protocol + "://" + req.get("host");
+    const { getBaseUrl } = await import("./socialHelpers");
+    const baseUrl = getBaseUrl();
     const entityPath = post.entityType === "blog" ? "blog" : post.entityType === "job" ? "jobs" : "resources";
     const entityUrl = `${baseUrl}/${entityPath}/${post.entityId}`;
     const defaultCopy = generateDefaultCopy(post.entityType, {
@@ -1729,6 +1774,15 @@ ${urls.join("\n")}
     for (const platform of platforms) {
       const webhookUrl = getPlatformWebhookUrl(platform)!;
       const providerRequestId = `${post.entityType}-${post.entityId}-${platform}`;
+      const { getJobContentHash } = await import("./utils/renderShareImage");
+      const contentHash = post.entityType === "job" ? getJobContentHash(entity) : "";
+      const jobImageFields = post.entityType === "job" ? {
+        imageUrl: `${baseUrl}/share/jobs/${post.entityId}.png?variant=og&v=${contentHash}`,
+        imageUrlOg: `${baseUrl}/share/jobs/${post.entityId}.png?variant=og&v=${contentHash}`,
+        imageUrlSquare: `${baseUrl}/share/jobs/${post.entityId}.png?variant=square&v=${contentHash}`,
+      } : {
+        imageUrl: post.imageUrl || null,
+      };
       const payload = {
         providerRequestId,
         entityType: post.entityType,
@@ -1742,7 +1796,7 @@ ${urls.join("\n")}
         jobType: entity.jobType || null,
         salary: entity.salary || null,
         url: `${baseUrl}/${entityPath}/${post.entityId}`,
-        imageUrl: post.imageUrl || null,
+        ...jobImageFields,
         platform,
         copy: resolvedCopy[platform],
         scheduledAt: post.scheduledAt,

@@ -1,4 +1,6 @@
-function getBaseUrl(): string {
+export function getBaseUrl(): string {
+  if (process.env.PUBLIC_BASE_URL) return process.env.PUBLIC_BASE_URL.replace(/\/$/, "");
+  if (process.env.BASE_URL) return process.env.BASE_URL.replace(/\/$/, "");
   const domains = process.env.REPLIT_DOMAINS || process.env.REPLIT_DEV_DOMAIN || "";
   const domain = domains.split(",")[0]?.trim();
   if (domain) return `https://${domain}`;
