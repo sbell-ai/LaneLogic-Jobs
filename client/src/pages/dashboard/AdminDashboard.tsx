@@ -2411,6 +2411,7 @@ function SitePagesTab() {
   const { toast } = useToast();
   const { data: saved, isLoading } = useQuery<SiteSettingsData>({ queryKey: ["/api/settings"] });
 
+  const [heroHidden, setHeroHidden] = useState(false);
   const [draft, setDraft] = useState<Record<string, string>>({
     heroSize: "default", heroBadge: "", heroHeading: "", heroSubtext: "", heroPopularSearches: "", heroBgColor: "", heroBorderColor: "", heroFontColor: "",
     feature1Title: "", feature1Description: "",
@@ -2424,6 +2425,7 @@ function SitePagesTab() {
 
   useEffect(() => {
     if (saved) {
+      setHeroHidden(saved.heroHidden ?? false);
       setDraft({
         heroSize: saved.heroSize ?? "default",
         heroBadge: saved.heroBadge ?? "",
@@ -2458,7 +2460,7 @@ function SitePagesTab() {
 
   const updateMutation = useMutation({
     mutationFn: (settings: Record<string, string>) =>
-      apiRequest("PUT", "/api/settings", { ...saved, ...settings }).then(r => r.json()),
+      apiRequest("PUT", "/api/settings", { ...saved, ...settings, heroHidden }).then(r => r.json()),
     onSuccess: (data: any) => {
       queryClient.setQueryData(["/api/settings"], data);
       toast({ title: "Site pages settings saved!", description: "Changes are now live." });
@@ -2480,9 +2482,15 @@ function SitePagesTab() {
       </div>
 
       <div className="space-y-5">
-        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-border p-6">
+        <div className={`bg-white dark:bg-slate-900 rounded-2xl border border-border p-6 ${heroHidden ? 'opacity-75' : ''}`}>
           <div className="flex items-center justify-between mb-5 pb-4 border-b border-border">
-            <h3 className="font-bold font-display text-lg">Homepage — Hero Section</h3>
+            <div className="flex items-center gap-3">
+              <h3 className="font-bold font-display text-lg">Homepage — Hero Section</h3>
+              <div className="flex items-center gap-2">
+                <Switch checked={!heroHidden} onCheckedChange={(checked) => setHeroHidden(!checked)} data-testid="switch-hero-visibility" />
+                <span className={`text-xs font-medium ${heroHidden ? 'text-red-500' : 'text-green-600'}`}>{heroHidden ? 'Hidden' : 'Visible'}</span>
+              </div>
+            </div>
             <Button variant="outline" size="sm" className="gap-1.5 text-xs" asChild data-testid="button-preview-homepage">
               <a href="/" target="_blank" rel="noopener noreferrer"><ExternalLink size={14} /> Preview Live Page</a>
             </Button>

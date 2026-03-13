@@ -46,7 +46,7 @@ export default function Home() {
       <Navbar />
       
       <main className="flex-grow">
-        <section
+        {!settings.heroHidden && <section
           className={`relative overflow-hidden ${!settings.heroBgColor ? 'bg-slate-50 dark:bg-slate-950' : ''} ${
             (() => {
               const hasHeading = !!settings.heroHeading?.trim();
@@ -141,7 +141,7 @@ export default function Home() {
               })()}
             </div>
           </div>
-        </section>
+        </section>}
 
         <section className="py-16 bg-white dark:bg-slate-900">
           <div className="container mx-auto px-4 md:px-6">

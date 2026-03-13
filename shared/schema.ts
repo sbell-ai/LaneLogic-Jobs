@@ -406,6 +406,7 @@ export interface SiteSettingsData {
   heroBgColor: string;
   heroBorderColor: string;
   heroFontColor: string;
+  heroHidden: boolean;
 }
 
 export const DEFAULT_SETTINGS: SiteSettingsData = {
@@ -462,6 +463,7 @@ export const DEFAULT_SETTINGS: SiteSettingsData = {
   heroBgColor: "",
   heroBorderColor: "",
   heroFontColor: "",
+  heroHidden: false,
 };
 
 export const siteSettings = pgTable("site_settings", {
