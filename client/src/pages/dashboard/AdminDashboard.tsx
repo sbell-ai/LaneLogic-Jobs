@@ -34,7 +34,7 @@ import { INTRO_TRUNCATE_LENGTH } from "@shared/constants";
 import { tokenize } from "@/lib/linkify";
 import { z } from "zod";
 import { formatDistanceToNow, format } from "date-fns";
-import { getCategories, getSubcategories } from "@shared/jobTaxonomy";
+import { getCategories, getSubcategories, validateCategoryPair } from "@shared/jobTaxonomy";
 
 // ─── USERS TAB ────────────────────────────────────────────────────────────────
 
@@ -319,6 +319,12 @@ function AllJobsTab() {
       toast({ title: "No changes", description: "Select at least one field to update.", variant: "destructive" });
       return;
     }
+    if ("category" in updates && "subcategory" in updates) {
+      const catVal = updates.category || null;
+      const subVal = updates.subcategory || null;
+      const pairCheck = validateCategoryPair(catVal, subVal);
+      if (!pairCheck.valid) { toast({ title: "Validation Error", description: pairCheck.error, variant: "destructive" }); return; }
+    }
     bulkUpdateMutation.mutate({ ids: [...selectedIds], updates });
   };
 
@@ -342,7 +348,7 @@ function AllJobsTab() {
   const filtered = (jobs || []).filter(j => {
     if (catFilter === "__missing__") { if (j.category) return false; }
     else if (catFilter !== "all" && j.category !== catFilter) return false;
-    if (subCatFilter !== "all" && (j as any).subcategory !== subCatFilter) return false;
+    if (subCatFilter !== "all" && j.subcategory !== subCatFilter) return false;
     if (indFilter !== "all" && j.industry !== indFilter) return false;
     if (!search) return true;
     return `${j.title} ${fmtLoc(j)} ${j.companyName || ""}`.toLowerCase().includes(search.toLowerCase());
@@ -534,6 +540,10 @@ function AllJobsTab() {
             <div className="flex gap-2">
               <Button className="flex-1" disabled={updateMutation.isPending} onClick={() => {
                 if (!editJob) return;
+                const catVal = editForm.category || null;
+                const subVal = editForm.subcategory || null;
+                const pairCheck = validateCategoryPair(catVal, subVal);
+                if (!pairCheck.valid) { toast({ title: "Validation Error", description: pairCheck.error, variant: "destructive" }); return; }
                 const updates = { ...editForm, expiresAt: editForm.expiresAt ? new Date(editForm.expiresAt).toISOString() : null };
                 if (updates.isPublished && !editJob.isPublished) updates.publishedAt = new Date().toISOString();
                 if (!updates.isPublished && editJob.isPublished) updates.publishedAt = null;
@@ -646,6 +656,7 @@ function PostJobTab({ userId }: { userId: number }) {
     resolver: zodResolver(jobFormSchema),
     defaultValues: {
       title: "", companyName: "", jobType: "Full-time",
+      category: "", subcategory: "", industry: "",
       description: "", requirements: "", benefits: "",
       locationCity: "", locationState: "", locationCountry: "USA",
       salary: "", applyUrl: "", isExternalApply: false,
@@ -672,7 +683,11 @@ function PostJobTab({ userId }: { userId: number }) {
       <p className="text-muted-foreground mb-6">Create a job listing on behalf of an employer or directly from admin.</p>
       <div className="bg-white dark:bg-slate-900 rounded-2xl border border-border p-8">
         <Form {...form}>
-          <form onSubmit={form.handleSubmit((v) => createMutation.mutate(v))} className="space-y-5">
+          <form onSubmit={form.handleSubmit((v) => {
+            const pairCheck = validateCategoryPair(v.category || null, v.subcategory || null);
+            if (!pairCheck.valid) { toast({ title: "Validation Error", description: pairCheck.error, variant: "destructive" }); return; }
+            createMutation.mutate(v);
+          })} className="space-y-5">
             <FormField control={form.control} name="title" render={({ field }) => (
               <FormItem>
                 <FormLabel>Job Title *</FormLabel>
@@ -743,6 +758,7 @@ function PostJobTab({ userId }: { userId: number }) {
                       {form.watch("category") && getSubcategories(form.watch("category")).map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
                     </SelectContent>
                   </Select>
+                  <FormMessage />
                 </FormItem>
               )} />
             </div>

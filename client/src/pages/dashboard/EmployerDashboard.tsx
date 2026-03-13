@@ -23,7 +23,7 @@ import type { Job, Application, Category } from "@shared/schema";
 import { insertJobSchema } from "@shared/schema";
 import { z } from "zod";
 import { Link } from "wouter";
-import { getCategories, getSubcategories } from "@shared/jobTaxonomy";
+import { getCategories, getSubcategories, validateCategoryPair } from "@shared/jobTaxonomy";
 
 const JOB_TYPES = ["Full-time", "Part-time", "Contract", "Seasonal", "Owner-Operator", "Lease Purchase", "Temporary"];
 
@@ -76,7 +76,11 @@ function PostJobTab({ userId }: { userId: number }) {
       <h2 className="text-2xl font-bold font-display mb-6">Post a New Job</h2>
       <div className="bg-white dark:bg-slate-900 rounded-2xl border border-border p-8">
         <Form {...form}>
-          <form onSubmit={form.handleSubmit((v) => createMutation.mutate(v))} className="space-y-5">
+          <form onSubmit={form.handleSubmit((v) => {
+            const pairCheck = validateCategoryPair(v.category || null, v.subcategory || null);
+            if (!pairCheck.valid) { toast({ title: "Validation Error", description: pairCheck.error, variant: "destructive" }); return; }
+            createMutation.mutate(v);
+          })} className="space-y-5">
             <FormField control={form.control} name="title" render={({ field }) => (
               <FormItem>
                 <FormLabel>Job Title *</FormLabel>
@@ -147,6 +151,7 @@ function PostJobTab({ userId }: { userId: number }) {
                       {form.watch("category") && getSubcategories(form.watch("category")).map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
                     </SelectContent>
                   </Select>
+                  <FormMessage />
                 </FormItem>
               )} />
             </div>
