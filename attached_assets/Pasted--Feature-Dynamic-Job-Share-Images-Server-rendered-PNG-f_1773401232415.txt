@@ -1,0 +1,163 @@
+## Feature: Dynamic Job Share Images (Server-rendered PNG) for Zapier Social Posts
+
+### What & Why
+
+We want LaneLogic Jobs to generate **dynamic, branded job card images** that include live job info (title, company, location, pay) and can be attached to social posts via Zapier/Buffer. Canva is too manual. This feature generates an image automatically on demand.
+
+### Done looks like
+
+- A public endpoint exists that returns a PNG for a job:
+    - `GET /share/jobs/:id.png`
+- The PNG includes:
+    - job title
+    - company name
+    - location
+    - pay range
+    - LaneLogic Jobs branding (logo/text)
+    - optional QR code to the job URL
+- The endpoint is **fast** (cached) and **safe** (no drafts leaked)
+- The “Share job” webhook payload sent to Zapier includes:
+    - `imageUrl: https://www.lanelogicjobs.com/share/jobs/36.png?...`
+- Zapier/Buffer uses that `imageUrl` as the post image
+
+---
+
+## Requirements / Constraints
+
+1) **Publish gating**
+
+- If `isPublished=false`, the PNG endpoint must behave like not found (404). (Do not leak drafts.)
+- If jobs are shareable only when “published + not expired,” enforce that too.
+
+2) **Performance**
+
+- First render can be slower, but subsequent requests should be fast.
+- Implement caching so social platforms don’t time out.
+
+3) **No external dependencies for image hosting**
+
+- The endpoint itself serves the PNG. Zapier receives the URL.
+
+---
+
+## Implementation approach (recommended)
+
+Use **Playwright (Chromium)** server-side to render an HTML template and screenshot it.
+
+### Tasks
+
+#### 1) Add the PNG endpoint
+
+Create a route like:
+
+- `GET /share/jobs/:id.png`
+
+Behavior:
+
+- Load job by ID
+- Enforce shareability:
+    - return 404 if missing
+    - return 404 if `isPublished=false`
+    - return 404 if expired (if share policy requires)
+- Compute canonical share URL:
+    - `https://www.lanelogicjobs.com/jobs/:id?utm_source=social&utm_medium=organic&utm_campaign=admin_share`
+- Generate PNG and return it with:
+    - `Content-Type: image/png`
+    - Cache headers (see caching section)
+
+#### 2) Build a share-card HTML template
+
+Create a template function that returns a full HTML document string, for example:
+
+- `server/shareTemplates/jobShareCardHtml.ts`
+
+Template requirements:
+
+- Fixed size, e.g. **1200×628** (works well on LinkedIn/X as a universal card)
+- Clean layout:
+    - Header: LaneLogic Jobs (and logo if available)
+    - Title (large)
+    - Company + Location
+    - Pay range
+    - Footer: “Apply: [lanelogicjobs.com](http://lanelogicjobs.com)” or QR code
+
+Styling:
+
+- Inline CSS (preferred for reliability in headless rendering)
+- Do not depend on external CSS loading
+
+#### 3) Render HTML → PNG with Playwright
+
+Add a utility:
+
+- `server/utils/renderHtmlToPng.ts`
+
+Pseudo steps:
+
+- launch chromium
+- create page
+- `page.setContent(html, { waitUntil: "networkidle" })`
+- set viewport to match image dimensions
+- screenshot the container (or full page) to PNG buffer
+- close browser
+- return buffer
+
+Important:
+
+- Reuse a single browser instance if possible (big speed win).
+- If reuse is too complex, start with per-request launch and add caching to compensate.
+
+#### 4) Caching strategy (must implement)
+
+Implement at least one:
+
+**Option A: In-memory cache (fastest MVP)**
+
+- Key: `jobId + updatedAt + templateVersion`
+- Store PNG buffer for 15–60 minutes
+- Bust cache when job changes
+
+**Option B: Disk cache**
+
+- Save PNG file under `./.cache/share-images/jobs/:id-<hash>.png`
+- Serve cached file if present
+
+**HTTP caching headers**
+
+- If you have a stable URL per version: `Cache-Control: public, max-age=3600, immutable`
+- If not: `Cache-Control: public, max-age=300` (5 minutes) is a safe starting point
+
+#### 5) Update the Zapier webhook payload
+
+Wherever the “share job” webhook payload is assembled (the same place you currently send:
+
+- providerRequestId
+- entityType/entityId
+- title snapshot
+- link url
+- copy)
+
+Add:
+
+- `imageUrl = https://www.lanelogicjobs.com/share/jobs/${id}.png?v=${updatedAtTimestamp}`
+
+Then map this in Zapier → Buffer as the image.
+
+---
+
+## Testing checklist
+
+- Published job returns a PNG that visually looks correct
+- Draft job returns 404
+- Expired job returns 404 (if required)
+- `imageUrl` field is present in the Zapier webhook payload
+- Zapier run posts with image successfully
+- Repeated hits are fast due to caching
+
+---
+
+## Notes / pitfalls to avoid
+
+- Do not use `dangerouslySetInnerHTML` anywhere in the image template with untrusted strings. Escape job title/company/location.
+- Don’t load external fonts/CSS at runtime unless absolutely necessary (it slows rendering and can fail).
+- Ensure the endpoint is accessible publicly (no auth), but still gated by publish rules.
