@@ -98,7 +98,7 @@ export function Navbar() {
           </form>
 
           <div className="relative shrink-0 ml-auto">
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-5">
               {!user && (
                 <Link href="/login" className="hidden md:inline-flex text-sm font-semibold hover:text-primary transition-colors" data-testid="link-header-login">
                   Log in
