@@ -114,8 +114,8 @@ export function Navbar() {
                 data-testid="button-header-menu"
               >
                 <Menu size={18} />
-                <div className="w-7 h-7 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xs font-bold">
-                  {user ? (user.fullName?.charAt(0) || user.email?.charAt(0) || "U").toUpperCase() : "?"}
+                <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold ${user ? 'bg-primary/10 text-primary' : 'bg-orange-500'}`}>
+                  {user ? (user.fullName?.charAt(0) || user.email?.charAt(0) || "U").toUpperCase() : ""}
                 </div>
               </button>
             </div>
