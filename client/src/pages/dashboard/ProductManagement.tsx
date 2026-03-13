@@ -12,7 +12,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Plus, Trash2, Pencil, Package, Shield, Settings2,
-  Download, AlertCircle, Loader2, Check, X
+  Download, AlertCircle, Loader2, Check, X, Users, Briefcase
 } from "lucide-react";
 import type {
   AdminProduct, AdminEntitlement, AdminProductOverride
@@ -156,14 +156,17 @@ function ProductsTab() {
         </Button>
       </div>
 
-      <div className="space-y-3">
-        {products?.map((p) => (
+      {(() => {
+        const jobSeekerProducts = products?.filter((p) => p.audience === "job_seeker" && p.planType !== "Top-up") || [];
+        const employerProducts = products?.filter((p) => p.audience === "employer" && p.planType !== "Top-up") || [];
+        const addOnProducts = products?.filter((p) => p.planType === "Top-up") || [];
+
+        const renderProductCard = (p: ProductWithEntitlements) => (
           <div key={p.id} className="border rounded-lg p-4 bg-white dark:bg-slate-900 flex items-center justify-between" data-testid={`card-product-${p.id}`}>
             <div>
               <div className="flex items-center gap-2">
                 <span className="font-medium">{p.name}</span>
                 <Badge variant={p.status === "Active" ? "default" : "secondary"}>{p.status}</Badge>
-                <Badge variant="outline">{p.audience}</Badge>
                 <Badge variant="outline">{p.planType}</Badge>
               </div>
               <div className="text-sm text-muted-foreground mt-1">
@@ -200,13 +203,48 @@ function ProductsTab() {
               </Button>
             </div>
           </div>
-        ))}
-        {products?.length === 0 && (
-          <div className="text-center py-12 text-muted-foreground" data-testid="text-no-products">
-            No products yet. Seed from snapshot or create manually.
+        );
+
+        if (!products?.length) {
+          return (
+            <div className="text-center py-12 text-muted-foreground" data-testid="text-no-products">
+              No products yet. Seed from snapshot or create manually.
+            </div>
+          );
+        }
+
+        return (
+          <div className="space-y-8">
+            {jobSeekerProducts.length > 0 && (
+              <div data-testid="section-job-seeker-products">
+                <h3 className="text-lg font-semibold mb-3 flex items-center gap-2">
+                  <Users size={18} /> Job Seeker Products
+                  <Badge variant="outline" className="ml-1">{jobSeekerProducts.length}</Badge>
+                </h3>
+                <div className="space-y-3">{jobSeekerProducts.map(renderProductCard)}</div>
+              </div>
+            )}
+            {employerProducts.length > 0 && (
+              <div data-testid="section-employer-products">
+                <h3 className="text-lg font-semibold mb-3 flex items-center gap-2">
+                  <Briefcase size={18} /> Employer Products
+                  <Badge variant="outline" className="ml-1">{employerProducts.length}</Badge>
+                </h3>
+                <div className="space-y-3">{employerProducts.map(renderProductCard)}</div>
+              </div>
+            )}
+            {addOnProducts.length > 0 && (
+              <div data-testid="section-addon-products">
+                <h3 className="text-lg font-semibold mb-3 flex items-center gap-2">
+                  <Package size={18} /> Add-On Products
+                  <Badge variant="outline" className="ml-1">{addOnProducts.length}</Badge>
+                </h3>
+                <div className="space-y-3">{addOnProducts.map(renderProductCard)}</div>
+              </div>
+            )}
           </div>
-        )}
-      </div>
+        );
+      })()}
 
       <Dialog open={showForm} onOpenChange={(open) => { if (!open) resetForm(); }}>
         <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
