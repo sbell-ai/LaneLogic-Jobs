@@ -91,13 +91,26 @@ function ProductsTab() {
     },
   });
 
+  const toggleStatusMutation = useMutation({
+    mutationFn: async ({ id, newStatus }: { id: number; newStatus: string }) => {
+      return apiRequest("PATCH", `/api/admin/products/${id}`, { status: newStatus });
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/products"] });
+      toast({ title: `Product ${variables.newStatus === "Active" ? "activated" : "deactivated"}` });
+    },
+    onError: (err: any) => {
+      toast({ title: "Error", description: err.message, variant: "destructive" });
+    },
+  });
+
   const deleteMutation = useMutation({
     mutationFn: async (id: number) => {
       return apiRequest("DELETE", `/api/admin/products/${id}`);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/products"] });
-      toast({ title: "Product deleted" });
+      toast({ title: "Product permanently deleted" });
     },
     onError: (err: any) => {
       toast({ title: "Error", description: err.message, variant: "destructive" });
@@ -166,12 +179,20 @@ function ProductsTab() {
                 {p.stripeProductId && <span className="text-xs text-green-600 ml-2">· Stripe ✓</span>}
               </div>
             </div>
-            <div className="flex gap-2">
+            <div className="flex items-center gap-3">
+              <Switch
+                checked={p.status === "Active"}
+                disabled={toggleStatusMutation.isPending}
+                onCheckedChange={(checked) =>
+                  toggleStatusMutation.mutate({ id: p.id, newStatus: checked ? "Active" : "Inactive" })
+                }
+                data-testid={`switch-product-status-${p.id}`}
+              />
               <Button variant="ghost" size="sm" onClick={() => startEdit(p)} data-testid={`button-edit-product-${p.id}`}>
                 <Pencil size={14} />
               </Button>
               <Button variant="ghost" size="sm" onClick={() => {
-                if (confirm(`Delete "${p.name}"? This will also deactivate it in Stripe.`)) {
+                if (confirm(`Permanently delete "${p.name}"? This cannot be undone. (Stripe products are not affected.)`)) {
                   deleteMutation.mutate(p.id);
                 }
               }} data-testid={`button-delete-product-${p.id}`}>

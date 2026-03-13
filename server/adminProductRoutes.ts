@@ -228,16 +228,6 @@ export function registerAdminProductRoutes(app: Express) {
       const existing = await storage.getAdminProduct(id);
       if (!existing) return res.status(404).json({ error: "Product not found" });
 
-      if (existing.stripeProductId) {
-        try {
-          const { getUncachableStripeClient } = await import("./stripeClient");
-          const stripe = await getUncachableStripeClient();
-          await stripe.products.update(existing.stripeProductId, { active: false });
-        } catch (stripeErr: any) {
-          console.error("[adminProducts] Stripe deactivate failed:", stripeErr.message);
-        }
-      }
-
       await storage.deleteAdminProduct(id);
       res.json({ success: true });
     } catch (err: any) {
