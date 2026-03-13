@@ -207,19 +207,13 @@ export function filterJobs(jobs: Job[], f: JobFilters): Job[] {
       (t) => (job.jobType || "").toLowerCase() === t.toLowerCase()
     );
 
-    const jobIndustry = (job.industry || "").toLowerCase();
     const jobCategory = (job.category || "").toLowerCase();
     const jobSubcategory = (job.subcategory || "").toLowerCase();
     const jobDesc = (job.description || "").toLowerCase();
     const jobTitle = (job.title || "").toLowerCase();
-    const matchSector = f.sectors.length === 0 || f.sectors.some((s) => {
-      const sl = s.toLowerCase();
-      return jobCategory === sl || jobIndustry.includes(sl) || jobDesc.includes(sl) || jobTitle.includes(sl);
-    });
+    const matchSector = f.sectors.length === 0 || f.sectors.some((s) => jobCategory === s.toLowerCase());
 
-    const matchSubcategory = f.subcategories.length === 0 || f.subcategories.some((s) => {
-      return jobSubcategory === s.toLowerCase();
-    });
+    const matchSubcategory = f.subcategories.length === 0 || f.subcategories.some((s) => jobSubcategory === s.toLowerCase());
 
     const matchExperience = f.experienceLevels.length === 0 || f.experienceLevels.some((lvl) => {
       const ll = lvl.toLowerCase();

@@ -319,11 +319,17 @@ function AllJobsTab() {
       toast({ title: "No changes", description: "Select at least one field to update.", variant: "destructive" });
       return;
     }
-    if ("category" in updates && "subcategory" in updates) {
-      const catVal = updates.category || null;
-      const subVal = updates.subcategory || null;
-      const pairCheck = validateCategoryPair(catVal, subVal);
+    if ("category" in updates && updates.category) {
+      if (!("subcategory" in updates) || !updates.subcategory) {
+        toast({ title: "Validation Error", description: "Subcategory is required when changing category.", variant: "destructive" });
+        return;
+      }
+      const pairCheck = validateCategoryPair(updates.category, updates.subcategory);
       if (!pairCheck.valid) { toast({ title: "Validation Error", description: pairCheck.error, variant: "destructive" }); return; }
+    }
+    if ("subcategory" in updates && updates.subcategory && !("category" in updates)) {
+      toast({ title: "Validation Error", description: "Category is required when changing subcategory.", variant: "destructive" });
+      return;
     }
     bulkUpdateMutation.mutate({ ids: [...selectedIds], updates });
   };
