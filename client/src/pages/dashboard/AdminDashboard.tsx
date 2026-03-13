@@ -34,6 +34,7 @@ import { INTRO_TRUNCATE_LENGTH } from "@shared/constants";
 import { tokenize } from "@/lib/linkify";
 import { z } from "zod";
 import { formatDistanceToNow, format } from "date-fns";
+import { getCategories, getSubcategories } from "@shared/jobTaxonomy";
 
 // ─── USERS TAB ────────────────────────────────────────────────────────────────
 
@@ -248,14 +249,16 @@ function AllJobsTab() {
   const { toast } = useToast();
   const [search, setSearch] = useState("");
   const [catFilter, setCatFilter] = useState("all");
+  const [subCatFilter, setSubCatFilter] = useState("all");
   const [indFilter, setIndFilter] = useState("all");
   const [viewJob, setViewJob] = useState<Job | null>(null);
   const [editJob, setEditJob] = useState<Job | null>(null);
   const [editForm, setEditForm] = useState<Record<string, any>>({});
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [bulkEditOpen, setBulkEditOpen] = useState(false);
-  const [bulkForm, setBulkForm] = useState<{ jobType: string; category: string; industry: string }>({ jobType: "", category: "", industry: "" });
+  const [bulkForm, setBulkForm] = useState<{ jobType: string; category: string; subcategory: string; industry: string }>({ jobType: "", category: "", subcategory: "", industry: "" });
   const [shareJob, setShareJob] = useState<Job | null>(null);
+  const taxonomyCategories = getCategories();
 
   const deleteMutation = useMutation({
     mutationFn: (id: number) => apiRequest("DELETE", `/api/jobs/${id}`),
@@ -282,7 +285,7 @@ function AllJobsTab() {
       queryClient.invalidateQueries({ queryKey: ["/api/jobs"] });
       setBulkEditOpen(false);
       setSelectedIds(new Set());
-      setBulkForm({ jobType: "", category: "", industry: "" });
+      setBulkForm({ jobType: "", category: "", subcategory: "", industry: "" });
       toast({ title: "Jobs updated" });
     },
   });
@@ -306,7 +309,11 @@ function AllJobsTab() {
   const handleBulkSave = () => {
     const updates: Record<string, string> = {};
     if (bulkForm.jobType && bulkForm.jobType !== "__unchanged__") updates.jobType = bulkForm.jobType;
-    if (bulkForm.category && bulkForm.category !== "__unchanged__") updates.category = bulkForm.category === "__clear__" ? "" : bulkForm.category;
+    if (bulkForm.category && bulkForm.category !== "__unchanged__") {
+      updates.category = bulkForm.category === "__clear__" ? "" : bulkForm.category;
+      if (bulkForm.category === "__clear__") updates.subcategory = "";
+    }
+    if (bulkForm.subcategory && bulkForm.subcategory !== "__unchanged__") updates.subcategory = bulkForm.subcategory === "__clear__" ? "" : bulkForm.subcategory;
     if (bulkForm.industry && bulkForm.industry !== "__unchanged__") updates.industry = bulkForm.industry === "__clear__" ? "" : bulkForm.industry;
     if (Object.keys(updates).length === 0) {
       toast({ title: "No changes", description: "Select at least one field to update.", variant: "destructive" });
@@ -318,7 +325,7 @@ function AllJobsTab() {
   const openEdit = (j: Job) => {
     setEditForm({
       title: j.title, companyName: j.companyName || "", jobType: j.jobType || "",
-      category: j.category || "", industry: j.industry || "",
+      category: j.category || "", subcategory: (j as any).subcategory || "", industry: j.industry || "",
       description: j.description, requirements: j.requirements,
       benefits: j.benefits || "", salary: j.salary || "",
       locationCity: j.locationCity || "", locationState: j.locationState || "", locationCountry: j.locationCountry || "",
@@ -329,12 +336,13 @@ function AllJobsTab() {
     setEditJob(j);
   };
 
-  const jobCats = (categories || []).filter(c => c.type === "job");
   const industries = (categories || []).filter(c => c.type === "industry");
 
   const fmtLoc = (j: Job) => [j.locationCity, j.locationState, j.locationCountry].filter(Boolean).join(", ");
   const filtered = (jobs || []).filter(j => {
-    if (catFilter !== "all" && j.category !== catFilter) return false;
+    if (catFilter === "__missing__") { if (j.category) return false; }
+    else if (catFilter !== "all" && j.category !== catFilter) return false;
+    if (subCatFilter !== "all" && (j as any).subcategory !== subCatFilter) return false;
     if (indFilter !== "all" && j.industry !== indFilter) return false;
     if (!search) return true;
     return `${j.title} ${fmtLoc(j)} ${j.companyName || ""}`.toLowerCase().includes(search.toLowerCase());
@@ -360,12 +368,20 @@ function AllJobsTab() {
         </div>
       </div>
       <div className="flex gap-2 flex-wrap mb-6">
-          {jobCats.length > 0 && (
-            <Select value={catFilter} onValueChange={setCatFilter}>
-              <SelectTrigger className="w-36"><SelectValue placeholder="Category" /></SelectTrigger>
+          <Select value={catFilter} onValueChange={v => { setCatFilter(v); setSubCatFilter("all"); }}>
+            <SelectTrigger className="w-48" data-testid="select-filter-category"><SelectValue placeholder="Category" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Categories</SelectItem>
+              <SelectItem value="__missing__">Missing Category</SelectItem>
+              {taxonomyCategories.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          {catFilter !== "all" && catFilter !== "__missing__" && (
+            <Select value={subCatFilter} onValueChange={setSubCatFilter}>
+              <SelectTrigger className="w-48" data-testid="select-filter-subcategory"><SelectValue placeholder="Subcategory" /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">All Categories</SelectItem>
-                {jobCats.map(c => <SelectItem key={c.id} value={c.name}>{c.name}</SelectItem>)}
+                <SelectItem value="all">All Subcategories</SelectItem>
+                {getSubcategories(catFilter).map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
               </SelectContent>
             </Select>
           )}
@@ -383,7 +399,7 @@ function AllJobsTab() {
       {selectedIds.size > 0 && (
         <div className="mb-4 flex items-center gap-3 bg-primary/5 border border-primary/20 rounded-xl px-5 py-3" data-testid="bulk-action-bar">
           <span className="text-sm font-medium">{selectedIds.size} job{selectedIds.size !== 1 ? "s" : ""} selected</span>
-          <Button size="sm" onClick={() => { setBulkForm({ jobType: "", category: "", industry: "" }); setBulkEditOpen(true); }} data-testid="button-bulk-edit">
+          <Button size="sm" onClick={() => { setBulkForm({ jobType: "", category: "", subcategory: "", industry: "" }); setBulkEditOpen(true); }} data-testid="button-bulk-edit">
             <Pencil size={14} className="mr-1.5" /> Bulk Edit
           </Button>
           <Button variant="ghost" size="sm" onClick={() => setSelectedIds(new Set())} data-testid="button-clear-selection">Clear</Button>
@@ -411,6 +427,7 @@ function AllJobsTab() {
                   <h3 className="font-semibold">{job.title}</h3>
                   {job.companyName && <span className="text-sm text-muted-foreground">· {job.companyName}</span>}
                   {job.category && <Badge variant="outline" className="text-xs">{job.category}</Badge>}
+                  {(job as any).subcategory && <Badge variant="outline" className="text-xs">{(job as any).subcategory}</Badge>}
                   {job.industry && <Badge variant="outline" className="text-xs">{job.industry}</Badge>}
                   {!job.isPublished && <Badge variant="secondary" className="text-xs" data-testid={`badge-draft-job-${job.id}`}>Draft</Badge>}
                 </div>
@@ -447,6 +464,7 @@ function AllJobsTab() {
                 <div><p className="text-muted-foreground">Salary</p><p className="font-medium">{viewJob.salary || "—"}</p></div>
                 <div><p className="text-muted-foreground">Job Type</p><p className="font-medium">{viewJob.jobType || "—"}</p></div>
                 <div><p className="text-muted-foreground">Category</p><p className="font-medium">{viewJob.category || "—"}</p></div>
+                <div><p className="text-muted-foreground">Subcategory</p><p className="font-medium">{(viewJob as any).subcategory || "—"}</p></div>
                 <div><p className="text-muted-foreground">Expires</p><p className="font-medium">{viewJob.expiresAt ? new Date(viewJob.expiresAt).toLocaleDateString() : "No expiration"}</p></div>
               </div>
               <div><p className="text-muted-foreground">Description</p><p className="whitespace-pre-wrap">{viewJob.description}</p></div>
@@ -473,11 +491,19 @@ function AllJobsTab() {
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div><Label>Category</Label>
-                <Select value={editForm.category || "none"} onValueChange={v => setEditForm(f => ({ ...f, category: v === "none" ? "" : v }))}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent><SelectItem value="none">None</SelectItem>{jobCats.map(c => <SelectItem key={c.id} value={c.name}>{c.name}</SelectItem>)}</SelectContent>
+                <Select value={editForm.category || "none"} onValueChange={v => setEditForm(f => ({ ...f, category: v === "none" ? "" : v, subcategory: "" }))}>
+                  <SelectTrigger data-testid="select-edit-category"><SelectValue /></SelectTrigger>
+                  <SelectContent><SelectItem value="none">None</SelectItem>{taxonomyCategories.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
+              <div><Label>Subcategory</Label>
+                <Select value={editForm.subcategory || "none"} onValueChange={v => setEditForm(f => ({ ...f, subcategory: v === "none" ? "" : v }))} disabled={!editForm.category}>
+                  <SelectTrigger data-testid="select-edit-subcategory"><SelectValue /></SelectTrigger>
+                  <SelectContent><SelectItem value="none">None</SelectItem>{editForm.category && getSubcategories(editForm.category).map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
               <div><Label>Industry</Label>
                 <Select value={editForm.industry || "none"} onValueChange={v => setEditForm(f => ({ ...f, industry: v === "none" ? "" : v }))}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
@@ -556,15 +582,28 @@ function AllJobsTab() {
             </div>
             <div>
               <Label className="text-sm font-semibold mb-1.5 block">Category</Label>
-              <Select value={bulkForm.category} onValueChange={v => setBulkForm(f => ({ ...f, category: v }))}>
+              <Select value={bulkForm.category} onValueChange={v => setBulkForm(f => ({ ...f, category: v, subcategory: v === "__clear__" ? "__clear__" : "" }))}>
                 <SelectTrigger data-testid="select-bulk-category"><SelectValue placeholder="— No change —" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="__unchanged__">— No change —</SelectItem>
                   <SelectItem value="__clear__">Clear category</SelectItem>
-                  {jobCats.map(c => <SelectItem key={c.id} value={c.name}>{c.name}</SelectItem>)}
+                  {taxonomyCategories.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
+            {bulkForm.category && bulkForm.category !== "__unchanged__" && bulkForm.category !== "__clear__" && (
+              <div>
+                <Label className="text-sm font-semibold mb-1.5 block">Subcategory</Label>
+                <Select value={bulkForm.subcategory} onValueChange={v => setBulkForm(f => ({ ...f, subcategory: v }))}>
+                  <SelectTrigger data-testid="select-bulk-subcategory"><SelectValue placeholder="— No change —" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__unchanged__">— No change —</SelectItem>
+                    <SelectItem value="__clear__">Clear subcategory</SelectItem>
+                    {getSubcategories(bulkForm.category).map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
             <div>
               <Label className="text-sm font-semibold mb-1.5 block">Industry</Label>
               <Select value={bulkForm.industry} onValueChange={v => setBulkForm(f => ({ ...f, industry: v }))}>
@@ -600,8 +639,8 @@ function PostJobTab({ userId }: { userId: number }) {
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const { data: categories } = useQuery<Category[]>({ queryKey: ["/api/categories"] });
-  const jobCats = (categories || []).filter(c => c.type === "job");
   const industries = (categories || []).filter(c => c.type === "industry");
+  const taxonomyCats = getCategories();
 
   const form = useForm<z.infer<typeof jobFormSchema>>({
     resolver: zodResolver(jobFormSchema),
@@ -685,19 +724,33 @@ function PostJobTab({ userId }: { userId: number }) {
               <FormField control={form.control} name="category" render={({ field }) => (
                 <FormItem>
                   <FormLabel>Job Category</FormLabel>
-                  <Select onValueChange={v => field.onChange(v === "none" ? "" : v)} defaultValue={field.value || "none"}>
+                  <Select onValueChange={v => { field.onChange(v === "none" ? "" : v); form.setValue("subcategory", ""); }} value={field.value || "none"}>
                     <FormControl><SelectTrigger data-testid="select-job-category"><SelectValue placeholder="Select category" /></SelectTrigger></FormControl>
                     <SelectContent>
                       <SelectItem value="none">None</SelectItem>
-                      {jobCats.map(c => <SelectItem key={c.id} value={c.name}>{c.name}</SelectItem>)}
+                      {taxonomyCats.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
                     </SelectContent>
                   </Select>
                 </FormItem>
               )} />
+              <FormField control={form.control} name="subcategory" render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Subcategory</FormLabel>
+                  <Select onValueChange={v => field.onChange(v === "none" ? "" : v)} value={field.value || "none"} disabled={!form.watch("category")}>
+                    <FormControl><SelectTrigger data-testid="select-job-subcategory"><SelectValue placeholder="Select subcategory" /></SelectTrigger></FormControl>
+                    <SelectContent>
+                      <SelectItem value="none">None</SelectItem>
+                      {form.watch("category") && getSubcategories(form.watch("category")).map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </FormItem>
+              )} />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
               <FormField control={form.control} name="industry" render={({ field }) => (
                 <FormItem>
                   <FormLabel>Industry</FormLabel>
-                  <Select onValueChange={v => field.onChange(v === "none" ? "" : v)} defaultValue={field.value || "none"}>
+                  <Select onValueChange={v => field.onChange(v === "none" ? "" : v)} value={field.value || "none"}>
                     <FormControl><SelectTrigger data-testid="select-job-industry"><SelectValue placeholder="Select industry" /></SelectTrigger></FormControl>
                     <SelectContent>
                       <SelectItem value="none">None</SelectItem>
@@ -847,9 +900,9 @@ function UploadJobsTab({ userId }: { userId: number }) {
     }
   };
 
-  const sampleCsv = `externalJobKey,title,companyName,jobType,category,category2,category3,industry,locationCity,locationState,locationCountry,description,coreResponsibilities,requirements,benefits,salaryMin,salaryMax,salaryUnit,experienceLevel,skills,keywords,applyUrl
-CDL-001,CDL Class A Driver,Fast Trucking Co.,Full-time,Driving,,,Trucking,Chicago,IL,USA,"Long haul driver needed","Drive routes; maintain logs","CDL Class A; 3+ years","Health insurance; 401k",70000,90000,year,Mid-level,"CDL,long haul,freight","trucking,driver",
-DISP-001,Fleet Dispatcher,Metro Logistics,Contract,Dispatch,,,Logistics,Atlanta,GA,USA,"Manage driver schedules","Schedule routes; coordinate","2+ years dispatching","PTO; remote",55000,65000,year,Entry-level,"dispatching,routing","logistics,dispatch",https://example.com/apply`;
+  const sampleCsv = `externalJobKey,title,companyName,jobType,category,subcategory,industry,locationCity,locationState,locationCountry,description,coreResponsibilities,requirements,benefits,salaryMin,salaryMax,salaryUnit,experienceLevel,skills,keywords,applyUrl
+CDL-001,CDL Class A Driver,Fast Trucking Co.,Full-time,Drivers (CDL & Non-CDL),CDL A Driver (OTR),Trucking,Chicago,IL,USA,"Long haul driver needed","Drive routes; maintain logs","CDL Class A; 3+ years","Health insurance; 401k",70000,90000,year,Mid-level,"CDL,long haul,freight","trucking,driver",
+DISP-001,Fleet Dispatcher,Metro Logistics,Contract,Ground Transportation Ops (Dispatch Planning Fleet),Dispatcher,Logistics,Atlanta,GA,USA,"Manage driver schedules","Schedule routes; coordinate","2+ years dispatching","PTO; remote",55000,65000,year,Entry-level,"dispatching,routing","logistics,dispatch",https://example.com/apply`;
 
   const downloadSample = () => {
     const blob = new Blob([sampleCsv], { type: "text/csv" });
@@ -875,7 +928,7 @@ DISP-001,Fleet Dispatcher,Metro Logistics,Contract,Dispatch,,,Logistics,Atlanta,
       <div className="bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 rounded-xl p-4 text-sm text-blue-800 dark:text-blue-300 mb-6">
         <p className="font-semibold mb-1">Required columns:</p>
         <code className="text-xs">externalJobKey, title, description, requirements</code>
-        <p className="mt-1">Optional: <code className="text-xs">companyName, jobType, category, category2, category3, industry, locationCity, locationState, locationCountry, coreResponsibilities, benefits, salaryMin, salaryMax, salaryUnit, experienceLevelYears (0-2 | 2-5 | 5-10 | 10+), skills, keywords, applyUrl</code></p>
+        <p className="mt-1">Optional: <code className="text-xs">companyName, jobType, category, subcategory, industry, locationCity, locationState, locationCountry, coreResponsibilities, benefits, salaryMin, salaryMax, salaryUnit, experienceLevelYears (0-2 | 2-5 | 5-10 | 10+), skills, keywords, applyUrl</code></p>
       </div>
 
       <div className="bg-white dark:bg-slate-900 rounded-2xl border border-border p-8 mb-6">

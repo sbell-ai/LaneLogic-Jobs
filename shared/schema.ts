@@ -37,6 +37,7 @@ export const jobs = pgTable("jobs", {
   companyName: text("company_name"),
   jobType: text("job_type"),
   category: text("category"),
+  subcategory: text("subcategory"),
   industry: text("industry"),
   description: text("description").notNull(),
   requirements: text("requirements").notNull(),

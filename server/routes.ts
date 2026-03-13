@@ -17,6 +17,7 @@ import { createHash } from "crypto";
 import { getPricingData, resolveUserEntitlements, checkEntitlement } from "./registry/entitlementResolver";
 import { JOB_CATEGORIES, US_STATES as SEO_STATES } from "@shared/seoConfig";
 import { validateKeywords } from "./taggingValidator";
+import { validateCategoryPair, normalizeCategory, normalizeSubcategory, getCategories } from "@shared/jobTaxonomy";
 
 const LANELOGIC_OWNED_DOMAINS: string[] = (process.env.LANELOGIC_OWNED_DOMAINS || "lanelogicjobs.com,lanelogic.com")
   .split(",").map(d => d.trim().toLowerCase()).filter(Boolean);
@@ -115,8 +116,34 @@ function validateAndMapCsvRow(
     errors.push({ rowNumber, field: "requirements", errorCode: "MISSING_REQUIRED_FIELD", errorMessage: "requirements is required" });
   }
 
-  const cats = [get("category"), get("category2"), get("category3")].filter(Boolean);
-  const category = cats.join(" | ") || null;
+  const rawCategory = get("category") || null;
+  const rawSubcategory = get("subcategory") || null;
+  let category: string | null = null;
+  let subcategory: string | null = null;
+  if (rawCategory) {
+    const normalizedCat = normalizeCategory(rawCategory);
+    if (!normalizedCat) {
+      errors.push({ rowNumber, field: "category", errorCode: "INVALID_CATEGORY", errorMessage: `Category "${rawCategory}" is not a valid taxonomy category.` });
+    } else {
+      category = normalizedCat;
+    }
+  }
+  if (rawSubcategory && !rawCategory) {
+    errors.push({ rowNumber, field: "subcategory", errorCode: "INVALID_CATEGORY_PAIR", errorMessage: `Subcategory "${rawSubcategory}" provided without a category.` });
+  } else if (rawSubcategory && rawCategory && !category) {
+    errors.push({ rowNumber, field: "subcategory", errorCode: "INVALID_CATEGORY_PAIR", errorMessage: `Subcategory "${rawSubcategory}" provided with invalid category "${rawCategory}".` });
+  } else if (rawSubcategory && category) {
+    const normalizedSub = normalizeSubcategory(category, rawSubcategory);
+    if (!normalizedSub) {
+      errors.push({ rowNumber, field: "subcategory", errorCode: "INVALID_SUBCATEGORY", errorMessage: `Subcategory "${rawSubcategory}" is not valid for category "${category}".` });
+    } else {
+      subcategory = normalizedSub;
+    }
+  }
+  const catPairResult = validateCategoryPair(category, subcategory);
+  if (!catPairResult.valid) {
+    errors.push({ rowNumber, field: "category", errorCode: "INVALID_CATEGORY_PAIR", errorMessage: catPairResult.error! });
+  }
 
   let salary: string | null = null;
   const salaryMin = get("salaryMin");
@@ -193,6 +220,7 @@ function validateAndMapCsvRow(
     companyName: get("companyName") || null,
     jobType: get("jobType") || null,
     category,
+    subcategory,
     industry: get("industry") || null,
     description: paragraphize(description || ""),
     requirements: requirements || "",
@@ -521,6 +549,8 @@ export async function registerRoutes(
       const body = { ...req.body };
       if (body.expiresAt && typeof body.expiresAt === "string") body.expiresAt = new Date(body.expiresAt);
       if (body.expiresAt === null || body.expiresAt === "") body.expiresAt = null;
+      const catCheck = validateCategoryPair(body.category, body.subcategory);
+      if (!catCheck.valid) return res.status(400).json({ message: catCheck.error });
       const input = api.jobs.create.input.parse(body);
       const job = await storage.createJob(input);
       res.status(201).json(job);
@@ -543,6 +573,8 @@ export async function registerRoutes(
       if (body.expiresAt === null || body.expiresAt === "") body.expiresAt = null;
       if (body.publishedAt && typeof body.publishedAt === "string") body.publishedAt = new Date(body.publishedAt);
       if (body.publishedAt === null || body.publishedAt === "") body.publishedAt = null;
+      const catCheck = validateCategoryPair(body.category ?? existingJob.category, body.subcategory ?? existingJob.subcategory);
+      if (!catCheck.valid) return res.status(400).json({ message: catCheck.error });
       const input = api.jobs.update.input.parse(body);
       const job = await storage.updateJob(jobId, input);
       res.json(job);
@@ -564,15 +596,37 @@ export async function registerRoutes(
   });
 
   app.put("/api/jobs-bulk-update", async (req, res) => {
+    if (!req.isAuthenticated() || !req.user || (req.user as any).role !== "admin") {
+      return res.status(403).json({ message: "Admin access required" });
+    }
     try {
       const { ids, updates } = req.body as { ids: number[]; updates: Record<string, any> };
       if (!Array.isArray(ids) || ids.length === 0) return res.status(400).json({ message: "No job IDs provided" });
-      const allowed = ["jobType", "category", "industry"];
+      const allowed = ["jobType", "category", "subcategory", "industry"];
       const filtered: Record<string, any> = {};
       for (const key of allowed) {
         if (key in updates) filtered[key] = updates[key];
       }
       if (Object.keys(filtered).length === 0) return res.status(400).json({ message: "No valid fields to update" });
+      if ("category" in filtered || "subcategory" in filtered) {
+        const hasCatUpdate = "category" in filtered;
+        const hasSubUpdate = "subcategory" in filtered;
+        if (hasCatUpdate && hasSubUpdate) {
+          const catVal = filtered.category === "" ? null : filtered.category;
+          const subVal = filtered.subcategory === "" ? null : filtered.subcategory;
+          const catCheck = validateCategoryPair(catVal, subVal);
+          if (!catCheck.valid) return res.status(400).json({ message: catCheck.error });
+        } else {
+          for (const id of ids) {
+            const existingJob = await storage.getJob(id);
+            if (!existingJob) continue;
+            const mergedCat = hasCatUpdate ? (filtered.category === "" ? null : filtered.category) : (existingJob as any).category;
+            const mergedSub = hasSubUpdate ? (filtered.subcategory === "" ? null : filtered.subcategory) : (existingJob as any).subcategory;
+            const catCheck = validateCategoryPair(mergedCat ?? null, mergedSub ?? null);
+            if (!catCheck.valid) return res.status(400).json({ message: `Job #${id}: ${catCheck.error}` });
+          }
+        }
+      }
       const results = await Promise.all(ids.map(id => storage.updateJob(id, filtered)));
       res.json({ updated: results.length });
     } catch (err) {
@@ -1097,6 +1151,70 @@ export async function registerRoutes(
         }
       }
       res.json({ message: `Paragraphized ${updated} job descriptions`, updated });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  const LEGACY_CATEGORY_MAP: Record<string, string | null> = {
+    "driver": "Drivers (CDL & Non-CDL)",
+    "driving": "Drivers (CDL & Non-CDL)",
+    "driving | transport": "Drivers (CDL & Non-CDL)",
+    "driving | otr": "Drivers (CDL & Non-CDL)",
+    "otr": "Drivers (CDL & Non-CDL)",
+    "local": "Drivers (CDL & Non-CDL)",
+    "flatbed": "Drivers (CDL & Non-CDL)",
+    "tanker | hazmat": "Drivers (CDL & Non-CDL)",
+    "owner-operator": "Drivers (CDL & Non-CDL)",
+    "dispatch": "Ground Transportation Ops (Dispatch, Planning, Fleet)",
+    "dispatcher": "Ground Transportation Ops (Dispatch, Planning, Fleet)",
+    "warehouse": "Warehousing & Distribution (DC Ops)",
+    "operators": "Warehousing & Distribution (DC Ops)",
+    "operations management - district": "Leadership & Management",
+    "operations management - frontline": "Leadership & Management",
+    "operations support": "Leadership & Management",
+    "account management": "Customer Service & Account Management",
+    "accounts payable": "Finance, Billing, Claims & Audit",
+    "ce inbound sales and service": "Customer Service & Account Management",
+    "technicians": null,
+    "mechanic": null,
+    "intern": null,
+    "it project management": null,
+    "welding": null,
+    "sustainability and environmental services": null,
+  };
+
+  app.post("/api/admin/jobs/migrate-categories", async (req, res) => {
+    if (!req.isAuthenticated() || !req.user || (req.user as any).role !== "admin") {
+      return res.status(403).json({ message: "Admin access required" });
+    }
+    try {
+      const allJobs = await db.select({ id: jobs.id, category: jobs.category }).from(jobs);
+      let mapped = 0;
+      let cleared = 0;
+      let unchanged = 0;
+      for (const job of allJobs) {
+        if (!job.category || job.category.trim() === "") { unchanged++; continue; }
+        const normalized = normalizeCategory(job.category);
+        if (normalized) {
+          if (normalized !== job.category) {
+            await db.update(jobs).set({ category: normalized }).where(eq(jobs.id, job.id));
+            mapped++;
+          } else {
+            unchanged++;
+          }
+          continue;
+        }
+        const legacyMapping = LEGACY_CATEGORY_MAP[job.category.toLowerCase()];
+        if (legacyMapping !== undefined) {
+          await db.update(jobs).set({ category: legacyMapping }).where(eq(jobs.id, job.id));
+          if (legacyMapping) mapped++; else cleared++;
+        } else {
+          await db.update(jobs).set({ category: null }).where(eq(jobs.id, job.id));
+          cleared++;
+        }
+      }
+      res.json({ message: `Category migration complete`, mapped, cleared, unchanged, total: allJobs.length });
     } catch (err: any) {
       res.status(500).json({ message: err.message });
     }

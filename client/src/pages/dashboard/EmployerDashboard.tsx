@@ -23,6 +23,7 @@ import type { Job, Application, Category } from "@shared/schema";
 import { insertJobSchema } from "@shared/schema";
 import { z } from "zod";
 import { Link } from "wouter";
+import { getCategories, getSubcategories } from "@shared/jobTaxonomy";
 
 const JOB_TYPES = ["Full-time", "Part-time", "Contract", "Seasonal", "Owner-Operator", "Lease Purchase", "Temporary"];
 
@@ -43,8 +44,8 @@ function PostJobTab({ userId }: { userId: number }) {
   const { toast } = useToast();
 
   const { data: categories } = useQuery<Category[]>({ queryKey: ["/api/categories"] });
-  const jobCategories = (categories || []).filter((c) => c.type === "job");
   const industries = (categories || []).filter((c) => c.type === "industry");
+  const taxonomyCats = getCategories();
 
   const form = useForm<JobFormValues>({
     resolver: zodResolver(jobFormSchema),
@@ -53,7 +54,7 @@ function PostJobTab({ userId }: { userId: number }) {
       description: "", requirements: "", benefits: "",
       locationCity: "", locationState: "", locationCountry: "USA",
       salary: "", applyUrl: "", isExternalApply: false,
-      category: "", industry: "", expiresAt: "",
+      category: "", subcategory: "", industry: "", expiresAt: "",
     },
   });
 
@@ -127,15 +128,29 @@ function PostJobTab({ userId }: { userId: number }) {
               <FormField control={form.control} name="category" render={({ field }) => (
                 <FormItem>
                   <FormLabel>Category</FormLabel>
-                  <Select onValueChange={(v) => field.onChange(v === "__none__" ? "" : v)} value={field.value || "__none__"}>
+                  <Select onValueChange={(v) => { field.onChange(v === "__none__" ? "" : v); form.setValue("subcategory", ""); }} value={field.value || "__none__"}>
                     <FormControl><SelectTrigger data-testid="select-job-category"><SelectValue placeholder="Select category" /></SelectTrigger></FormControl>
                     <SelectContent>
                       <SelectItem value="__none__">None</SelectItem>
-                      {jobCategories.map(c => <SelectItem key={c.id} value={c.name}>{c.name}</SelectItem>)}
+                      {taxonomyCats.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
                     </SelectContent>
                   </Select>
                 </FormItem>
               )} />
+              <FormField control={form.control} name="subcategory" render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Subcategory</FormLabel>
+                  <Select onValueChange={(v) => field.onChange(v === "__none__" ? "" : v)} value={field.value || "__none__"} disabled={!form.watch("category")}>
+                    <FormControl><SelectTrigger data-testid="select-job-subcategory"><SelectValue placeholder="Select subcategory" /></SelectTrigger></FormControl>
+                    <SelectContent>
+                      <SelectItem value="__none__">None</SelectItem>
+                      {form.watch("category") && getSubcategories(form.watch("category")).map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </FormItem>
+              )} />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
               <FormField control={form.control} name="industry" render={({ field }) => (
                 <FormItem>
                   <FormLabel>Industry</FormLabel>

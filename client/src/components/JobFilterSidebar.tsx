@@ -11,11 +11,12 @@ import {
 import { motion, AnimatePresence } from "framer-motion";
 import type { Job, Category } from "@shared/schema";
 import { subDays } from "date-fns";
+import { getCategories } from "@shared/jobTaxonomy";
 
 export const SALARY_MAX = 250000;
 
 const JOB_TYPES = ["Full-time", "Part-time", "Contract", "Internship"];
-const SECTORS = ["Trucking", "Logistics", "Freight Brokerage", "Supply Chain", "Warehousing", "Fleet Management"];
+const SECTORS = getCategories() as unknown as string[];
 const EXPERIENCE_LEVELS = ["Entry Level", "Mid Level", "Senior"];
 const CDL_OPTIONS = ["Yes", "No"];
 const WORK_ENVIRONMENTS = ["Remote", "Hybrid", "On-site"];
@@ -206,7 +207,7 @@ export function filterJobs(jobs: Job[], f: JobFilters): Job[] {
     const jobTitle = (job.title || "").toLowerCase();
     const matchSector = f.sectors.length === 0 || f.sectors.some((s) => {
       const sl = s.toLowerCase();
-      return jobIndustry.includes(sl) || jobCategory.includes(sl) || jobDesc.includes(sl) || jobTitle.includes(sl);
+      return jobCategory === sl || jobIndustry.includes(sl) || jobDesc.includes(sl) || jobTitle.includes(sl);
     });
 
     const matchExperience = f.experienceLevels.length === 0 || f.experienceLevels.some((lvl) => {
@@ -312,7 +313,7 @@ function SidebarContent({ filters: f, activeFilterCount, onClearAll, industries 
         <CheckboxFilter items={JOB_TYPES} selected={f.jobTypes} onChange={f.setJobTypes} testIdPrefix="checkbox-job-type" />
       </FilterSection>
 
-      <FilterSection title="Transportation Sector">
+      <FilterSection title="Job Category">
         <CheckboxFilter items={SECTORS} selected={f.sectors} onChange={f.setSectors} testIdPrefix="checkbox-sector" />
       </FilterSection>
 
