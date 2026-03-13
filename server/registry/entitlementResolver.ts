@@ -10,6 +10,7 @@ import type {
   FeaturesEntitlementsSnapshot,
   ProductEntitlementOverridesSnapshot,
 } from "./notionSync";
+import { storage } from "../storage";
 
 export type ResolvedEntitlement = {
   entitlementKey: string;
@@ -25,7 +26,157 @@ function getEnvironment(): Environment {
   return process.env.REPLIT_DOMAINS ? "prod" : "staging";
 }
 
-async function loadSnapshots() {
+async function loadFromAdminTables(): Promise<{
+  products: ProductRow[];
+  entitlements: EntitlementRow[];
+  overrides: OverrideRow[];
+} | null> {
+  try {
+    const [dbProducts, dbEntitlements, dbOverrides] = await Promise.all([
+      storage.getAdminProducts(),
+      storage.getAdminEntitlements(),
+      storage.getAdminProductOverrides(),
+    ]);
+
+    if (dbProducts.length === 0 || dbEntitlements.length === 0) return null;
+
+    const allPEs = await Promise.all(
+      dbProducts.map((p) => storage.getAdminProductEntitlements(p.id))
+    );
+
+    const entIdMap = new Map(dbEntitlements.map((e) => [e.id, e]));
+
+    const products: ProductRow[] = dbProducts.map((p, idx) => {
+      const entitlementPageIds = allPEs[idx]
+        .map((pe) => `ent-${pe.entitlementId}`)
+        .filter((id) => {
+          const numId = Number(id.replace("ent-", ""));
+          return entIdMap.has(numId);
+        });
+
+      const stripePriceId =
+        p.stripePriceIdMonthly || p.stripePriceIdYearly || p.stripePriceIdOneTime || "";
+      const price = p.priceMonthly ?? p.priceYearly ?? p.priceOneTime ?? 0;
+      let billingCycle = "Monthly";
+      if (p.stripePriceIdYearly || (p.priceYearly && !p.priceMonthly)) {
+        billingCycle = "Annual";
+      }
+
+      return {
+        notionPageId: `admin-product-${p.id}`,
+        productName: p.name,
+        audience: p.audience,
+        billingCycle,
+        planType: p.planType,
+        price,
+        stripeProductId: p.stripeProductId || "",
+        stripePriceId,
+        trialDays: p.trialDays,
+        logicKey: p.logicKey || "",
+        status: p.status,
+        entitlementPageIds,
+        quotaSource: p.quotaSource || "",
+        activeInstruction: p.activeInstruction || "",
+      };
+    });
+
+    const monthlyDuplicates: ProductRow[] = [];
+    for (const p of dbProducts) {
+      if (
+        p.billingType === "subscription" &&
+        p.stripePriceIdMonthly &&
+        p.stripePriceIdYearly
+      ) {
+        const idx = dbProducts.indexOf(p);
+        const entitlementPageIds = allPEs[idx]
+          .map((pe) => `ent-${pe.entitlementId}`);
+        monthlyDuplicates.push({
+          notionPageId: `admin-product-${p.id}-monthly`,
+          productName: p.name,
+          audience: p.audience,
+          billingCycle: "Monthly",
+          planType: p.planType,
+          price: p.priceMonthly ?? 0,
+          stripeProductId: p.stripeProductId || "",
+          stripePriceId: p.stripePriceIdMonthly,
+          trialDays: p.trialDays,
+          logicKey: p.logicKey || "",
+          status: p.status,
+          entitlementPageIds,
+          quotaSource: p.quotaSource || "",
+          activeInstruction: p.activeInstruction || "",
+        });
+
+        const existingIdx = products.findIndex(
+          (ep) => ep.notionPageId === `admin-product-${p.id}`
+        );
+        if (existingIdx >= 0) {
+          products[existingIdx].billingCycle = "Annual";
+          products[existingIdx].price = p.priceYearly ?? 0;
+          products[existingIdx].stripePriceId = p.stripePriceIdYearly!;
+        }
+      }
+    }
+    products.push(...monthlyDuplicates);
+
+    const entitlements: EntitlementRow[] = dbEntitlements.map((e) => ({
+      notionPageId: `ent-${e.id}`,
+      entitlementName: e.name,
+      entitlementKey: e.key,
+      type: e.type,
+      unit: e.unit || "",
+      defaultValue: e.defaultValue || "",
+      status: e.status,
+    }));
+
+    const overrides: OverrideRow[] = dbOverrides.map((o) => ({
+      notionPageId: `ovr-${o.id}`,
+      overrideName: `Override ${o.id}`,
+      productPageId: `admin-product-${o.productId}`,
+      entitlementPageId: `ent-${o.entitlementId}`,
+      value: o.value,
+      isUnlimited: o.isUnlimited,
+      enabled: o.enabled,
+      status: o.status,
+      notes: o.notes || "",
+    }));
+
+    const extraOverrides: OverrideRow[] = [];
+    for (const o of dbOverrides) {
+      const product = dbProducts.find((p) => p.id === o.productId);
+      if (
+        product &&
+        product.billingType === "subscription" &&
+        product.stripePriceIdMonthly &&
+        product.stripePriceIdYearly
+      ) {
+        extraOverrides.push({
+          notionPageId: `ovr-${o.id}-monthly`,
+          overrideName: `Override ${o.id} Monthly`,
+          productPageId: `admin-product-${o.productId}-monthly`,
+          entitlementPageId: `ent-${o.entitlementId}`,
+          value: o.value,
+          isUnlimited: o.isUnlimited,
+          enabled: o.enabled,
+          status: o.status,
+          notes: o.notes || "",
+        });
+      }
+    }
+    overrides.push(...extraOverrides);
+
+    return { products, entitlements, overrides };
+  } catch (err) {
+    console.error("[entitlementResolver] Failed to load from admin tables:", err);
+    return null;
+  }
+}
+
+async function loadFromSnapshots(): Promise<{
+  products: ProductRow[];
+  entitlements: EntitlementRow[];
+  overrides: OverrideRow[];
+} | null> {
   const env = getEnvironment();
 
   const [ppSnap, feSnap, ovrSnap] = await Promise.all([
@@ -43,6 +194,12 @@ async function loadSnapshots() {
   const ovr = ovrSnap.payload as ProductEntitlementOverridesSnapshot;
 
   return { products: pp.rows, entitlements: fe.rows, overrides: ovr.rows };
+}
+
+async function loadSnapshots() {
+  const adminData = await loadFromAdminTables();
+  if (adminData) return adminData;
+  return loadFromSnapshots();
 }
 
 function buildEntitlementMap(entitlements: EntitlementRow[]): Map<string, EntitlementRow> {

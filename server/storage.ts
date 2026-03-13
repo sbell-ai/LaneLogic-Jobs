@@ -2,6 +2,7 @@ import { db } from "./db";
 import {
   users, jobs, applications, resources, blogPosts, resumes, siteSettings, categories, coupons, pages,
   importRuns, importArtifacts, socialPosts,
+  adminProducts, adminEntitlements, adminProductOverrides, adminProductEntitlements, migrationState,
   type User, type InsertUser, type Job, type InsertJob,
   type Application, type InsertApplication,
   type Resource, type InsertResource,
@@ -13,6 +14,11 @@ import {
   type ImportRun, type InsertImportRun,
   type ImportArtifact, type InsertImportArtifact,
   type SocialPost, type InsertSocialPost,
+  type AdminProduct, type InsertAdminProduct,
+  type AdminEntitlement, type InsertAdminEntitlement,
+  type AdminProductOverride, type InsertAdminProductOverride,
+  type AdminProductEntitlement, type InsertAdminProductEntitlement,
+  type MigrationState, type InsertMigrationState,
   type SiteSettingsData, DEFAULT_SETTINGS
 } from "@shared/schema";
 import { eq, and, sql, desc, isNotNull } from "drizzle-orm";
@@ -97,6 +103,35 @@ export interface IStorage {
   // Site Settings
   getSiteSettings(): Promise<SiteSettingsData>;
   updateSiteSettings(settings: SiteSettingsData): Promise<SiteSettingsData>;
+
+  // Admin Products
+  getAdminProducts(): Promise<AdminProduct[]>;
+  getAdminProduct(id: number): Promise<AdminProduct | undefined>;
+  createAdminProduct(product: InsertAdminProduct): Promise<AdminProduct>;
+  updateAdminProduct(id: number, updates: Partial<InsertAdminProduct>): Promise<AdminProduct>;
+  deleteAdminProduct(id: number): Promise<void>;
+
+  // Admin Entitlements
+  getAdminEntitlements(): Promise<AdminEntitlement[]>;
+  getAdminEntitlement(id: number): Promise<AdminEntitlement | undefined>;
+  createAdminEntitlement(entitlement: InsertAdminEntitlement): Promise<AdminEntitlement>;
+  updateAdminEntitlement(id: number, updates: Partial<InsertAdminEntitlement>): Promise<AdminEntitlement>;
+  deleteAdminEntitlement(id: number): Promise<void>;
+
+  // Admin Product Overrides
+  getAdminProductOverrides(productId?: number): Promise<AdminProductOverride[]>;
+  getAdminProductOverride(id: number): Promise<AdminProductOverride | undefined>;
+  createAdminProductOverride(override: InsertAdminProductOverride): Promise<AdminProductOverride>;
+  updateAdminProductOverride(id: number, updates: Partial<InsertAdminProductOverride>): Promise<AdminProductOverride>;
+  deleteAdminProductOverride(id: number): Promise<void>;
+
+  // Admin Product Entitlements (join table)
+  getAdminProductEntitlements(productId: number): Promise<AdminProductEntitlement[]>;
+  setAdminProductEntitlements(productId: number, entitlementIds: number[]): Promise<void>;
+
+  // Migration State
+  getMigrationState(key: string): Promise<MigrationState | undefined>;
+  setMigrationState(state: InsertMigrationState): Promise<MigrationState>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -359,6 +394,100 @@ export class DatabaseStorage implements IStorage {
         .returning();
       return row.settings;
     }
+  }
+  // Admin Products
+  async getAdminProducts(): Promise<AdminProduct[]> {
+    return await db.select().from(adminProducts).orderBy(desc(adminProducts.createdAt));
+  }
+  async getAdminProduct(id: number): Promise<AdminProduct | undefined> {
+    const [p] = await db.select().from(adminProducts).where(eq(adminProducts.id, id));
+    return p;
+  }
+  async createAdminProduct(product: InsertAdminProduct): Promise<AdminProduct> {
+    const [p] = await db.insert(adminProducts).values(product).returning();
+    return p;
+  }
+  async updateAdminProduct(id: number, updates: Partial<InsertAdminProduct>): Promise<AdminProduct> {
+    const [p] = await db.update(adminProducts).set({ ...updates, updatedAt: new Date() }).where(eq(adminProducts.id, id)).returning();
+    return p;
+  }
+  async deleteAdminProduct(id: number): Promise<void> {
+    await db.delete(adminProductEntitlements).where(eq(adminProductEntitlements.productId, id));
+    await db.delete(adminProductOverrides).where(eq(adminProductOverrides.productId, id));
+    await db.delete(adminProducts).where(eq(adminProducts.id, id));
+  }
+
+  // Admin Entitlements
+  async getAdminEntitlements(): Promise<AdminEntitlement[]> {
+    return await db.select().from(adminEntitlements).orderBy(desc(adminEntitlements.createdAt));
+  }
+  async getAdminEntitlement(id: number): Promise<AdminEntitlement | undefined> {
+    const [e] = await db.select().from(adminEntitlements).where(eq(adminEntitlements.id, id));
+    return e;
+  }
+  async createAdminEntitlement(entitlement: InsertAdminEntitlement): Promise<AdminEntitlement> {
+    const [e] = await db.insert(adminEntitlements).values(entitlement).returning();
+    return e;
+  }
+  async updateAdminEntitlement(id: number, updates: Partial<InsertAdminEntitlement>): Promise<AdminEntitlement> {
+    const [e] = await db.update(adminEntitlements).set({ ...updates, updatedAt: new Date() }).where(eq(adminEntitlements.id, id)).returning();
+    return e;
+  }
+  async deleteAdminEntitlement(id: number): Promise<void> {
+    await db.delete(adminProductOverrides).where(eq(adminProductOverrides.entitlementId, id));
+    await db.delete(adminProductEntitlements).where(eq(adminProductEntitlements.entitlementId, id));
+    await db.delete(adminEntitlements).where(eq(adminEntitlements.id, id));
+  }
+
+  // Admin Product Overrides
+  async getAdminProductOverrides(productId?: number): Promise<AdminProductOverride[]> {
+    if (productId !== undefined) {
+      return await db.select().from(adminProductOverrides).where(eq(adminProductOverrides.productId, productId));
+    }
+    return await db.select().from(adminProductOverrides);
+  }
+  async getAdminProductOverride(id: number): Promise<AdminProductOverride | undefined> {
+    const [o] = await db.select().from(adminProductOverrides).where(eq(adminProductOverrides.id, id));
+    return o;
+  }
+  async createAdminProductOverride(override: InsertAdminProductOverride): Promise<AdminProductOverride> {
+    const [o] = await db.insert(adminProductOverrides).values(override).returning();
+    return o;
+  }
+  async updateAdminProductOverride(id: number, updates: Partial<InsertAdminProductOverride>): Promise<AdminProductOverride> {
+    const [o] = await db.update(adminProductOverrides).set({ ...updates, updatedAt: new Date() }).where(eq(adminProductOverrides.id, id)).returning();
+    return o;
+  }
+  async deleteAdminProductOverride(id: number): Promise<void> {
+    await db.delete(adminProductOverrides).where(eq(adminProductOverrides.id, id));
+  }
+
+  // Admin Product Entitlements (join table)
+  async getAdminProductEntitlements(productId: number): Promise<AdminProductEntitlement[]> {
+    return await db.select().from(adminProductEntitlements).where(eq(adminProductEntitlements.productId, productId));
+  }
+  async setAdminProductEntitlements(productId: number, entitlementIds: number[]): Promise<void> {
+    await db.delete(adminProductEntitlements).where(eq(adminProductEntitlements.productId, productId));
+    if (entitlementIds.length > 0) {
+      await db.insert(adminProductEntitlements).values(
+        entitlementIds.map(eid => ({ productId, entitlementId: eid }))
+      );
+    }
+  }
+
+  // Migration State
+  async getMigrationState(key: string): Promise<MigrationState | undefined> {
+    const [m] = await db.select().from(migrationState).where(eq(migrationState.key, key));
+    return m;
+  }
+  async setMigrationState(state: InsertMigrationState): Promise<MigrationState> {
+    const existing = await this.getMigrationState(state.key);
+    if (existing) {
+      const [m] = await db.update(migrationState).set(state).where(eq(migrationState.key, state.key)).returning();
+      return m;
+    }
+    const [m] = await db.insert(migrationState).values(state).returning();
+    return m;
   }
 }
 

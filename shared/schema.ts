@@ -1,4 +1,4 @@
-import { pgTable, text, serial, integer, boolean, timestamp, jsonb, uniqueIndex } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, boolean, timestamp, jsonb, uniqueIndex, real } from "drizzle-orm/pg-core";
 import { relations, sql } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
@@ -228,6 +228,90 @@ export const socialPosts = pgTable("social_posts", {
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
+
+// ---- Admin Product Management (replaces Notion SOT) ----
+export const adminProducts = pgTable("admin_products", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  audience: text("audience").notNull(), // employer | job_seeker
+  kind: text("kind").notNull(), // base_plan | add_on
+  billingType: text("billing_type").notNull(), // subscription | one_time
+  priceMonthly: real("price_monthly"),
+  priceYearly: real("price_yearly"),
+  priceOneTime: real("price_one_time"),
+  stripeProductId: text("stripe_product_id"),
+  stripePriceIdMonthly: text("stripe_price_id_monthly"),
+  stripePriceIdYearly: text("stripe_price_id_yearly"),
+  stripePriceIdOneTime: text("stripe_price_id_one_time"),
+  logicKey: text("logic_key"),
+  trialDays: integer("trial_days").notNull().default(0),
+  status: text("status").notNull().default("Active"), // Active | Inactive
+  planType: text("plan_type").notNull().default("Subscription"), // Subscription | Top-up | Admin/Flag
+  quotaSource: text("quota_source"),
+  activeInstruction: text("active_instruction"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const adminEntitlements = pgTable("admin_entitlements", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  key: text("key").notNull().unique(),
+  type: text("type").notNull(), // Limit | Flag
+  unit: text("unit"),
+  defaultValue: text("default_value"),
+  status: text("status").notNull().default("Active"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const adminProductOverrides = pgTable("admin_product_overrides", {
+  id: serial("id").primaryKey(),
+  productId: integer("product_id").notNull(),
+  entitlementId: integer("entitlement_id").notNull(),
+  value: real("value"),
+  isUnlimited: boolean("is_unlimited").notNull().default(false),
+  enabled: boolean("enabled").notNull().default(false),
+  status: text("status").notNull().default("Active"),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => [
+  uniqueIndex("admin_product_overrides_product_entitlement_idx").on(table.productId, table.entitlementId),
+]);
+
+export const adminProductEntitlements = pgTable("admin_product_entitlements", {
+  id: serial("id").primaryKey(),
+  productId: integer("product_id").notNull(),
+  entitlementId: integer("entitlement_id").notNull(),
+}, (table) => [
+  uniqueIndex("admin_product_entitlements_product_entitlement_idx").on(table.productId, table.entitlementId),
+]);
+
+export const migrationState = pgTable("migration_state", {
+  id: serial("id").primaryKey(),
+  key: text("key").notNull().unique(),
+  completedAt: timestamp("completed_at"),
+  result: jsonb("result"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const insertAdminProductSchema = createInsertSchema(adminProducts).omit({ id: true, createdAt: true, updatedAt: true });
+export const insertAdminEntitlementSchema = createInsertSchema(adminEntitlements).omit({ id: true, createdAt: true, updatedAt: true });
+export const insertAdminProductOverrideSchema = createInsertSchema(adminProductOverrides).omit({ id: true, createdAt: true, updatedAt: true });
+export const insertAdminProductEntitlementSchema = createInsertSchema(adminProductEntitlements).omit({ id: true });
+export const insertMigrationStateSchema = createInsertSchema(migrationState).omit({ id: true, createdAt: true });
+
+export type AdminProduct = typeof adminProducts.$inferSelect;
+export type InsertAdminProduct = z.infer<typeof insertAdminProductSchema>;
+export type AdminEntitlement = typeof adminEntitlements.$inferSelect;
+export type InsertAdminEntitlement = z.infer<typeof insertAdminEntitlementSchema>;
+export type AdminProductOverride = typeof adminProductOverrides.$inferSelect;
+export type InsertAdminProductOverride = z.infer<typeof insertAdminProductOverrideSchema>;
+export type AdminProductEntitlement = typeof adminProductEntitlements.$inferSelect;
+export type InsertAdminProductEntitlement = z.infer<typeof insertAdminProductEntitlementSchema>;
+export type MigrationState = typeof migrationState.$inferSelect;
+export type InsertMigrationState = z.infer<typeof insertMigrationStateSchema>;
 
 export const insertUserSchema = createInsertSchema(users).omit({ id: true, createdAt: true });
 export const insertJobSchema = createInsertSchema(jobs).omit({ id: true, createdAt: true });

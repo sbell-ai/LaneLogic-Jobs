@@ -50,6 +50,18 @@ The platform utilizes React with TypeScript, Wouter for routing, and a combinati
     - `SocialPublishing` (`client/src/pages/dashboard/SocialPublishing.tsx`) — Social Queue tab (table with filters, retry/cancel actions) + Connections tab (webhook status, test button). Accessible at `/dashboard/admin/social`.
   - **Env vars**: `ZAPIER_SOCIAL_POST_WEBHOOK_URL`, `ZAPIER_CALLBACK_SECRET`
 - **Resource Detail Pages**: Public route `/resources/:id` with component `client/src/pages/ResourceDetail.tsx` and API endpoint `GET /api/resources/:id` (gated on `isPublished`).
+- **Admin Product Management**: Full CRUD for products, entitlements, and overrides replacing Notion as the source of truth. Admin dashboard section at `/dashboard/admin/products` with three tabs (Products, Entitlements, Overrides).
+  - **Schema**: `admin_products`, `admin_entitlements`, `admin_product_overrides`, `admin_product_entitlements` (join), `migration_state` tables in `shared/schema.ts`.
+  - **Storage**: Full CRUD methods in `server/storage.ts` for all product management tables.
+  - **API Routes** (`server/adminProductRoutes.ts`): All admin-gated.
+    - `GET/POST /api/admin/products`, `GET/PATCH/DELETE /api/admin/products/:id`
+    - `GET/POST /api/admin/entitlements`, `PATCH/DELETE /api/admin/entitlements/:id`
+    - `GET/POST /api/admin/product-overrides`, `PATCH/DELETE /api/admin/product-overrides/:id`
+    - `POST /api/admin/products/seed-from-snapshot` — One-time import from Notion registry snapshot, guarded by `migration_state` record.
+    - `POST /api/admin/products/seed-reset` — Clears all product data and migration state.
+  - **Stripe auto-create**: Creating a paid product auto-creates Stripe Product + Price objects. Deleting deactivates the Stripe product.
+  - **Entitlement resolver** (`server/registry/entitlementResolver.ts`): `loadSnapshots()` now checks admin tables first; falls back to Notion snapshots when admin tables are empty. Maps admin DB rows to existing `ProductRow`/`EntitlementRow`/`OverrideRow` shapes. Products with both monthly+yearly prices emit separate `ProductRow` entries per billing cycle.
+  - **Frontend**: `client/src/pages/dashboard/ProductManagement.tsx` — Tabbed UI for Products, Entitlements, Overrides. Seed from Snapshot section with one-click import and reset.
 
 ## Image Uploads / Cloudflare R2
 - Image uploads are handled by `POST /api/upload` using multer memory storage.

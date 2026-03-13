@@ -1,0 +1,823 @@
+import { useState } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { apiRequest } from "@/lib/queryClient";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
+import { Switch } from "@/components/ui/switch";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useToast } from "@/hooks/use-toast";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  Plus, Trash2, Pencil, Package, Shield, Settings2,
+  Download, AlertCircle, Loader2, Check
+} from "lucide-react";
+import type {
+  AdminProduct, AdminEntitlement, AdminProductOverride
+} from "@shared/schema";
+
+type ProductWithEntitlements = AdminProduct & { entitlementIds: number[] };
+type ProductWithOverrides = ProductWithEntitlements & { overrides: AdminProductOverride[] };
+
+function ProductsTab() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  const [showForm, setShowForm] = useState(false);
+  const [editId, setEditId] = useState<number | null>(null);
+
+  const { data: products, isLoading } = useQuery<ProductWithEntitlements[]>({
+    queryKey: ["/api/admin/products"],
+  });
+  const { data: entitlements } = useQuery<AdminEntitlement[]>({
+    queryKey: ["/api/admin/entitlements"],
+  });
+
+  const [form, setForm] = useState({
+    name: "",
+    audience: "Job Seeker",
+    kind: "base_plan",
+    billingType: "subscription",
+    planType: "Subscription",
+    priceMonthly: "",
+    priceYearly: "",
+    priceOneTime: "",
+    logicKey: "",
+    trialDays: "0",
+    status: "Active",
+    entitlementIds: [] as number[],
+  });
+
+  const resetForm = () => {
+    setForm({
+      name: "", audience: "Job Seeker", kind: "base_plan",
+      billingType: "subscription", planType: "Subscription",
+      priceMonthly: "", priceYearly: "", priceOneTime: "",
+      logicKey: "", trialDays: "0", status: "Active", entitlementIds: [],
+    });
+    setEditId(null);
+    setShowForm(false);
+  };
+
+  const saveMutation = useMutation({
+    mutationFn: async () => {
+      const body = {
+        name: form.name,
+        audience: form.audience,
+        kind: form.kind,
+        billingType: form.billingType,
+        planType: form.planType,
+        priceMonthly: form.priceMonthly ? parseFloat(form.priceMonthly) : null,
+        priceYearly: form.priceYearly ? parseFloat(form.priceYearly) : null,
+        priceOneTime: form.priceOneTime ? parseFloat(form.priceOneTime) : null,
+        logicKey: form.logicKey || null,
+        trialDays: parseInt(form.trialDays) || 0,
+        status: form.status,
+        entitlementIds: form.entitlementIds,
+      };
+      if (editId) {
+        return apiRequest("PATCH", `/api/admin/products/${editId}`, body);
+      }
+      return apiRequest("POST", "/api/admin/products", body);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/products"] });
+      toast({ title: editId ? "Product updated" : "Product created" });
+      resetForm();
+    },
+    onError: (err: any) => {
+      toast({ title: "Error", description: err.message, variant: "destructive" });
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async (id: number) => {
+      return apiRequest("DELETE", `/api/admin/products/${id}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/products"] });
+      toast({ title: "Product deleted" });
+    },
+    onError: (err: any) => {
+      toast({ title: "Error", description: err.message, variant: "destructive" });
+    },
+  });
+
+  const startEdit = (p: ProductWithEntitlements) => {
+    setForm({
+      name: p.name,
+      audience: p.audience,
+      kind: p.kind,
+      billingType: p.billingType,
+      planType: p.planType,
+      priceMonthly: p.priceMonthly?.toString() || "",
+      priceYearly: p.priceYearly?.toString() || "",
+      priceOneTime: p.priceOneTime?.toString() || "",
+      logicKey: p.logicKey || "",
+      trialDays: p.trialDays.toString(),
+      status: p.status,
+      entitlementIds: p.entitlementIds || [],
+    });
+    setEditId(p.id);
+    setShowForm(true);
+  };
+
+  const toggleEntitlement = (eid: number) => {
+    setForm((prev) => ({
+      ...prev,
+      entitlementIds: prev.entitlementIds.includes(eid)
+        ? prev.entitlementIds.filter((id) => id !== eid)
+        : [...prev.entitlementIds, eid],
+    }));
+  };
+
+  if (isLoading) return <div className="flex justify-center py-8"><Loader2 className="animate-spin" /></div>;
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-6">
+        <h2 className="text-xl font-semibold" data-testid="text-products-heading">Products</h2>
+        <Button onClick={() => { resetForm(); setShowForm(true); }} data-testid="button-add-product">
+          <Plus size={16} className="mr-1" /> Add Product
+        </Button>
+      </div>
+
+      <div className="space-y-3">
+        {products?.map((p) => (
+          <div key={p.id} className="border rounded-lg p-4 bg-white dark:bg-slate-900 flex items-center justify-between" data-testid={`card-product-${p.id}`}>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="font-medium">{p.name}</span>
+                <Badge variant={p.status === "Active" ? "default" : "secondary"}>{p.status}</Badge>
+                <Badge variant="outline">{p.audience}</Badge>
+                <Badge variant="outline">{p.planType}</Badge>
+              </div>
+              <div className="text-sm text-muted-foreground mt-1">
+                {p.billingType === "subscription" && (
+                  <>
+                    {p.priceMonthly != null && p.priceMonthly > 0 && <span>${p.priceMonthly}/mo </span>}
+                    {p.priceYearly != null && p.priceYearly > 0 && <span>${p.priceYearly}/yr </span>}
+                    {!p.priceMonthly && !p.priceYearly && <span>Free </span>}
+                  </>
+                )}
+                {p.billingType === "one_time" && p.priceOneTime != null && <span>${p.priceOneTime} one-time </span>}
+                {p.logicKey && <span className="text-xs text-gray-400">· {p.logicKey}</span>}
+                {p.stripeProductId && <span className="text-xs text-green-600 ml-2">· Stripe ✓</span>}
+              </div>
+            </div>
+            <div className="flex gap-2">
+              <Button variant="ghost" size="sm" onClick={() => startEdit(p)} data-testid={`button-edit-product-${p.id}`}>
+                <Pencil size={14} />
+              </Button>
+              <Button variant="ghost" size="sm" onClick={() => {
+                if (confirm(`Delete "${p.name}"? This will also deactivate it in Stripe.`)) {
+                  deleteMutation.mutate(p.id);
+                }
+              }} data-testid={`button-delete-product-${p.id}`}>
+                <Trash2 size={14} className="text-red-500" />
+              </Button>
+            </div>
+          </div>
+        ))}
+        {products?.length === 0 && (
+          <div className="text-center py-12 text-muted-foreground" data-testid="text-no-products">
+            No products yet. Seed from snapshot or create manually.
+          </div>
+        )}
+      </div>
+
+      <Dialog open={showForm} onOpenChange={(open) => { if (!open) resetForm(); }}>
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>{editId ? "Edit Product" : "Add Product"}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label>Name</Label>
+              <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} data-testid="input-product-name" />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label>Audience</Label>
+                <Select value={form.audience} onValueChange={(v) => setForm({ ...form, audience: v })}>
+                  <SelectTrigger data-testid="select-audience"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Job Seeker">Job Seeker</SelectItem>
+                    <SelectItem value="Employer">Employer</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label>Plan Type</Label>
+                <Select value={form.planType} onValueChange={(v) => setForm({ ...form, planType: v })}>
+                  <SelectTrigger data-testid="select-plan-type"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Subscription">Subscription</SelectItem>
+                    <SelectItem value="Top-up">Top-up</SelectItem>
+                    <SelectItem value="Admin/Flag">Admin/Flag</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label>Kind</Label>
+                <Select value={form.kind} onValueChange={(v) => setForm({ ...form, kind: v })}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="base_plan">Base Plan</SelectItem>
+                    <SelectItem value="add_on">Add-on</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label>Billing Type</Label>
+                <Select value={form.billingType} onValueChange={(v) => setForm({ ...form, billingType: v })}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="subscription">Subscription</SelectItem>
+                    <SelectItem value="one_time">One-time</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            {form.billingType === "subscription" && (
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label>Monthly Price ($)</Label>
+                  <Input type="number" step="0.01" value={form.priceMonthly} onChange={(e) => setForm({ ...form, priceMonthly: e.target.value })} data-testid="input-price-monthly" />
+                </div>
+                <div>
+                  <Label>Yearly Price ($)</Label>
+                  <Input type="number" step="0.01" value={form.priceYearly} onChange={(e) => setForm({ ...form, priceYearly: e.target.value })} data-testid="input-price-yearly" />
+                </div>
+              </div>
+            )}
+            {form.billingType === "one_time" && (
+              <div>
+                <Label>One-time Price ($)</Label>
+                <Input type="number" step="0.01" value={form.priceOneTime} onChange={(e) => setForm({ ...form, priceOneTime: e.target.value })} data-testid="input-price-one-time" />
+              </div>
+            )}
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label>Logic Key</Label>
+                <Input value={form.logicKey} onChange={(e) => setForm({ ...form, logicKey: e.target.value })} placeholder="e.g. js_starter" data-testid="input-logic-key" />
+              </div>
+              <div>
+                <Label>Trial Days</Label>
+                <Input type="number" value={form.trialDays} onChange={(e) => setForm({ ...form, trialDays: e.target.value })} data-testid="input-trial-days" />
+              </div>
+            </div>
+            <div>
+              <Label>Status</Label>
+              <Select value={form.status} onValueChange={(v) => setForm({ ...form, status: v })}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Active">Active</SelectItem>
+                  <SelectItem value="Inactive">Inactive</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            {entitlements && entitlements.length > 0 && (
+              <div>
+                <Label>Entitlements</Label>
+                <div className="border rounded p-3 space-y-2 max-h-40 overflow-y-auto mt-1">
+                  {entitlements.filter(e => e.status === "Active").map((e) => (
+                    <label key={e.id} className="flex items-center gap-2 text-sm cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={form.entitlementIds.includes(e.id)}
+                        onChange={() => toggleEntitlement(e.id)}
+                      />
+                      <span>{e.name}</span>
+                      <Badge variant="outline" className="text-xs">{e.type}</Badge>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            )}
+            <Button onClick={() => saveMutation.mutate()} disabled={saveMutation.isPending || !form.name} className="w-full" data-testid="button-save-product">
+              {saveMutation.isPending ? <Loader2 className="animate-spin mr-2" size={16} /> : null}
+              {editId ? "Update Product" : "Create Product"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
+
+function EntitlementsTab() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  const [showForm, setShowForm] = useState(false);
+  const [editId, setEditId] = useState<number | null>(null);
+
+  const { data: entitlements, isLoading } = useQuery<AdminEntitlement[]>({
+    queryKey: ["/api/admin/entitlements"],
+  });
+
+  const [form, setForm] = useState({
+    name: "", key: "", type: "Flag" as "Limit" | "Flag",
+    unit: "", defaultValue: "", status: "Active",
+  });
+
+  const resetForm = () => {
+    setForm({ name: "", key: "", type: "Flag", unit: "", defaultValue: "", status: "Active" });
+    setEditId(null);
+    setShowForm(false);
+  };
+
+  const saveMutation = useMutation({
+    mutationFn: async () => {
+      const body = {
+        name: form.name,
+        key: form.key,
+        type: form.type,
+        unit: form.unit || null,
+        defaultValue: form.defaultValue || null,
+        status: form.status,
+      };
+      if (editId) {
+        return apiRequest("PATCH", `/api/admin/entitlements/${editId}`, body);
+      }
+      return apiRequest("POST", "/api/admin/entitlements", body);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/entitlements"] });
+      toast({ title: editId ? "Entitlement updated" : "Entitlement created" });
+      resetForm();
+    },
+    onError: (err: any) => {
+      toast({ title: "Error", description: err.message, variant: "destructive" });
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: number) => apiRequest("DELETE", `/api/admin/entitlements/${id}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/entitlements"] });
+      toast({ title: "Entitlement deleted" });
+    },
+    onError: (err: any) => {
+      toast({ title: "Error", description: err.message, variant: "destructive" });
+    },
+  });
+
+  const startEdit = (e: AdminEntitlement) => {
+    setForm({
+      name: e.name, key: e.key, type: e.type as "Limit" | "Flag",
+      unit: e.unit || "", defaultValue: e.defaultValue || "", status: e.status,
+    });
+    setEditId(e.id);
+    setShowForm(true);
+  };
+
+  if (isLoading) return <div className="flex justify-center py-8"><Loader2 className="animate-spin" /></div>;
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-6">
+        <h2 className="text-xl font-semibold" data-testid="text-entitlements-heading">Entitlements</h2>
+        <Button onClick={() => { resetForm(); setShowForm(true); }} data-testid="button-add-entitlement">
+          <Plus size={16} className="mr-1" /> Add Entitlement
+        </Button>
+      </div>
+
+      <div className="space-y-3">
+        {entitlements?.map((e) => (
+          <div key={e.id} className="border rounded-lg p-4 bg-white dark:bg-slate-900 flex items-center justify-between" data-testid={`card-entitlement-${e.id}`}>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="font-medium">{e.name}</span>
+                <Badge variant="outline">{e.type}</Badge>
+                <Badge variant={e.status === "Active" ? "default" : "secondary"}>{e.status}</Badge>
+              </div>
+              <div className="text-sm text-muted-foreground mt-1">
+                Key: <code className="bg-gray-100 dark:bg-gray-800 px-1 rounded">{e.key}</code>
+                {e.unit && <span> · {e.unit}</span>}
+              </div>
+            </div>
+            <div className="flex gap-2">
+              <Button variant="ghost" size="sm" onClick={() => startEdit(e)} data-testid={`button-edit-entitlement-${e.id}`}>
+                <Pencil size={14} />
+              </Button>
+              <Button variant="ghost" size="sm" onClick={() => {
+                if (confirm(`Delete "${e.name}"? This will remove all related overrides.`)) {
+                  deleteMutation.mutate(e.id);
+                }
+              }} data-testid={`button-delete-entitlement-${e.id}`}>
+                <Trash2 size={14} className="text-red-500" />
+              </Button>
+            </div>
+          </div>
+        ))}
+        {entitlements?.length === 0 && (
+          <div className="text-center py-12 text-muted-foreground">No entitlements yet.</div>
+        )}
+      </div>
+
+      <Dialog open={showForm} onOpenChange={(open) => { if (!open) resetForm(); }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>{editId ? "Edit Entitlement" : "Add Entitlement"}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label>Name</Label>
+              <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} data-testid="input-entitlement-name" />
+            </div>
+            <div>
+              <Label>Key</Label>
+              <Input value={form.key} onChange={(e) => setForm({ ...form, key: e.target.value })} placeholder="e.g. can_post_jobs" data-testid="input-entitlement-key" disabled={!!editId} />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label>Type</Label>
+                <Select value={form.type} onValueChange={(v) => setForm({ ...form, type: v as "Limit" | "Flag" })}>
+                  <SelectTrigger data-testid="select-entitlement-type"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Flag">Flag</SelectItem>
+                    <SelectItem value="Limit">Limit</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label>Status</Label>
+                <Select value={form.status} onValueChange={(v) => setForm({ ...form, status: v })}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Active">Active</SelectItem>
+                    <SelectItem value="Inactive">Inactive</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            {form.type === "Limit" && (
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label>Unit</Label>
+                  <Input value={form.unit} onChange={(e) => setForm({ ...form, unit: e.target.value })} placeholder="e.g. posts" />
+                </div>
+                <div>
+                  <Label>Default Value</Label>
+                  <Input value={form.defaultValue} onChange={(e) => setForm({ ...form, defaultValue: e.target.value })} placeholder="0" />
+                </div>
+              </div>
+            )}
+            <Button onClick={() => saveMutation.mutate()} disabled={saveMutation.isPending || !form.name || !form.key} className="w-full" data-testid="button-save-entitlement">
+              {saveMutation.isPending ? <Loader2 className="animate-spin mr-2" size={16} /> : null}
+              {editId ? "Update" : "Create"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
+
+function OverridesTab() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  const [selectedProductId, setSelectedProductId] = useState<string>("");
+  const [showForm, setShowForm] = useState(false);
+  const [editId, setEditId] = useState<number | null>(null);
+
+  const { data: products } = useQuery<ProductWithEntitlements[]>({
+    queryKey: ["/api/admin/products"],
+  });
+  const { data: entitlements } = useQuery<AdminEntitlement[]>({
+    queryKey: ["/api/admin/entitlements"],
+  });
+  const { data: overrides, isLoading } = useQuery<AdminProductOverride[]>({
+    queryKey: ["/api/admin/product-overrides", selectedProductId],
+    queryFn: async () => {
+      const url = selectedProductId && selectedProductId !== "all"
+        ? `/api/admin/product-overrides?productId=${selectedProductId}`
+        : "/api/admin/product-overrides";
+      const res = await fetch(url, { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to load overrides");
+      return res.json();
+    },
+  });
+
+  const [form, setForm] = useState({
+    productId: "", entitlementId: "",
+    value: "", isUnlimited: false, enabled: false,
+    status: "Active", notes: "",
+  });
+
+  const resetForm = () => {
+    const validProductId = selectedProductId && selectedProductId !== "all" ? selectedProductId : "";
+    setForm({
+      productId: validProductId, entitlementId: "",
+      value: "", isUnlimited: false, enabled: false,
+      status: "Active", notes: "",
+    });
+    setEditId(null);
+    setShowForm(false);
+  };
+
+  const saveMutation = useMutation({
+    mutationFn: async () => {
+      const body = {
+        productId: parseInt(form.productId),
+        entitlementId: parseInt(form.entitlementId),
+        value: form.value ? parseFloat(form.value) : null,
+        isUnlimited: form.isUnlimited,
+        enabled: form.enabled,
+        status: form.status,
+        notes: form.notes || null,
+      };
+      if (editId) {
+        return apiRequest("PATCH", `/api/admin/product-overrides/${editId}`, body);
+      }
+      return apiRequest("POST", "/api/admin/product-overrides", body);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/product-overrides"] });
+      toast({ title: editId ? "Override updated" : "Override created" });
+      resetForm();
+    },
+    onError: (err: any) => {
+      toast({ title: "Error", description: err.message, variant: "destructive" });
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: number) => apiRequest("DELETE", `/api/admin/product-overrides/${id}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/product-overrides"] });
+      toast({ title: "Override deleted" });
+    },
+    onError: (err: any) => {
+      toast({ title: "Error", description: err.message, variant: "destructive" });
+    },
+  });
+
+  const getProductName = (id: number) => products?.find((p) => p.id === id)?.name || `#${id}`;
+  const getEntitlementName = (id: number) => entitlements?.find((e) => e.id === id)?.name || `#${id}`;
+  const getEntitlementType = (id: number) => entitlements?.find((e) => e.id === id)?.type || "Flag";
+
+  const startEdit = (o: AdminProductOverride) => {
+    setForm({
+      productId: o.productId.toString(),
+      entitlementId: o.entitlementId.toString(),
+      value: o.value?.toString() || "",
+      isUnlimited: o.isUnlimited,
+      enabled: o.enabled,
+      status: o.status,
+      notes: o.notes || "",
+    });
+    setEditId(o.id);
+    setShowForm(true);
+  };
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-6">
+        <h2 className="text-xl font-semibold" data-testid="text-overrides-heading">Product Overrides</h2>
+        <div className="flex items-center gap-3">
+          <Select value={selectedProductId} onValueChange={setSelectedProductId}>
+            <SelectTrigger className="w-[200px]" data-testid="select-override-product-filter">
+              <SelectValue placeholder="All Products" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Products</SelectItem>
+              {products?.map((p) => (
+                <SelectItem key={p.id} value={p.id.toString()}>{p.name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Button onClick={() => { resetForm(); setShowForm(true); }} data-testid="button-add-override">
+            <Plus size={16} className="mr-1" /> Add Override
+          </Button>
+        </div>
+      </div>
+
+      {isLoading ? (
+        <div className="flex justify-center py-8"><Loader2 className="animate-spin" /></div>
+      ) : (
+        <div className="space-y-3">
+          {overrides?.map((o) => (
+            <div key={o.id} className="border rounded-lg p-4 bg-white dark:bg-slate-900 flex items-center justify-between" data-testid={`card-override-${o.id}`}>
+              <div>
+                <div className="flex items-center gap-2">
+                  <Badge variant="outline">{getProductName(o.productId)}</Badge>
+                  <span className="text-muted-foreground">→</span>
+                  <span className="font-medium">{getEntitlementName(o.entitlementId)}</span>
+                  <Badge variant={o.status === "Active" ? "default" : "secondary"}>{o.status}</Badge>
+                </div>
+                <div className="text-sm text-muted-foreground mt-1">
+                  {getEntitlementType(o.entitlementId) === "Limit" ? (
+                    o.isUnlimited ? <span className="text-green-600">Unlimited</span> : <span>Value: {o.value ?? 0}</span>
+                  ) : (
+                    <span>{o.enabled ? "✓ Enabled" : "✗ Disabled"}</span>
+                  )}
+                  {o.notes && <span className="ml-2 text-xs">· {o.notes}</span>}
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <Button variant="ghost" size="sm" onClick={() => startEdit(o)} data-testid={`button-edit-override-${o.id}`}>
+                  <Pencil size={14} />
+                </Button>
+                <Button variant="ghost" size="sm" onClick={() => {
+                  if (confirm("Delete this override?")) deleteMutation.mutate(o.id);
+                }} data-testid={`button-delete-override-${o.id}`}>
+                  <Trash2 size={14} className="text-red-500" />
+                </Button>
+              </div>
+            </div>
+          ))}
+          {overrides?.length === 0 && (
+            <div className="text-center py-12 text-muted-foreground">No overrides found.</div>
+          )}
+        </div>
+      )}
+
+      <Dialog open={showForm} onOpenChange={(open) => { if (!open) resetForm(); }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>{editId ? "Edit Override" : "Add Override"}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label>Product</Label>
+              <Select value={form.productId} onValueChange={(v) => setForm({ ...form, productId: v })}>
+                <SelectTrigger data-testid="select-override-product"><SelectValue placeholder="Select product" /></SelectTrigger>
+                <SelectContent>
+                  {products?.map((p) => (
+                    <SelectItem key={p.id} value={p.id.toString()}>{p.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>Entitlement</Label>
+              <Select value={form.entitlementId} onValueChange={(v) => setForm({ ...form, entitlementId: v })}>
+                <SelectTrigger data-testid="select-override-entitlement"><SelectValue placeholder="Select entitlement" /></SelectTrigger>
+                <SelectContent>
+                  {entitlements?.filter(e => e.status === "Active").map((e) => (
+                    <SelectItem key={e.id} value={e.id.toString()}>{e.name} ({e.type})</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            {form.entitlementId && getEntitlementType(parseInt(form.entitlementId)) === "Limit" && (
+              <div className="space-y-3">
+                <div className="flex items-center gap-3">
+                  <Label>Unlimited</Label>
+                  <Switch checked={form.isUnlimited} onCheckedChange={(v) => setForm({ ...form, isUnlimited: v })} />
+                </div>
+                {!form.isUnlimited && (
+                  <div>
+                    <Label>Value</Label>
+                    <Input type="number" value={form.value} onChange={(e) => setForm({ ...form, value: e.target.value })} data-testid="input-override-value" />
+                  </div>
+                )}
+              </div>
+            )}
+            {form.entitlementId && getEntitlementType(parseInt(form.entitlementId)) === "Flag" && (
+              <div className="flex items-center gap-3">
+                <Label>Enabled</Label>
+                <Switch checked={form.enabled} onCheckedChange={(v) => setForm({ ...form, enabled: v })} />
+              </div>
+            )}
+            <div>
+              <Label>Status</Label>
+              <Select value={form.status} onValueChange={(v) => setForm({ ...form, status: v })}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Active">Active</SelectItem>
+                  <SelectItem value="Inactive">Inactive</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>Notes</Label>
+              <Input value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} placeholder="Optional notes" />
+            </div>
+            <Button
+              onClick={() => saveMutation.mutate()}
+              disabled={saveMutation.isPending || !form.productId || !form.entitlementId}
+              className="w-full"
+              data-testid="button-save-override"
+            >
+              {saveMutation.isPending ? <Loader2 className="animate-spin mr-2" size={16} /> : null}
+              {editId ? "Update" : "Create"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
+
+function SeedSection() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  const seedMutation = useMutation({
+    mutationFn: () => apiRequest("POST", "/api/admin/products/seed-from-snapshot"),
+    onSuccess: async (res) => {
+      const data = await res.json();
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/products"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/entitlements"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/product-overrides"] });
+      toast({
+        title: "Seed complete",
+        description: `${data.products} products, ${data.entitlements} entitlements, ${data.overrides} overrides imported.`,
+      });
+    },
+    onError: (err: any) => {
+      toast({ title: "Seed failed", description: err.message, variant: "destructive" });
+    },
+  });
+
+  const resetMutation = useMutation({
+    mutationFn: () => apiRequest("POST", "/api/admin/products/seed-reset"),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/products"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/entitlements"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/product-overrides"] });
+      toast({ title: "All product data cleared" });
+    },
+    onError: (err: any) => {
+      toast({ title: "Reset failed", description: err.message, variant: "destructive" });
+    },
+  });
+
+  return (
+    <div className="border rounded-lg p-6 bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800">
+      <div className="flex items-start gap-3">
+        <AlertCircle className="text-amber-600 mt-0.5" size={20} />
+        <div className="flex-1">
+          <h3 className="font-semibold text-amber-800 dark:text-amber-200">Seed from Registry Snapshot</h3>
+          <p className="text-sm text-amber-700 dark:text-amber-300 mt-1">
+            Import products, entitlements, and overrides from the active Notion registry snapshot. This is a one-time migration.
+          </p>
+          <div className="flex gap-3 mt-4">
+            <Button
+              onClick={() => seedMutation.mutate()}
+              disabled={seedMutation.isPending}
+              variant="outline"
+              className="border-amber-300"
+              data-testid="button-seed-snapshot"
+            >
+              {seedMutation.isPending ? <Loader2 className="animate-spin mr-2" size={16} /> : <Download size={16} className="mr-2" />}
+              Seed from Snapshot
+            </Button>
+            <Button
+              onClick={() => {
+                if (confirm("This will delete ALL products, entitlements, and overrides. Are you sure?")) {
+                  resetMutation.mutate();
+                }
+              }}
+              disabled={resetMutation.isPending}
+              variant="destructive"
+              size="sm"
+              data-testid="button-seed-reset"
+            >
+              {resetMutation.isPending ? <Loader2 className="animate-spin mr-2" size={16} /> : <Trash2 size={14} className="mr-1" />}
+              Reset All
+            </Button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export default function ProductManagement() {
+  return (
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-2xl font-bold flex items-center gap-2" data-testid="text-product-management-title">
+          <Package size={24} /> Product Management
+        </h1>
+        <p className="text-muted-foreground mt-1">Manage products, entitlements, and overrides. Changes auto-sync with Stripe.</p>
+      </div>
+
+      <SeedSection />
+
+      <Tabs defaultValue="products">
+        <TabsList data-testid="tabs-product-management">
+          <TabsTrigger value="products" data-testid="tab-products">
+            <Package size={14} className="mr-1" /> Products
+          </TabsTrigger>
+          <TabsTrigger value="entitlements" data-testid="tab-entitlements">
+            <Shield size={14} className="mr-1" /> Entitlements
+          </TabsTrigger>
+          <TabsTrigger value="overrides" data-testid="tab-overrides">
+            <Settings2 size={14} className="mr-1" /> Overrides
+          </TabsTrigger>
+        </TabsList>
+        <TabsContent value="products"><ProductsTab /></TabsContent>
+        <TabsContent value="entitlements"><EntitlementsTab /></TabsContent>
+        <TabsContent value="overrides"><OverridesTab /></TabsContent>
+      </Tabs>
+    </div>
+  );
+}

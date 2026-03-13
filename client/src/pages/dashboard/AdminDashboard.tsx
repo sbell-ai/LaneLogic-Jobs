@@ -29,6 +29,7 @@ import { RichTextEditor } from "@/components/ui/rich-text-editor";
 import type { User, Job, Resource, BlogPost, Category, Coupon, SiteSettingsData, Page } from "@shared/schema";
 import { ShareToSocialModal } from "@/components/ShareToSocialModal";
 import SocialPublishing from "./SocialPublishing";
+import ProductManagement from "./ProductManagement";
 import { insertResourceSchema, insertBlogPostSchema, insertJobSchema } from "@shared/schema";
 import { INTRO_TRUNCATE_LENGTH } from "@shared/constants";
 import { tokenize } from "@/lib/linkify";
@@ -3076,6 +3077,7 @@ export default function AdminDashboard({ section, subsection }: { section?: stri
       case "site-pages": return <SitePagesTab />;
       case "custom-pages": return <CustomPagesTab />;
       case "social": return <SocialPublishing />;
+      case "products": return <ProductManagement />;
       default: return <UsersLandingTab />;
     }
   };

@@ -384,6 +384,9 @@ export async function registerRoutes(
     }
   });
 
+  const { registerAdminProductRoutes } = await import("./adminProductRoutes");
+  registerAdminProductRoutes(app);
+
   // Users
   app.get(api.users.list.path, async (req, res) => {
     const users = await storage.getUsers();

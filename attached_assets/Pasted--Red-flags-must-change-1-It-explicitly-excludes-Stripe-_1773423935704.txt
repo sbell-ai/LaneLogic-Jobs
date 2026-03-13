@@ -1,0 +1,91 @@
+## Red flags (must change)
+
+### 1) It explicitly excludes “Stripe create from dashboard”
+
+You said you want **monthly + annual + one-time add-ons**, and you want Admin to **create Stripe products/prices automatically**. The plan marks that as **out of scope**, which means it does *not* meet your requirement.
+
+**Fix:** remove that out-of-scope item and add tasks for:
+
+- `POST /api/admin/stripe/products` (or integrate into product create)
+- `POST /api/admin/stripe/prices` for:
+    - recurring monthly
+    - recurring yearly
+    - one-time add-on prices
+
+### 2) “Migrate on first load” is dangerous
+
+> “Existing product data is migrated … into the new tables on first load”
+> 
+
+That’s a trap:
+
+- it can run multiple times
+- it can run in production unexpectedly
+- it is hard to make idempotent without planning
+
+**Fix:** migration must be an explicit, admin-only action:
+
+- a one-time endpoint + a “Seed from snapshot” button
+- it writes a `migration_state` record so it can only run once (or is safely replayable)
+
+## Yellow flags (should tighten)
+
+### 3) Data model doesn’t mention add-ons as a distinct product type
+
+Right now the plan speaks in “products” but doesn’t force a clean distinction between:
+
+- **Base plans** (subscription)
+- **Add-ons** (one-time)
+
+If you don’t model this now, you’ll hack it later.
+
+**Fix:** add required fields:
+
+- `billingType`: `subscription | one_time`
+- `billingInterval`: `month | year | null`
+- `audience`: employer | job_seeker
+- `kind`: `base_plan | add_on`
+
+### 4) Stripe deletion semantics are wrong/missing
+
+You said “hard delete,” but Stripe generally does not hard-delete Products/Prices in the way you expect. The safe approach is:
+
+- **hard delete in your DB**
+- **deactivate in Stripe** (set `active=false` on Product/Price)
+
+**Fix:** update “delete product” behavior:
+
+- If Stripe IDs exist, deactivate Stripe objects, then delete DB row.
+- Still show this as “Delete” in UI since you have no subscribers yet.
+
+### 5) “Same data shape as before” may block you from doing it correctly
+
+Keeping the resolver output identical is fine, but don’t force your *tables* to mirror Notion snapshot JSON blobs. That’s how you end up with a brittle schema.
+
+**Fix:** keep the resolver output stable, but let the DB schema be normalized.
+
+## What I would tell Replit to change in their plan (patch)
+
+Add these items to the plan:
+
+1) **Stripe auto-create (required)**
+
+- Admin can click “Create in Stripe” (or auto-create on Save when `billingType !== free`)
+- Creates:
+    - Stripe Product (once)
+    - Stripe Prices:
+        - monthly recurring (if enabled)
+        - annual recurring (if enabled)
+        - one-time price for add-ons
+
+2) **Support monthly + annual + one-time add-ons**
+
+- Products UI supports:
+    - base plan with both monthly + annual prices
+    - add-on with one-time price
+- Webhook/checkout uses the correct Stripe Price ID
+
+3) **Migration is a one-click admin action**
+
+- Not “on first load”
+- Must be idempotent and logged

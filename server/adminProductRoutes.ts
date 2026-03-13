@@ -1,0 +1,496 @@
+import { type Express, type Request, type Response } from "express";
+import { storage } from "./storage";
+import { z } from "zod";
+import type {
+  ProductRow,
+  EntitlementRow,
+  OverrideRow,
+  ProductsPricingSnapshot,
+  FeaturesEntitlementsSnapshot,
+  ProductEntitlementOverridesSnapshot,
+} from "./registry/notionSync";
+import {
+  getActiveRegistrySnapshot,
+  type Environment,
+} from "./registry/snapshotStore";
+
+function requireAdmin(req: Request, res: Response): boolean {
+  const user = (req as any).user;
+  if (!user || user.role !== "admin") {
+    res.status(403).json({ error: "Admin access required" });
+    return false;
+  }
+  return true;
+}
+
+const productSchema = z.object({
+  name: z.string().min(1),
+  audience: z.string().min(1),
+  kind: z.string().min(1),
+  billingType: z.string().min(1),
+  priceMonthly: z.number().nullable().optional(),
+  priceYearly: z.number().nullable().optional(),
+  priceOneTime: z.number().nullable().optional(),
+  stripeProductId: z.string().nullable().optional(),
+  stripePriceIdMonthly: z.string().nullable().optional(),
+  stripePriceIdYearly: z.string().nullable().optional(),
+  stripePriceIdOneTime: z.string().nullable().optional(),
+  logicKey: z.string().nullable().optional(),
+  trialDays: z.number().int().min(0).default(0),
+  status: z.enum(["Active", "Inactive"]).default("Active"),
+  planType: z.string().default("Subscription"),
+  quotaSource: z.string().nullable().optional(),
+  activeInstruction: z.string().nullable().optional(),
+  entitlementIds: z.array(z.number()).optional(),
+});
+
+const entitlementSchema = z.object({
+  name: z.string().min(1),
+  key: z.string().min(1),
+  type: z.enum(["Limit", "Flag"]),
+  unit: z.string().nullable().optional(),
+  defaultValue: z.string().nullable().optional(),
+  status: z.enum(["Active", "Inactive"]).default("Active"),
+});
+
+const overrideSchema = z.object({
+  productId: z.number().int(),
+  entitlementId: z.number().int(),
+  value: z.number().nullable().optional(),
+  isUnlimited: z.boolean().default(false),
+  enabled: z.boolean().default(false),
+  status: z.enum(["Active", "Inactive"]).default("Active"),
+  notes: z.string().nullable().optional(),
+});
+
+export function registerAdminProductRoutes(app: Express) {
+  // ---- Products CRUD ----
+  app.get("/api/admin/products", async (req, res) => {
+    if (!requireAdmin(req, res)) return;
+    try {
+      const products = await storage.getAdminProducts();
+      const enriched = await Promise.all(
+        products.map(async (p) => {
+          const pes = await storage.getAdminProductEntitlements(p.id);
+          return { ...p, entitlementIds: pes.map((pe) => pe.entitlementId) };
+        })
+      );
+      res.json(enriched);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.get("/api/admin/products/:id", async (req, res) => {
+    if (!requireAdmin(req, res)) return;
+    try {
+      const product = await storage.getAdminProduct(Number(req.params.id));
+      if (!product) return res.status(404).json({ error: "Product not found" });
+      const pes = await storage.getAdminProductEntitlements(product.id);
+      const overrides = await storage.getAdminProductOverrides(product.id);
+      res.json({ ...product, entitlementIds: pes.map((pe) => pe.entitlementId), overrides });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.post("/api/admin/products", async (req, res) => {
+    if (!requireAdmin(req, res)) return;
+    try {
+      const parsed = productSchema.parse(req.body);
+      const { entitlementIds, ...productData } = parsed;
+
+      const activeProducts = await storage.getAdminProducts();
+      const duplicate = activeProducts.find(
+        (p) => p.name === parsed.name && p.status === "Active"
+      );
+      if (duplicate) {
+        return res.status(409).json({ error: `Active product "${parsed.name}" already exists` });
+      }
+
+      let stripeProductId = productData.stripeProductId;
+      let stripePriceIdMonthly = productData.stripePriceIdMonthly;
+      let stripePriceIdYearly = productData.stripePriceIdYearly;
+      let stripePriceIdOneTime = productData.stripePriceIdOneTime;
+
+      const hasPaidPrice =
+        (productData.priceMonthly && productData.priceMonthly > 0) ||
+        (productData.priceYearly && productData.priceYearly > 0) ||
+        (productData.priceOneTime && productData.priceOneTime > 0);
+
+      if (hasPaidPrice && !stripeProductId) {
+        try {
+          const { getUncachableStripeClient } = await import("./stripeClient");
+          const stripe = await getUncachableStripeClient();
+
+          const stripeProduct = await stripe.products.create({
+            name: productData.name,
+            metadata: { audience: productData.audience, logicKey: productData.logicKey || "" },
+          });
+          stripeProductId = stripeProduct.id;
+
+          if (productData.billingType === "subscription") {
+            if (productData.priceMonthly && productData.priceMonthly > 0) {
+              const price = await stripe.prices.create({
+                product: stripeProductId,
+                unit_amount: Math.round(productData.priceMonthly * 100),
+                currency: "usd",
+                recurring: { interval: "month" },
+              });
+              stripePriceIdMonthly = price.id;
+            }
+            if (productData.priceYearly && productData.priceYearly > 0) {
+              const price = await stripe.prices.create({
+                product: stripeProductId,
+                unit_amount: Math.round(productData.priceYearly * 100),
+                currency: "usd",
+                recurring: { interval: "year" },
+              });
+              stripePriceIdYearly = price.id;
+            }
+          } else {
+            if (productData.priceOneTime && productData.priceOneTime > 0) {
+              const price = await stripe.prices.create({
+                product: stripeProductId,
+                unit_amount: Math.round(productData.priceOneTime * 100),
+                currency: "usd",
+              });
+              stripePriceIdOneTime = price.id;
+            }
+          }
+        } catch (stripeErr: any) {
+          console.error("[adminProducts] Stripe create failed:", stripeErr.message);
+          return res.status(500).json({ error: `Stripe error: ${stripeErr.message}` });
+        }
+      }
+
+      const product = await storage.createAdminProduct({
+        ...productData,
+        stripeProductId: stripeProductId || null,
+        stripePriceIdMonthly: stripePriceIdMonthly || null,
+        stripePriceIdYearly: stripePriceIdYearly || null,
+        stripePriceIdOneTime: stripePriceIdOneTime || null,
+      });
+
+      if (entitlementIds && entitlementIds.length > 0) {
+        await storage.setAdminProductEntitlements(product.id, entitlementIds);
+      }
+
+      const pes = await storage.getAdminProductEntitlements(product.id);
+      res.status(201).json({ ...product, entitlementIds: pes.map((pe) => pe.entitlementId) });
+    } catch (err: any) {
+      if (err.name === "ZodError") {
+        return res.status(400).json({ error: "Validation failed", details: err.errors });
+      }
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.patch("/api/admin/products/:id", async (req, res) => {
+    if (!requireAdmin(req, res)) return;
+    try {
+      const id = Number(req.params.id);
+      const existing = await storage.getAdminProduct(id);
+      if (!existing) return res.status(404).json({ error: "Product not found" });
+
+      const parsed = productSchema.partial().parse(req.body);
+      const { entitlementIds, ...updates } = parsed;
+
+      if (updates.name && updates.name !== existing.name) {
+        const activeProducts = await storage.getAdminProducts();
+        const duplicate = activeProducts.find(
+          (p) => p.name === updates.name && p.status === "Active" && p.id !== id
+        );
+        if (duplicate) {
+          return res.status(409).json({ error: `Active product "${updates.name}" already exists` });
+        }
+      }
+
+      const product = await storage.updateAdminProduct(id, updates);
+      if (entitlementIds !== undefined) {
+        await storage.setAdminProductEntitlements(id, entitlementIds);
+      }
+
+      const pes = await storage.getAdminProductEntitlements(product.id);
+      res.json({ ...product, entitlementIds: pes.map((pe) => pe.entitlementId) });
+    } catch (err: any) {
+      if (err.name === "ZodError") {
+        return res.status(400).json({ error: "Validation failed", details: err.errors });
+      }
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.delete("/api/admin/products/:id", async (req, res) => {
+    if (!requireAdmin(req, res)) return;
+    try {
+      const id = Number(req.params.id);
+      const existing = await storage.getAdminProduct(id);
+      if (!existing) return res.status(404).json({ error: "Product not found" });
+
+      if (existing.stripeProductId) {
+        try {
+          const { getUncachableStripeClient } = await import("./stripeClient");
+          const stripe = await getUncachableStripeClient();
+          await stripe.products.update(existing.stripeProductId, { active: false });
+        } catch (stripeErr: any) {
+          console.error("[adminProducts] Stripe deactivate failed:", stripeErr.message);
+        }
+      }
+
+      await storage.deleteAdminProduct(id);
+      res.json({ success: true });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // ---- Entitlements CRUD ----
+  app.get("/api/admin/entitlements", async (req, res) => {
+    if (!requireAdmin(req, res)) return;
+    try {
+      res.json(await storage.getAdminEntitlements());
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.post("/api/admin/entitlements", async (req, res) => {
+    if (!requireAdmin(req, res)) return;
+    try {
+      const parsed = entitlementSchema.parse(req.body);
+      const entitlement = await storage.createAdminEntitlement(parsed);
+      res.status(201).json(entitlement);
+    } catch (err: any) {
+      if (err.name === "ZodError") {
+        return res.status(400).json({ error: "Validation failed", details: err.errors });
+      }
+      if (err.message?.includes("unique")) {
+        return res.status(409).json({ error: `Entitlement key "${req.body.key}" already exists` });
+      }
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.patch("/api/admin/entitlements/:id", async (req, res) => {
+    if (!requireAdmin(req, res)) return;
+    try {
+      const id = Number(req.params.id);
+      const existing = await storage.getAdminEntitlement(id);
+      if (!existing) return res.status(404).json({ error: "Entitlement not found" });
+      const parsed = entitlementSchema.partial().parse(req.body);
+      const entitlement = await storage.updateAdminEntitlement(id, parsed);
+      res.json(entitlement);
+    } catch (err: any) {
+      if (err.name === "ZodError") {
+        return res.status(400).json({ error: "Validation failed", details: err.errors });
+      }
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.delete("/api/admin/entitlements/:id", async (req, res) => {
+    if (!requireAdmin(req, res)) return;
+    try {
+      const id = Number(req.params.id);
+      const existing = await storage.getAdminEntitlement(id);
+      if (!existing) return res.status(404).json({ error: "Entitlement not found" });
+      await storage.deleteAdminEntitlement(id);
+      res.json({ success: true });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // ---- Overrides CRUD ----
+  app.get("/api/admin/product-overrides", async (req, res) => {
+    if (!requireAdmin(req, res)) return;
+    try {
+      const productId = req.query.productId ? Number(req.query.productId) : undefined;
+      res.json(await storage.getAdminProductOverrides(productId));
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.post("/api/admin/product-overrides", async (req, res) => {
+    if (!requireAdmin(req, res)) return;
+    try {
+      const parsed = overrideSchema.parse(req.body);
+      const override = await storage.createAdminProductOverride(parsed);
+      res.status(201).json(override);
+    } catch (err: any) {
+      if (err.name === "ZodError") {
+        return res.status(400).json({ error: "Validation failed", details: err.errors });
+      }
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.patch("/api/admin/product-overrides/:id", async (req, res) => {
+    if (!requireAdmin(req, res)) return;
+    try {
+      const id = Number(req.params.id);
+      const existing = await storage.getAdminProductOverride(id);
+      if (!existing) return res.status(404).json({ error: "Override not found" });
+      const parsed = overrideSchema.partial().parse(req.body);
+      const override = await storage.updateAdminProductOverride(id, parsed);
+      res.json(override);
+    } catch (err: any) {
+      if (err.name === "ZodError") {
+        return res.status(400).json({ error: "Validation failed", details: err.errors });
+      }
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.delete("/api/admin/product-overrides/:id", async (req, res) => {
+    if (!requireAdmin(req, res)) return;
+    try {
+      const id = Number(req.params.id);
+      const existing = await storage.getAdminProductOverride(id);
+      if (!existing) return res.status(404).json({ error: "Override not found" });
+      await storage.deleteAdminProductOverride(id);
+      res.json({ success: true });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // ---- Seed from Snapshot ----
+  app.post("/api/admin/products/seed-from-snapshot", async (req, res) => {
+    if (!requireAdmin(req, res)) return;
+    try {
+      const migrationKey = "seed_from_notion_snapshot";
+      const existing = await storage.getMigrationState(migrationKey);
+      if (existing?.completedAt) {
+        return res.status(409).json({
+          error: "Seed already completed",
+          completedAt: existing.completedAt,
+          result: existing.result,
+        });
+      }
+
+      const env: Environment = process.env.REPLIT_DOMAINS ? "prod" : "staging";
+      const [ppSnap, feSnap, ovrSnap] = await Promise.all([
+        getActiveRegistrySnapshot(env, "products_pricing"),
+        getActiveRegistrySnapshot(env, "features_entitlements"),
+        getActiveRegistrySnapshot(env, "product_entitlement_overrides"),
+      ]);
+
+      if (!ppSnap || !feSnap || !ovrSnap) {
+        return res.status(404).json({ error: "No active registry snapshots found" });
+      }
+
+      const pp = ppSnap.payload as ProductsPricingSnapshot;
+      const fe = feSnap.payload as FeaturesEntitlementsSnapshot;
+      const ovr = ovrSnap.payload as ProductEntitlementOverridesSnapshot;
+
+      const entitlementMap = new Map<string, number>();
+      for (const ent of fe.rows) {
+        try {
+          const created = await storage.createAdminEntitlement({
+            name: ent.entitlementName,
+            key: ent.entitlementKey,
+            type: ent.type,
+            unit: ent.unit || null,
+            defaultValue: ent.defaultValue || null,
+            status: ent.status || "Active",
+          });
+          entitlementMap.set(ent.notionPageId, created.id);
+        } catch (err: any) {
+          console.warn(`[seed] Skipping entitlement "${ent.entitlementKey}":`, err.message);
+        }
+      }
+
+      const productMap = new Map<string, number>();
+      for (const prod of pp.rows) {
+        try {
+          const created = await storage.createAdminProduct({
+            name: prod.productName,
+            audience: prod.audience || "Job Seeker",
+            kind: prod.planType === "Top-up" ? "add_on" : "base_plan",
+            billingType: prod.planType === "Top-up" ? "one_time" : "subscription",
+            priceMonthly: prod.billingCycle === "Monthly" ? prod.price : null,
+            priceYearly: prod.billingCycle === "Annual" ? prod.price : null,
+            priceOneTime: prod.planType === "Top-up" ? prod.price : null,
+            stripeProductId: prod.stripeProductId || null,
+            stripePriceIdMonthly: prod.billingCycle === "Monthly" ? prod.stripePriceId : null,
+            stripePriceIdYearly: prod.billingCycle === "Annual" ? prod.stripePriceId : null,
+            stripePriceIdOneTime: prod.planType === "Top-up" ? prod.stripePriceId : null,
+            logicKey: prod.logicKey || null,
+            trialDays: prod.trialDays || 0,
+            status: prod.status || "Active",
+            planType: prod.planType || "Subscription",
+            quotaSource: prod.quotaSource || null,
+            activeInstruction: prod.activeInstruction || null,
+          });
+          productMap.set(prod.notionPageId, created.id);
+
+          const entitlementIds = prod.entitlementPageIds
+            .map((epid) => entitlementMap.get(epid))
+            .filter((id): id is number => id !== undefined);
+          if (entitlementIds.length > 0) {
+            await storage.setAdminProductEntitlements(created.id, entitlementIds);
+          }
+        } catch (err: any) {
+          console.warn(`[seed] Skipping product "${prod.productName}":`, err.message);
+        }
+      }
+
+      let overridesCreated = 0;
+      for (const o of ovr.rows) {
+        try {
+          const productId = productMap.get(o.productPageId);
+          const entitlementId = entitlementMap.get(o.entitlementPageId);
+          if (!productId || !entitlementId) continue;
+
+          await storage.createAdminProductOverride({
+            productId,
+            entitlementId,
+            value: o.value,
+            isUnlimited: o.isUnlimited,
+            enabled: o.enabled,
+            status: o.status || "Active",
+            notes: o.notes || null,
+          });
+          overridesCreated++;
+        } catch (err: any) {
+          console.warn(`[seed] Skipping override:`, err.message);
+        }
+      }
+
+      const result = {
+        products: productMap.size,
+        entitlements: entitlementMap.size,
+        overrides: overridesCreated,
+      };
+
+      await storage.setMigrationState({
+        key: migrationKey,
+        completedAt: new Date(),
+        result,
+      });
+
+      res.json({ success: true, ...result });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.post("/api/admin/products/seed-reset", async (req, res) => {
+    if (!requireAdmin(req, res)) return;
+    try {
+      const { db } = await import("./db");
+      const schema = await import("@shared/schema");
+      await db.delete(schema.adminProductOverrides);
+      await db.delete(schema.adminProductEntitlements);
+      await db.delete(schema.adminProducts);
+      await db.delete(schema.adminEntitlements);
+      await db.delete(schema.migrationState);
+      res.json({ success: true });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+}
