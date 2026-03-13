@@ -18,6 +18,7 @@ import { getPricingData, resolveUserEntitlements, checkEntitlement } from "./reg
 import { JOB_CATEGORIES, US_STATES as SEO_STATES } from "@shared/seoConfig";
 import { validateKeywords } from "./taggingValidator";
 import { validateCategoryPair, normalizeCategory, normalizeSubcategory, getCategories } from "@shared/jobTaxonomy";
+import { isR2Configured, uploadToR2, deleteFromR2 } from "./r2";
 
 const LANELOGIC_OWNED_DOMAINS: string[] = (process.env.LANELOGIC_OWNED_DOMAINS || "lanelogicjobs.com,lanelogic.com")
   .split(",").map(d => d.trim().toLowerCase()).filter(Boolean);
@@ -239,15 +240,8 @@ function validateAndMapCsvRow(
   return { job, errors };
 }
 
-const uploadStorage = multer.diskStorage({
-  destination: path.join(process.cwd(), "uploads"),
-  filename: (_req, file, cb) => {
-    const ext = path.extname(file.originalname);
-    cb(null, `${randomUUID()}${ext}`);
-  },
-});
-const upload = multer({
-  storage: uploadStorage,
+const imageUpload = multer({
+  storage: multer.memoryStorage(),
   limits: { fileSize: 5 * 1024 * 1024 },
   fileFilter: (_req, file, cb) => {
     const allowed = /\.(jpg|jpeg|png|gif|webp|svg)$/i;
@@ -259,11 +253,19 @@ const upload = multer({
   },
 });
 
+const csvDiskStorage = multer.diskStorage({
+  destination: path.join(process.cwd(), "uploads"),
+  filename: (_req, file, cb) => {
+    const ext = path.extname(file.originalname);
+    cb(null, `${randomUUID()}${ext}`);
+  },
+});
+
 const MAX_CSV_FILE_BYTES = parseInt(process.env.MAX_CSV_FILE_BYTES || String(10 * 1024 * 1024), 10);
 const MAX_CSV_ROWS = parseInt(process.env.MAX_CSV_ROWS || "5000", 10);
 
 const csvUpload = multer({
-  storage: uploadStorage,
+  storage: csvDiskStorage,
   limits: { fileSize: MAX_CSV_FILE_BYTES },
   fileFilter: (_req, file, cb) => {
     if (/\.csv$/i.test(path.extname(file.originalname))) {
@@ -1227,6 +1229,73 @@ export async function registerRoutes(
     }
   });
 
+  app.post("/api/admin/migrate-uploads-to-r2", async (req, res) => {
+    if (!req.isAuthenticated() || !req.user || (req.user as any).role !== "admin") {
+      return res.status(403).json({ message: "Admin access required" });
+    }
+    if (!isR2Configured()) {
+      return res.status(400).json({ message: "R2 is not configured. Set R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_BUCKET_NAME, and R2_PUBLIC_URL." });
+    }
+    try {
+      const fs = await import("fs");
+      const uploadsDir = path.join(process.cwd(), "uploads");
+      if (!fs.existsSync(uploadsDir)) {
+        return res.json({ message: "No uploads directory found", migrated: 0, updated: 0 });
+      }
+      const imageExts = /\.(jpg|jpeg|png|gif|webp|svg)$/i;
+      const files = fs.readdirSync(uploadsDir).filter(f => imageExts.test(f));
+      const urlMap = new Map<string, string>();
+      let migrated = 0;
+      for (const file of files) {
+        const filePath = path.join(uploadsDir, file);
+        const buffer = fs.readFileSync(filePath);
+        const ext = path.extname(file).toLowerCase();
+        const mimeMap: Record<string, string> = {
+          ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png",
+          ".gif": "image/gif", ".webp": "image/webp", ".svg": "image/svg+xml",
+        };
+        const contentType = mimeMap[ext] || "application/octet-stream";
+        const r2Url = await uploadToR2(buffer, file, contentType);
+        urlMap.set(`/uploads/${file}`, r2Url);
+        migrated++;
+      }
+      let updated = 0;
+      const settings = await storage.getSiteSettings();
+      if (settings) {
+        const settingsData = settings.settings as Record<string, any>;
+        let settingsChanged = false;
+        for (const [key, value] of Object.entries(settingsData)) {
+          if (typeof value === "string" && urlMap.has(value)) {
+            settingsData[key] = urlMap.get(value)!;
+            settingsChanged = true;
+            updated++;
+          }
+        }
+        if (settingsChanged) {
+          await storage.updateSiteSettings(settingsData);
+        }
+      }
+      const allUsers = await storage.getUsers();
+      for (const user of allUsers) {
+        const updates: Record<string, string> = {};
+        if (user.profileImage && urlMap.has(user.profileImage)) {
+          updates.profileImage = urlMap.get(user.profileImage)!;
+        }
+        if (user.companyLogo && urlMap.has(user.companyLogo)) {
+          updates.companyLogo = urlMap.get(user.companyLogo)!;
+        }
+        if (Object.keys(updates).length > 0) {
+          await storage.updateUser(user.id, updates);
+          updated += Object.keys(updates).length;
+        }
+      }
+      res.json({ message: "Migration complete", migrated, updated, urlMap: Object.fromEntries(urlMap) });
+    } catch (err: any) {
+      console.error("R2 migration error:", err);
+      res.status(500).json({ message: err.message });
+    }
+  });
+
   app.get("/api/admin/jobs/import/runs", async (req, res) => {
     if (!req.isAuthenticated() || !req.user || (req.user as any).role !== "admin") {
       return res.status(403).json({ message: "Admin access required" });
@@ -1544,12 +1613,28 @@ export async function registerRoutes(
       return res.status(401).json({ message: "Unauthorized" });
     }
     next();
-  }, upload.single("file"), (req, res) => {
+  }, imageUpload.single("file"), async (req, res) => {
     if (!req.file) {
       return res.status(400).json({ message: "No file uploaded" });
     }
-    const url = `/uploads/${req.file.filename}`;
-    res.json({ url });
+    try {
+      if (isR2Configured()) {
+        const ext = path.extname(req.file.originalname);
+        const key = `${randomUUID()}${ext}`;
+        const url = await uploadToR2(req.file.buffer, key, req.file.mimetype);
+        return res.json({ url });
+      }
+      const uploadsDir = path.join(process.cwd(), "uploads");
+      const fs = await import("fs");
+      if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
+      const ext = path.extname(req.file.originalname);
+      const filename = `${randomUUID()}${ext}`;
+      fs.writeFileSync(path.join(uploadsDir, filename), req.file.buffer);
+      res.json({ url: `/uploads/${filename}` });
+    } catch (err: any) {
+      console.error("Upload error:", err);
+      res.status(500).json({ message: err.message || "Upload failed" });
+    }
   });
 
   // Contact form rate limiting (5 requests per IP per 15 minutes)

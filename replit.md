@@ -51,7 +51,17 @@ The platform utilizes React with TypeScript, Wouter for routing, and a combinati
   - **Env vars**: `ZAPIER_SOCIAL_POST_WEBHOOK_URL`, `ZAPIER_CALLBACK_SECRET`
 - **Resource Detail Pages**: Public route `/resources/:id` with component `client/src/pages/ResourceDetail.tsx` and API endpoint `GET /api/resources/:id` (gated on `isPublished`).
 
+## Image Uploads / Cloudflare R2
+- Image uploads are handled by `POST /api/upload` using multer memory storage.
+- When R2 is configured (env vars below), images are uploaded to Cloudflare R2 and a public `https://` URL is returned. When R2 is not configured, images fall back to local disk storage in `/uploads/`.
+- CSV uploads remain on disk storage (temporary processing files).
+- Legacy `/uploads/...` URLs are still served via `express.static` for backward compatibility.
+- Migration endpoint: `POST /api/admin/migrate-uploads-to-r2` — migrates local images to R2 and updates site_settings + user records.
+- R2 utility: `server/r2.ts` — `uploadToR2()`, `deleteFromR2()`, `isR2Configured()`.
+- **Required env vars for R2**: `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET_NAME`, `R2_PUBLIC_URL`.
+
 ## External Dependencies
+- **Cloudflare R2**: S3-compatible object storage for persistent image uploads across deployments. Configured via env vars above.
 - **Stripe**: For processing all payments, including subscriptions and one-time add-ons. It integrates with `stripe-replit-sync` for webhook handling and database synchronization.
 - **Mailgun**: Utilized for sending emails, specifically for contact form submissions.
 - **Notion API**: Used to retrieve and synchronize product, pricing, feature, entitlement, and compliance data into the application's database. This serves as the Source of Truth (SOT) for these configurations.
