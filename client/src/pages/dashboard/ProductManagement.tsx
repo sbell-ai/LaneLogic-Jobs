@@ -12,7 +12,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Plus, Trash2, Pencil, Package, Shield, Settings2,
-  Download, AlertCircle, Loader2, Check
+  Download, AlertCircle, Loader2, Check, X
 } from "lucide-react";
 import type {
   AdminProduct, AdminEntitlement, AdminProductOverride
@@ -718,6 +718,11 @@ function OverridesTab() {
 function SeedSection() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const [hidden, setHidden] = useState(false);
+
+  const { data: seedStatus } = useQuery<{ seeded: boolean; completedAt: string | null; result: any }>({
+    queryKey: ["/api/admin/products/seed-status"],
+  });
 
   const seedMutation = useMutation({
     mutationFn: () => apiRequest("POST", "/api/admin/products/seed-from-snapshot"),
@@ -726,6 +731,7 @@ function SeedSection() {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/products"] });
       queryClient.invalidateQueries({ queryKey: ["/api/admin/entitlements"] });
       queryClient.invalidateQueries({ queryKey: ["/api/admin/product-overrides"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/products/seed-status"] });
       toast({
         title: "Seed complete",
         description: `${data.products} products, ${data.entitlements} entitlements, ${data.overrides} overrides imported.`,
@@ -742,6 +748,7 @@ function SeedSection() {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/products"] });
       queryClient.invalidateQueries({ queryKey: ["/api/admin/entitlements"] });
       queryClient.invalidateQueries({ queryKey: ["/api/admin/product-overrides"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/products/seed-status"] });
       toast({ title: "All product data cleared" });
     },
     onError: (err: any) => {
@@ -749,26 +756,26 @@ function SeedSection() {
     },
   });
 
-  return (
-    <div className="border rounded-lg p-6 bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800">
-      <div className="flex items-start gap-3">
-        <AlertCircle className="text-amber-600 mt-0.5" size={20} />
-        <div className="flex-1">
-          <h3 className="font-semibold text-amber-800 dark:text-amber-200">Seed from Registry Snapshot</h3>
-          <p className="text-sm text-amber-700 dark:text-amber-300 mt-1">
-            Import products, entitlements, and overrides from the active Notion registry snapshot. This is a one-time migration.
-          </p>
-          <div className="flex gap-3 mt-4">
-            <Button
-              onClick={() => seedMutation.mutate()}
-              disabled={seedMutation.isPending}
-              variant="outline"
-              className="border-amber-300"
-              data-testid="button-seed-snapshot"
-            >
-              {seedMutation.isPending ? <Loader2 className="animate-spin mr-2" size={16} /> : <Download size={16} className="mr-2" />}
-              Seed from Snapshot
-            </Button>
+  if (hidden) return null;
+
+  if (seedStatus?.seeded) {
+    const result = seedStatus.result;
+    const completedDate = seedStatus.completedAt ? new Date(seedStatus.completedAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" }) : "";
+
+    return (
+      <div className="border rounded-lg p-4 bg-green-50 dark:bg-green-950/20 border-green-200 dark:border-green-800" data-testid="seed-complete-banner">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <Check className="text-green-600" size={20} />
+            <div>
+              <span className="font-semibold text-green-800 dark:text-green-200">Snapshot seed complete</span>
+              <span className="text-sm text-green-700 dark:text-green-300 ml-2">
+                {result && `${result.products} products, ${result.entitlements} entitlements, ${result.overrides} overrides`}
+                {completedDate && ` · ${completedDate}`}
+              </span>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
             <Button
               onClick={() => {
                 if (confirm("This will delete ALL products, entitlements, and overrides. Are you sure?")) {
@@ -776,15 +783,49 @@ function SeedSection() {
                 }
               }}
               disabled={resetMutation.isPending}
-              variant="destructive"
+              variant="ghost"
               size="sm"
+              className="text-red-500 hover:text-red-700 hover:bg-red-50"
               data-testid="button-seed-reset"
             >
-              {resetMutation.isPending ? <Loader2 className="animate-spin mr-2" size={16} /> : <Trash2 size={14} className="mr-1" />}
-              Reset All
+              {resetMutation.isPending ? <Loader2 className="animate-spin" size={14} /> : <Trash2 size={14} />}
+            </Button>
+            <Button variant="ghost" size="sm" onClick={() => setHidden(true)} data-testid="button-hide-seed">
+              <X size={14} />
             </Button>
           </div>
         </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="border rounded-lg p-6 bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800">
+      <div className="flex items-start justify-between">
+        <div className="flex items-start gap-3 flex-1">
+          <AlertCircle className="text-amber-600 mt-0.5" size={20} />
+          <div className="flex-1">
+            <h3 className="font-semibold text-amber-800 dark:text-amber-200">Seed from Registry Snapshot</h3>
+            <p className="text-sm text-amber-700 dark:text-amber-300 mt-1">
+              Import products, entitlements, and overrides from the active Notion registry snapshot. This is a one-time migration.
+            </p>
+            <div className="flex gap-3 mt-4">
+              <Button
+                onClick={() => seedMutation.mutate()}
+                disabled={seedMutation.isPending}
+                variant="outline"
+                className="border-amber-300"
+                data-testid="button-seed-snapshot"
+              >
+                {seedMutation.isPending ? <Loader2 className="animate-spin mr-2" size={16} /> : <Download size={16} className="mr-2" />}
+                Seed from Snapshot
+              </Button>
+            </div>
+          </div>
+        </div>
+        <Button variant="ghost" size="sm" onClick={() => setHidden(true)} className="text-amber-600" data-testid="button-hide-seed">
+          <X size={14} />
+        </Button>
       </div>
     </div>
   );

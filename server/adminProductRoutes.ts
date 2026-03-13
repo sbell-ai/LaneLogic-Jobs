@@ -478,6 +478,16 @@ export function registerAdminProductRoutes(app: Express) {
     }
   });
 
+  app.get("/api/admin/products/seed-status", async (req, res) => {
+    if (!requireAdmin(req, res)) return;
+    try {
+      const state = await storage.getMigrationState("seed_from_notion_snapshot");
+      res.json({ seeded: !!state?.completedAt, completedAt: state?.completedAt || null, result: state?.result || null });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   app.post("/api/admin/products/seed-reset", async (req, res) => {
     if (!requireAdmin(req, res)) return;
     try {
