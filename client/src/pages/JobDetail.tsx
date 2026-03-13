@@ -112,7 +112,7 @@ export default function JobDetail() {
                     <img src={(job as any).employerLogo} alt={job.companyName || ""} className="w-16 h-16 rounded-2xl object-contain bg-white dark:bg-slate-800 border border-border shrink-0" data-testid="img-company-logo" />
                   ) : (
                     <div className="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center text-primary font-bold text-2xl shrink-0" data-testid="placeholder-company-logo">
-                      {(job.companyName || job.title).charAt(0).toUpperCase()}
+                      {(job.title || job.companyName || "J").charAt(0).toUpperCase()}
                     </div>
                   )}
                   <div>
