@@ -26,40 +26,24 @@ export function buildLinkUrl(entityUrl: string, platform?: string): string {
 
 export function generateDefaultCopy(
   entityType: string,
-  data: { title: string; location?: string; salary?: string; linkUrl: string }
+  data: { title: string; location?: string; salary?: string; linkUrl: string; company?: string; jobType?: string }
 ): Record<string, string> {
-  const { title, location, salary, linkUrl } = data;
+  const { title, location, salary, linkUrl, company, jobType } = data;
 
   if (entityType === "job") {
-    const lines = {
-      linkedin: [
-        `Now hiring: ${title}`,
-        location ? ` — ${location}` : "",
-        salary ? `\nPay: ${salary}` : "",
-        `\nApply: ${linkUrl}`,
-      ],
-      facebook_page: [
-        `Hiring: ${title}`,
-        location ? ` (${location})` : "",
-        salary ? `\nPay: ${salary}` : "",
-        `\nApply: ${linkUrl}`,
-      ],
-      instagram_business: [
-        `Now hiring: ${title}`,
-        location ? ` — ${location}` : "",
-        salary ? `\nPay: ${salary}` : "",
-        `\nApply: ${linkUrl}`,
-      ],
-      twitter: [
-        `Now hiring: ${title}`,
-        location ? ` — ${location}` : "",
-        salary ? `\nPay: ${salary}` : "",
-        `\nApply: ${linkUrl}`,
-      ],
+    const lines: string[] = [title];
+    if (company) lines.push(company);
+    if (location || jobType || salary) lines.push("");
+    if (location) lines.push(location);
+    if (jobType) lines.push(jobType);
+    if (salary) lines.push(salary);
+    const text = lines.join("\n");
+    return {
+      linkedin: text,
+      facebook_page: text,
+      instagram_business: text,
+      twitter: text,
     };
-    return Object.fromEntries(
-      Object.entries(lines).map(([p, parts]) => [p, parts.join("")])
-    );
   }
 
   if (entityType === "blog") {

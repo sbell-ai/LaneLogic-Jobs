@@ -1583,9 +1583,11 @@ ${urls.join("\n")}
       const titleSnapshot = entity.title;
       const defaultCopy = generateDefaultCopy(entityType, {
         title: entity.title,
-        location: entity.locationState || entity.locationCity,
-        salary: entity.salary,
+        location: [entity.locationCity, entity.locationState, entity.locationCountry].filter(Boolean).join(", ") || undefined,
+        salary: entity.salary || undefined,
         linkUrl,
+        company: entity.companyName || undefined,
+        jobType: entity.jobType || undefined,
       });
 
       const post = await storage.createSocialPost({
@@ -1680,9 +1682,11 @@ ${urls.join("\n")}
     const entityUrl = `${baseUrl}/${entityPath}/${post.entityId}`;
     const defaultCopy = generateDefaultCopy(post.entityType, {
       title: post.titleSnapshot || entity.title || "",
-      location: entity.locationCity && entity.locationState ? `${entity.locationCity}, ${entity.locationState}` : entity.locationCity || entity.locationState || undefined,
+      location: [entity.locationCity, entity.locationState, entity.locationCountry].filter(Boolean).join(", ") || undefined,
       salary: entity.salary || undefined,
       linkUrl: buildLinkUrl(entityUrl),
+      company: entity.companyName || undefined,
+      jobType: entity.jobType || undefined,
     });
 
     for (const p of platforms) {
@@ -1717,7 +1721,7 @@ ${urls.join("\n")}
       return res.status(500).json({ message: `No webhook URL configured for: ${unconfiguredPlatforms.join(", ")}` });
     }
 
-    const locationParts = [entity.locationCity, entity.locationState].filter(Boolean);
+    const locationParts = [entity.locationCity, entity.locationState, entity.locationCountry].filter(Boolean);
     const location = locationParts.length > 0 ? locationParts.join(", ") : null;
 
     const perPlatformResults: Array<{ platform: string; success: boolean; providerRequestId: string; error?: string; response?: any }> = [];
@@ -1732,6 +1736,11 @@ ${urls.join("\n")}
         title: post.titleSnapshot || entity.title || "",
         company: entity.companyName || null,
         location,
+        locationCity: entity.locationCity || null,
+        locationState: entity.locationState || null,
+        locationCountry: entity.locationCountry || null,
+        jobType: entity.jobType || null,
+        salary: entity.salary || null,
         url: `${baseUrl}/${entityPath}/${post.entityId}`,
         imageUrl: post.imageUrl || null,
         platform,
