@@ -1,0 +1,117 @@
+### implement 15-category, 2-level Job Category taxonomy
+
+#### What we are changing
+
+We are standardizing job categories into a **2-level taxonomy**:
+
+- **Category (Level 1):** exactly 15 options
+- **Subcategory (Level 2):** depends on the selected Category
+
+This will be used for job posting, filtering, search, and analytics.
+
+---
+
+## Done looks like (acceptance criteria)
+
+- Job posts store:
+    - `category` (one of the 15)
+    - `subcategory` (one of the allowed subcategories for that category)
+- Job create/edit form:
+    - user selects Category first
+    - Subcategory dropdown updates dynamically based on Category
+    - Subcategory is required once Category is selected
+- Search/filter UI:
+    - Category filter (15 options)
+    - Subcategory filter (only shows relevant options after Category is chosen)
+- Existing jobs are migrated:
+    - If old data exists (e.g., “Transportation Sector” or tags), map where possible
+    - If no safe mapping exists, set `category`/`subcategory` to null and flag for admin review
+- API validates:
+    - rejects invalid category/subcategory combinations
+- The taxonomy is defined in one canonical place (constant or DB table), not duplicated across client/server.
+
+---
+
+## Taxonomy (must implement exactly)
+
+**15 Categories**
+
+1. Leadership & Management  
+2. Freight Forwarding (Multimodal)  
+3. Customs & Trade Compliance  
+4. Air Cargo  
+5. Ocean / Maritime Cargo  
+6. Ground Transportation Ops (Dispatch, Planning, Fleet)  
+7. Drivers (CDL & Non-CDL)  
+8. Freight Brokerage & 3PL  
+9. Intermodal & Rail  
+10. Warehousing & Distribution (DC Ops)  
+11. Supply Chain Planning & Procurement  
+12. Customer Service & Account Management  
+13. Sales & Business Development  
+14. Pricing, Quoting & Rate Management  
+15. Finance, Billing, Claims & Audit  
+
+**Subcategories per Category**
+
+Use the subcategory lists exactly as provided in the taxonomy spec (the list we just finalized). If Replit needs it in JSON, I can format it, but the structure should be:
+
+```json
+{
+  "Leadership & Management": [
+    "General Manager (Logistics / Transportation)",
+    "Operations Director / Manager",
+    "Supply Chain Director / Manager",
+    "Terminal / Hub Manager",
+    "Branch Manager",
+    "Continuous Improvement Leader"
+  ],
+  "...": ["..."]
+}
+```
+
+---
+
+## Implementation tasks (what Replit should do)
+
+### 1) Data model + migration
+
+- Add fields to `jobs`:
+    - `category` (text)
+    - `subcategory` (text)
+- Optional but recommended:
+    - `categoryVersion` (number) default `1` so you can evolve taxonomy later
+- Write a migration:
+    - If old `jobType` or “Transportation Sector” exists, attempt mapping
+    - Otherwise leave null and add an admin “Needs category” view/filter
+
+### 2) Canonical taxonomy source (single source of truth)
+
+Pick one:
+
+- **Option A (fast):** a shared constant `shared/jobTaxonomy.ts` imported by server + client
+- **Option B (scalable):** a `job_taxonomy` table (Category/Subcategory rows) editable by admin
+
+For MVP, I recommend **Option A** unless you need admin-editable taxonomy immediately.
+
+### 3) Server-side validation
+
+- On job create/update:
+    - `category` must be one of the 15
+    - `subcategory` must be valid for that category
+    - Reject invalid combos with clear error messages
+
+### 4) UI changes
+
+- Job Post form:
+    - Category dropdown (15)
+    - Subcategory dropdown (filtered by category)
+    - If category changes, clear subcategory
+- Filters page:
+    - Category filter
+    - Subcategory filter that appears/enables only after Category is selected
+
+### 5) Backfill / admin review workflow
+
+- Add an admin filter: “Missing category or subcategory”
+- (Optional) add a bulk-edit tool later
