@@ -13,10 +13,12 @@ function getClient(): S3Client {
     if (!accountId || !accessKeyId || !secretAccessKey) {
       throw new Error("R2 credentials not configured. Set R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, and R2_SECRET_ACCESS_KEY.");
     }
+    const endpoint = `https://${accountId}.r2.cloudflarestorage.com`;
     client = new S3Client({
       region: "auto",
-      endpoint: `https://${accountId}.r2.cloudflarestorage.com`,
+      endpoint,
       credentials: { accessKeyId, secretAccessKey },
+      forcePathStyle: true,
     });
   }
   return client;
