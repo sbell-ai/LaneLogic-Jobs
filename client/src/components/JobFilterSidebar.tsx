@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -133,6 +133,9 @@ export type JobFilters = {
 export function useJobFilters(initialQuery = "", initialLocation = ""): JobFilters {
   const [query, setQuery] = useState(initialQuery);
   const [locationFilter, setLocationFilter] = useState(initialLocation);
+
+  useEffect(() => { setQuery(initialQuery); }, [initialQuery]);
+  useEffect(() => { setLocationFilter(initialLocation); }, [initialLocation]);
   const [jobTypes, setJobTypes] = useState<string[]>([]);
   const [sectors, setSectors] = useState<string[]>([]);
   const [subcategories, setSubcategories] = useState<string[]>([]);
