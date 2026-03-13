@@ -18,7 +18,7 @@ import { getPricingData, resolveUserEntitlements, checkEntitlement } from "./reg
 import { JOB_CATEGORIES, US_STATES as SEO_STATES } from "@shared/seoConfig";
 import { validateKeywords } from "./taggingValidator";
 import { validateCategoryPair, normalizeCategory, normalizeSubcategory, getCategories } from "@shared/jobTaxonomy";
-import { isR2Configured, uploadToR2, deleteFromR2 } from "./r2";
+import { isR2Configured, uploadToR2 } from "./r2";
 
 const LANELOGIC_OWNED_DOMAINS: string[] = (process.env.LANELOGIC_OWNED_DOMAINS || "lanelogicjobs.com,lanelogic.com")
   .split(",").map(d => d.trim().toLowerCase()).filter(Boolean);
@@ -280,7 +280,11 @@ export async function registerRoutes(
   httpServer: Server,
   app: Express
 ): Promise<Server> {
-  console.log(`[R2] Image storage: ${isR2Configured() ? "Cloudflare R2 (configured)" : "Local disk (R2 not configured)"}`);
+  const r2Ready = isR2Configured();
+  console.log(`[R2] Image storage: ${r2Ready ? "Cloudflare R2 (configured)" : "Local disk (R2 not configured)"}`);
+  if (!r2Ready && process.env.NODE_ENV === "production") {
+    console.warn("[R2] WARNING: R2 is not configured in production. Uploads will use ephemeral local disk and may be lost on restart.");
+  }
 
   app.set('trust proxy', 1);
 
