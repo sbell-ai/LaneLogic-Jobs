@@ -11,7 +11,7 @@ import {
 import { motion, AnimatePresence } from "framer-motion";
 import type { Job, Category } from "@shared/schema";
 import { subDays } from "date-fns";
-import { getCategories } from "@shared/jobTaxonomy";
+import { getCategories, getSubcategories } from "@shared/jobTaxonomy";
 
 export const SALARY_MAX = 250000;
 
@@ -112,6 +112,8 @@ export type JobFilters = {
   setJobTypes: (v: string[]) => void;
   sectors: string[];
   setSectors: (v: string[]) => void;
+  subcategories: string[];
+  setSubcategories: (v: string[]) => void;
   experienceLevels: string[];
   setExperienceLevels: (v: string[]) => void;
   cdlRequired: string[];
@@ -133,6 +135,7 @@ export function useJobFilters(initialQuery = "", initialLocation = ""): JobFilte
   const [locationFilter, setLocationFilter] = useState(initialLocation);
   const [jobTypes, setJobTypes] = useState<string[]>([]);
   const [sectors, setSectors] = useState<string[]>([]);
+  const [subcategories, setSubcategories] = useState<string[]>([]);
   const [experienceLevels, setExperienceLevels] = useState<string[]>([]);
   const [cdlRequired, setCdlRequired] = useState<string[]>([]);
   const [workEnvironments, setWorkEnvironments] = useState<string[]>([]);
@@ -144,6 +147,7 @@ export function useJobFilters(initialQuery = "", initialLocation = ""): JobFilte
   return {
     query, setQuery, locationFilter, setLocationFilter,
     jobTypes, setJobTypes, sectors, setSectors,
+    subcategories, setSubcategories,
     experienceLevels, setExperienceLevels, cdlRequired, setCdlRequired,
     workEnvironments, setWorkEnvironments, driverTypes, setDriverTypes,
     salaryRange, setSalaryRange, recentOnly, setRecentOnly,
@@ -155,6 +159,7 @@ export function getActiveFilterCount(f: JobFilters): number {
   return (
     f.jobTypes.length +
     f.sectors.length +
+    f.subcategories.length +
     f.experienceLevels.length +
     f.cdlRequired.length +
     f.workEnvironments.length +
@@ -172,6 +177,7 @@ export function clearAllFilters(f: JobFilters) {
   f.setLocationFilter("");
   f.setJobTypes([]);
   f.setSectors([]);
+  f.setSubcategories([]);
   f.setExperienceLevels([]);
   f.setCdlRequired([]);
   f.setWorkEnvironments([]);
@@ -203,11 +209,16 @@ export function filterJobs(jobs: Job[], f: JobFilters): Job[] {
 
     const jobIndustry = (job.industry || "").toLowerCase();
     const jobCategory = (job.category || "").toLowerCase();
+    const jobSubcategory = (job.subcategory || "").toLowerCase();
     const jobDesc = (job.description || "").toLowerCase();
     const jobTitle = (job.title || "").toLowerCase();
     const matchSector = f.sectors.length === 0 || f.sectors.some((s) => {
       const sl = s.toLowerCase();
       return jobCategory === sl || jobIndustry.includes(sl) || jobDesc.includes(sl) || jobTitle.includes(sl);
+    });
+
+    const matchSubcategory = f.subcategories.length === 0 || f.subcategories.some((s) => {
+      return jobSubcategory === s.toLowerCase();
     });
 
     const matchExperience = f.experienceLevels.length === 0 || f.experienceLevels.some((lvl) => {
@@ -239,7 +250,7 @@ export function filterJobs(jobs: Job[], f: JobFilters): Job[] {
 
     const matchRecent = !f.recentOnly || (job.createdAt && new Date(job.createdAt) >= sevenDaysAgo);
 
-    return matchQuery && matchLoc && matchRemote && matchJobType && matchSector &&
+    return matchQuery && matchLoc && matchRemote && matchJobType && matchSector && matchSubcategory &&
       matchExperience && matchCdl && matchWorkEnv && matchDriverType && matchSalary && matchRecent;
   });
 }
@@ -314,8 +325,17 @@ function SidebarContent({ filters: f, activeFilterCount, onClearAll, industries 
       </FilterSection>
 
       <FilterSection title="Job Category">
-        <CheckboxFilter items={SECTORS} selected={f.sectors} onChange={f.setSectors} testIdPrefix="checkbox-sector" />
+        <CheckboxFilter items={SECTORS} selected={f.sectors} onChange={(v) => { f.setSectors(v); if (v.length === 0) f.setSubcategories([]); }} testIdPrefix="checkbox-sector" />
       </FilterSection>
+
+      {f.sectors.length > 0 && (() => {
+        const availableSubs = f.sectors.flatMap(cat => getSubcategories(cat));
+        return availableSubs.length > 0 ? (
+          <FilterSection title="Subcategory">
+            <CheckboxFilter items={availableSubs} selected={f.subcategories} onChange={f.setSubcategories} testIdPrefix="checkbox-subcategory" />
+          </FilterSection>
+        ) : null;
+      })()}
 
       {industries.length > 0 && (
         <FilterSection title="Industry" defaultOpen={false}>

@@ -325,7 +325,7 @@ function AllJobsTab() {
   const openEdit = (j: Job) => {
     setEditForm({
       title: j.title, companyName: j.companyName || "", jobType: j.jobType || "",
-      category: j.category || "", subcategory: (j as any).subcategory || "", industry: j.industry || "",
+      category: j.category || "", subcategory: j.subcategory || "", industry: j.industry || "",
       description: j.description, requirements: j.requirements,
       benefits: j.benefits || "", salary: j.salary || "",
       locationCity: j.locationCity || "", locationState: j.locationState || "", locationCountry: j.locationCountry || "",
@@ -427,7 +427,7 @@ function AllJobsTab() {
                   <h3 className="font-semibold">{job.title}</h3>
                   {job.companyName && <span className="text-sm text-muted-foreground">· {job.companyName}</span>}
                   {job.category && <Badge variant="outline" className="text-xs">{job.category}</Badge>}
-                  {(job as any).subcategory && <Badge variant="outline" className="text-xs">{(job as any).subcategory}</Badge>}
+                  {job.subcategory && <Badge variant="outline" className="text-xs">{job.subcategory}</Badge>}
                   {job.industry && <Badge variant="outline" className="text-xs">{job.industry}</Badge>}
                   {!job.isPublished && <Badge variant="secondary" className="text-xs" data-testid={`badge-draft-job-${job.id}`}>Draft</Badge>}
                 </div>
@@ -464,7 +464,7 @@ function AllJobsTab() {
                 <div><p className="text-muted-foreground">Salary</p><p className="font-medium">{viewJob.salary || "—"}</p></div>
                 <div><p className="text-muted-foreground">Job Type</p><p className="font-medium">{viewJob.jobType || "—"}</p></div>
                 <div><p className="text-muted-foreground">Category</p><p className="font-medium">{viewJob.category || "—"}</p></div>
-                <div><p className="text-muted-foreground">Subcategory</p><p className="font-medium">{(viewJob as any).subcategory || "—"}</p></div>
+                <div><p className="text-muted-foreground">Subcategory</p><p className="font-medium">{viewJob.subcategory || "—"}</p></div>
                 <div><p className="text-muted-foreground">Expires</p><p className="font-medium">{viewJob.expiresAt ? new Date(viewJob.expiresAt).toLocaleDateString() : "No expiration"}</p></div>
               </div>
               <div><p className="text-muted-foreground">Description</p><p className="whitespace-pre-wrap">{viewJob.description}</p></div>
@@ -902,7 +902,7 @@ function UploadJobsTab({ userId }: { userId: number }) {
 
   const sampleCsv = `externalJobKey,title,companyName,jobType,category,subcategory,industry,locationCity,locationState,locationCountry,description,coreResponsibilities,requirements,benefits,salaryMin,salaryMax,salaryUnit,experienceLevel,skills,keywords,applyUrl
 CDL-001,CDL Class A Driver,Fast Trucking Co.,Full-time,Drivers (CDL & Non-CDL),CDL A Driver (OTR),Trucking,Chicago,IL,USA,"Long haul driver needed","Drive routes; maintain logs","CDL Class A; 3+ years","Health insurance; 401k",70000,90000,year,Mid-level,"CDL,long haul,freight","trucking,driver",
-DISP-001,Fleet Dispatcher,Metro Logistics,Contract,Ground Transportation Ops (Dispatch Planning Fleet),Dispatcher,Logistics,Atlanta,GA,USA,"Manage driver schedules","Schedule routes; coordinate","2+ years dispatching","PTO; remote",55000,65000,year,Entry-level,"dispatching,routing","logistics,dispatch",https://example.com/apply`;
+DISP-001,Fleet Dispatcher,Metro Logistics,Contract,"Ground Transportation Ops (Dispatch, Planning, Fleet)",Dispatcher,Logistics,Atlanta,GA,USA,"Manage driver schedules","Schedule routes; coordinate","2+ years dispatching","PTO; remote",55000,65000,year,Entry-level,"dispatching,routing","logistics,dispatch",https://example.com/apply`;
 
   const downloadSample = () => {
     const blob = new Blob([sampleCsv], { type: "text/csv" });

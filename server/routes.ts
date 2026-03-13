@@ -549,7 +549,9 @@ export async function registerRoutes(
       const body = { ...req.body };
       if (body.expiresAt && typeof body.expiresAt === "string") body.expiresAt = new Date(body.expiresAt);
       if (body.expiresAt === null || body.expiresAt === "") body.expiresAt = null;
-      const catCheck = validateCategoryPair(body.category, body.subcategory);
+      if (body.category === "") body.category = null;
+      if (body.subcategory === "") body.subcategory = null;
+      const catCheck = validateCategoryPair(body.category ?? null, body.subcategory ?? null);
       if (!catCheck.valid) return res.status(400).json({ message: catCheck.error });
       const input = api.jobs.create.input.parse(body);
       const job = await storage.createJob(input);
@@ -573,7 +575,11 @@ export async function registerRoutes(
       if (body.expiresAt === null || body.expiresAt === "") body.expiresAt = null;
       if (body.publishedAt && typeof body.publishedAt === "string") body.publishedAt = new Date(body.publishedAt);
       if (body.publishedAt === null || body.publishedAt === "") body.publishedAt = null;
-      const catCheck = validateCategoryPair(body.category ?? existingJob.category, body.subcategory ?? existingJob.subcategory);
+      if (body.category === "") body.category = null;
+      if (body.subcategory === "") body.subcategory = null;
+      const mergedCat = body.category !== undefined ? body.category : existingJob.category;
+      const mergedSub = body.subcategory !== undefined ? body.subcategory : existingJob.subcategory;
+      const catCheck = validateCategoryPair(mergedCat ?? null, mergedSub ?? null);
       if (!catCheck.valid) return res.status(400).json({ message: catCheck.error });
       const input = api.jobs.update.input.parse(body);
       const job = await storage.updateJob(jobId, input);
@@ -608,21 +614,21 @@ export async function registerRoutes(
         if (key in updates) filtered[key] = updates[key];
       }
       if (Object.keys(filtered).length === 0) return res.status(400).json({ message: "No valid fields to update" });
+      if ("category" in filtered && filtered.category === "") filtered.category = null;
+      if ("subcategory" in filtered && filtered.subcategory === "") filtered.subcategory = null;
       if ("category" in filtered || "subcategory" in filtered) {
         const hasCatUpdate = "category" in filtered;
         const hasSubUpdate = "subcategory" in filtered;
         if (hasCatUpdate && hasSubUpdate) {
-          const catVal = filtered.category === "" ? null : filtered.category;
-          const subVal = filtered.subcategory === "" ? null : filtered.subcategory;
-          const catCheck = validateCategoryPair(catVal, subVal);
+          const catCheck = validateCategoryPair(filtered.category ?? null, filtered.subcategory ?? null);
           if (!catCheck.valid) return res.status(400).json({ message: catCheck.error });
         } else {
           for (const id of ids) {
             const existingJob = await storage.getJob(id);
             if (!existingJob) continue;
-            const mergedCat = hasCatUpdate ? (filtered.category === "" ? null : filtered.category) : (existingJob as any).category;
-            const mergedSub = hasSubUpdate ? (filtered.subcategory === "" ? null : filtered.subcategory) : (existingJob as any).subcategory;
-            const catCheck = validateCategoryPair(mergedCat ?? null, mergedSub ?? null);
+            const mergedCat = hasCatUpdate ? (filtered.category ?? null) : (existingJob.category ?? null);
+            const mergedSub = hasSubUpdate ? (filtered.subcategory ?? null) : (existingJob.subcategory ?? null);
+            const catCheck = validateCategoryPair(mergedCat, mergedSub);
             if (!catCheck.valid) return res.status(400).json({ message: `Job #${id}: ${catCheck.error}` });
           }
         }
