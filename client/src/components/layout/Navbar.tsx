@@ -97,13 +97,16 @@ export function Navbar() {
             </div>
           </form>
 
-          <div className="relative shrink-0">
-            <div className="flex items-center gap-2">
+          <div className="relative shrink-0 ml-auto">
+            <div className="flex items-center gap-3">
               {!user && (
                 <Link href="/login" className="hidden md:inline-flex text-sm font-semibold hover:text-primary transition-colors" data-testid="link-header-login">
                   Log in
                 </Link>
               )}
+              <Button asChild size="sm" className="hidden sm:inline-flex hover-elevate bg-primary text-primary-foreground shadow-lg shadow-primary/20" data-testid="button-header-post-job">
+                <Link href="/register">Post a Job</Link>
+              </Button>
               <button
                 ref={buttonRef}
                 onClick={() => setMenuOpen(!menuOpen)}
@@ -112,7 +115,7 @@ export function Navbar() {
               >
                 <Menu size={18} />
                 <div className="w-7 h-7 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xs font-bold">
-                  {user ? user.fullName?.charAt(0).toUpperCase() || "U" : "?"}
+                  {user ? (user.fullName?.charAt(0) || user.email?.charAt(0) || "U").toUpperCase() : "?"}
                 </div>
               </button>
             </div>
