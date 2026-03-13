@@ -22,7 +22,7 @@ import {
   Upload, CheckCircle2, Copy, Eye, EyeOff, UserPlus,
   AlertCircle, Download, Pencil, X, Tag, Ticket, ExternalLink,
   FilePlus2, Globe, Search as SearchIcon, Share2, PlusCircle, ArrowLeft,
-  FileEdit, LayoutList, UserCircle
+  FileEdit, LayoutList, UserCircle, ChevronDown, ChevronRight, Info
 } from "lucide-react";
 import { ImageUpload } from "@/components/ui/image-upload";
 import { RichTextEditor } from "@/components/ui/rich-text-editor";
@@ -34,7 +34,7 @@ import { INTRO_TRUNCATE_LENGTH } from "@shared/constants";
 import { tokenize } from "@/lib/linkify";
 import { z } from "zod";
 import { formatDistanceToNow, format } from "date-fns";
-import { getCategories, getSubcategories, validateCategoryPair } from "@shared/jobTaxonomy";
+import { JOB_TAXONOMY, getCategories, getSubcategories, validateCategoryPair } from "@shared/jobTaxonomy";
 
 // ─── USERS TAB ────────────────────────────────────────────────────────────────
 
@@ -1720,7 +1720,7 @@ function CategoriesTab() {
   const { toast } = useToast();
   const { data: categories, isLoading } = useQuery<Category[]>({ queryKey: ["/api/categories"] });
   const [newName, setNewName] = useState("");
-  const [newType, setNewType] = useState<"job" | "industry" | "blog">("job");
+  const [newType, setNewType] = useState<"industry" | "blog">("industry");
   const [csvUploading, setCsvUploading] = useState(false);
 
   const createMutation = useMutation({
@@ -1747,8 +1747,8 @@ function CategoriesTab() {
         const parts = line.split(",").map(p => p.trim().replace(/^["']|["']$/g, ""));
         if (parts.length < 2) continue;
         const [name, type] = parts;
-        if (!name || !["job", "industry", "blog"].includes(type.toLowerCase())) continue;
-        const normalizedType = type.toLowerCase() as "job" | "industry" | "blog";
+        if (!name || !["industry", "blog"].includes(type.toLowerCase())) continue;
+        const normalizedType = type.toLowerCase() as "industry" | "blog";
         if (existing.has(`${normalizedType}:${name.toLowerCase()}`)) { skipped++; continue; }
         existing.add(`${normalizedType}:${name.toLowerCase()}`);
         await apiRequest("POST", "/api/categories", { name, type: normalizedType });
@@ -1777,13 +1777,22 @@ function CategoriesTab() {
     createMutation.mutate({ name: newName.trim(), type: newType });
   };
 
+  const [expandedTaxCats, setExpandedTaxCats] = useState<Set<string>>(new Set());
+  const toggleTaxCat = (cat: string) => setExpandedTaxCats(prev => {
+    const next = new Set(prev);
+    if (next.has(cat)) next.delete(cat); else next.add(cat);
+    return next;
+  });
+  const expandAllTax = () => setExpandedTaxCats(new Set(Object.keys(JOB_TAXONOMY)));
+  const collapseAllTax = () => setExpandedTaxCats(new Set());
+  const taxonomyEntries = Object.entries(JOB_TAXONOMY) as [string, readonly string[]][];
+
   if (isLoading) return <div className="animate-pulse h-40 bg-slate-100 dark:bg-slate-800 rounded-xl" />;
 
-  const jobCats = (categories || []).filter(c => c.type === "job");
   const industries = (categories || []).filter(c => c.type === "industry");
   const blogCats = (categories || []).filter(c => c.type === "blog");
 
-  const renderSection = (title: string, type: "job" | "industry" | "blog", items: Category[]) => (
+  const renderEditableSection = (title: string, type: "industry" | "blog", items: Category[]) => (
     <div className="bg-white dark:bg-slate-900 rounded-2xl border border-border p-6">
       <h3 className="font-bold font-display text-lg mb-4">{title}</h3>
       <div className="flex flex-wrap gap-2 mb-4">
@@ -1821,11 +1830,11 @@ function CategoriesTab() {
       <div className="flex flex-wrap items-end justify-between gap-4 mb-6">
         <div>
           <h2 className="text-2xl font-bold font-display">Categories & Labels</h2>
-          <p className="text-muted-foreground text-sm mt-1">Manage categories for jobs, industries, and blog posts.</p>
+          <p className="text-muted-foreground text-sm mt-1">Browse the job taxonomy and manage industries and blog categories.</p>
         </div>
         <div className="bg-white dark:bg-slate-900 rounded-xl border border-border p-4 flex flex-col gap-2 max-w-sm">
           <p className="text-sm font-semibold">Bulk Upload via CSV</p>
-          <p className="text-xs text-muted-foreground">CSV format: <code className="bg-muted px-1 rounded">name,type</code> — one per line. Type must be <code className="bg-muted px-1 rounded">job</code>, <code className="bg-muted px-1 rounded">industry</code>, or <code className="bg-muted px-1 rounded">blog</code>. Duplicates are skipped.</p>
+          <p className="text-xs text-muted-foreground">CSV format: <code className="bg-muted px-1 rounded">name,type</code> — one per line. Type must be <code className="bg-muted px-1 rounded">industry</code> or <code className="bg-muted px-1 rounded">blog</code>. Duplicates are skipped.</p>
           <label className="cursor-pointer">
             <input type="file" accept=".csv,.txt" onChange={handleCsvUpload} className="hidden" data-testid="input-csv-categories" />
             <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-lg border border-border hover:bg-accent transition-colors ${csvUploading ? "opacity-50 pointer-events-none" : ""}`}>
@@ -1835,9 +1844,48 @@ function CategoriesTab() {
         </div>
       </div>
       <div className="space-y-6">
-        {renderSection("Job Categories", "job", jobCats)}
-        {renderSection("Industries", "industry", industries)}
-        {renderSection("Blog Categories", "blog", blogCats)}
+        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-border p-6" data-testid="section-job-taxonomy">
+          <div className="flex items-center justify-between mb-2">
+            <h3 className="font-bold font-display text-lg">Job Categories</h3>
+            <div className="flex gap-2">
+              <Button variant="ghost" size="sm" onClick={expandAllTax} data-testid="button-expand-all-taxonomy">Expand All</Button>
+              <Button variant="ghost" size="sm" onClick={collapseAllTax} data-testid="button-collapse-all-taxonomy">Collapse All</Button>
+            </div>
+          </div>
+          <div className="flex items-center gap-1.5 mb-4 text-xs text-muted-foreground">
+            <Info size={12} />
+            <span>{taxonomyEntries.length} categories defined in code — read-only</span>
+          </div>
+          <div className="space-y-1">
+            {taxonomyEntries.map(([cat, subs]) => {
+              const isOpen = expandedTaxCats.has(cat);
+              return (
+                <div key={cat} className="border border-border rounded-lg overflow-hidden">
+                  <button
+                    onClick={() => toggleTaxCat(cat)}
+                    className="w-full flex items-center gap-2 px-4 py-2.5 text-left text-sm font-medium hover:bg-accent/50 transition-colors"
+                    data-testid={`taxonomy-cat-${cat.replace(/[^a-zA-Z0-9]/g, "-").toLowerCase()}`}
+                  >
+                    {isOpen ? <ChevronDown size={14} className="text-muted-foreground shrink-0" /> : <ChevronRight size={14} className="text-muted-foreground shrink-0" />}
+                    <span>{cat}</span>
+                    <Badge variant="outline" className="ml-auto text-xs">{subs.length}</Badge>
+                  </button>
+                  {isOpen && (
+                    <div className="px-4 pb-3 pt-1 border-t border-border bg-muted/30">
+                      <div className="flex flex-wrap gap-1.5">
+                        {subs.map(sub => (
+                          <Badge key={sub} variant="secondary" className="text-xs py-1 px-2.5" data-testid={`taxonomy-sub-${sub.replace(/[^a-zA-Z0-9]/g, "-").toLowerCase()}`}>{sub}</Badge>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+        {renderEditableSection("Industries", "industry", industries)}
+        {renderEditableSection("Blog Categories", "blog", blogCats)}
       </div>
     </div>
   );
