@@ -1,0 +1,83 @@
+#10 - Dynamic Job Share Images (Server-rendered PNG)
+What & Why
+Generate branded job card images automatically so social posts via Zapier/Buffer include a visual card with job details (title, company, location, pay, branding). Currently the share flow sends text-only — this adds generated image URLs to each webhook payload.
+
+Done looks like
+Public endpoint GET /share/jobs/:id.png returns a branded PNG
+Supports a variant query param:
+?variant=og → 1200×628 (default, for X/LinkedIn)
+?variant=square → 1080×1080 (for Facebook/Instagram)
+Missing or invalid variant defaults to og
+PNG includes: job title, company name, location, salary, job type, LaneLogic Jobs branding
+Salary on the card displays job.salary exactly as stored — the same raw string shown on the job detail page (no re-formatting, no separate min/max/period logic)
+Missing fields (e.g. no salary) are simply omitted — no blank gaps or placeholders
+Endpoint returns 404 for unpublished/expired/missing jobs (no draft leaks)
+PNG is cached in-memory for performance (cache key includes variant + template version)
+Zapier webhook payload includes three image URL fields for jobs: imageUrl, imageUrlOg, imageUrlSquare
+All outward-facing URLs use the PUBLIC_BASE_URL env var — never derived from request host
+HTTP cache headers set for social platform compatibility
+Implementation approach
+Use satori + @resvg/resvg-js for lightweight server-side rendering. Satori converts JSX-like markup to SVG, resvg rasterizes SVG to PNG. No headless browser needed (~5MB vs ~300MB for Playwright).
+
+Tasks
+1. Install dependencies
+satori (HTML-like markup → SVG renderer)
+@resvg/resvg-js (SVG→PNG rasterizer)
+2. Canonicalize the base URL env var
+The canonical env var is PUBLIC_BASE_URL.
+In server/socialHelpers.ts, update getBaseUrl() to read PUBLIC_BASE_URL first, falling back to BASE_URL, then the existing REPLIT_DOMAINS / REPLIT_DEV_DOMAIN logic last.
+In server/routes.ts (~line 1680), replace the inline process.env.BASE_URL || req.protocol + ... with a call to the updated getBaseUrl() from socialHelpers.ts.
+Every place that constructs a public-facing URL must go through this single function — no ad-hoc process.env.BASE_URL reads.
+3. Create share card template
+server/shareTemplates/jobShareCard.ts
+Export a function that takes job data + variant ("og" | "square") and returns a satori-compatible virtual DOM object
+Template must adapt to variant:
+og (1200×628): landscape layout, wider title area
+square (1080×1080): taller layout, more vertical spacing, larger typography
+Layout contents:
+Header: "LaneLogic Jobs" branding text
+Job title (large, prominent)
+Company name (if present)
+Location: city, state, country (if present)
+Job type (if present)
+Salary: render job.salary as-is (the same pre-formatted string displayed on the site — do NOT parse, split, or reformat it)
+Footer: site URL text
+Missing fields are skipped entirely (no blank lines, no placeholders)
+Use inline styles (satori requirement)
+Escape all user-provided strings to prevent injection
+4. Create PNG renderer utility
+server/utils/renderShareImage.ts
+Uses satori to render template to SVG with variant-appropriate dimensions
+Uses @resvg/resvg-js to convert SVG → PNG buffer
+Embeds a bundled font (e.g., Inter from Google Fonts, stored as a file in the repo)
+const TEMPLATE_VERSION = 1 — bump when template design changes
+In-memory LRU cache:
+Key: ${jobId}:${updatedAtMs}:${variant}:v${TEMPLATE_VERSION}
+TTL: 1 hour, max 200 entries
+Busted automatically when job is updated (different updatedAt)
+5. Add the PNG endpoint
+GET /share/jobs/:id.png in server/routes.ts
+No auth required (public endpoint)
+Read variant from query params — default to "og" if missing/invalid
+Load job by ID → 404 if missing
+Use checkShareable from server/socialHelpers.ts → 404 if not shareable (unpublished or expired)
+Call renderer with job data + variant → return PNG buffer
+Response headers:
+Content-Type: image/png
+Cache-Control: public, max-age=3600
+6. Update webhook payload
+In server/routes.ts where the Zapier payload is assembled (~line 1735)
+For entityType === "job", add three fields:
+imageUrlOg: ${PUBLIC_BASE_URL}/share/jobs/${id}.png?variant=og&v=${updatedAtMs}
+imageUrlSquare: ${PUBLIC_BASE_URL}/share/jobs/${id}.png?variant=square&v=${updatedAtMs}
+imageUrl: same as imageUrlOg (backward compatible alias)
+Use getBaseUrl() from socialHelpers.ts to get PUBLIC_BASE_URL — never call process.env.BASE_URL directly or derive from request host
+Out of scope
+Share images for blog posts or resources (jobs only for now)
+Custom branding per employer
+Replit.md documentation update (can be done separately)
+Relevant files
+server/routes.ts:1678-1740
+server/socialHelpers.ts
+shared/schema.ts:47
+client/src/pages/JobDetail.tsx:130-134
