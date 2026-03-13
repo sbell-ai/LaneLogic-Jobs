@@ -280,6 +280,8 @@ export async function registerRoutes(
   httpServer: Server,
   app: Express
 ): Promise<Server> {
+  console.log(`[R2] Image storage: ${isR2Configured() ? "Cloudflare R2 (configured)" : "Local disk (R2 not configured)"}`);
+
   app.set('trust proxy', 1);
 
   const sessionConfig: session.SessionOptions = {
@@ -1260,9 +1262,8 @@ export async function registerRoutes(
         migrated++;
       }
       let updated = 0;
-      const settings = await storage.getSiteSettings();
-      if (settings) {
-        const settingsData = settings.settings as Record<string, any>;
+      const settingsData = await storage.getSiteSettings() as Record<string, any>;
+      if (settingsData && typeof settingsData === "object") {
         let settingsChanged = false;
         for (const [key, value] of Object.entries(settingsData)) {
           if (typeof value === "string" && urlMap.has(value)) {
