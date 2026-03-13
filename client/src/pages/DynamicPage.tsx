@@ -38,7 +38,7 @@ function JobCard({ job }: { job: any }) {
           {job.employerLogo ? (
             <img src={job.employerLogo} alt={job.companyName || ""} className="w-10 h-10 rounded-xl object-contain bg-white dark:bg-slate-800 border border-border shrink-0" data-testid={`img-company-logo-${job.id}`} />
           ) : (
-            <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center text-lg font-bold text-primary shrink-0" data-testid={`placeholder-company-logo-${job.id}`}>
+            <div className="w-10 h-10 rounded-xl bg-primary flex items-center justify-center text-lg font-bold text-white shrink-0" data-testid={`placeholder-company-logo-${job.id}`}>
               {(job.title || job.companyName || "J").charAt(0).toUpperCase()}
             </div>
           )}

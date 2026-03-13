@@ -271,7 +271,7 @@ export default function JobsByTypeAndState({ seoSlug }: JobsByTypeAndStateProps)
                             {(job as any).employerLogo ? (
                               <img src={(job as any).employerLogo} alt={job.companyName || ""} className="w-12 h-12 rounded-xl object-contain bg-white dark:bg-slate-800 border border-border shrink-0" data-testid={`img-company-logo-${job.id}`} />
                             ) : (
-                              <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center text-primary font-bold text-lg shrink-0" data-testid={`placeholder-company-logo-${job.id}`}>
+                              <div className="w-12 h-12 rounded-xl bg-primary flex items-center justify-center text-white font-bold text-lg shrink-0" data-testid={`placeholder-company-logo-${job.id}`}>
                                 {(job.title || job.companyName || "J").charAt(0).toUpperCase()}
                               </div>
                             )}
