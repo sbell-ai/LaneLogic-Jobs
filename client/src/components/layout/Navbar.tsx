@@ -2,22 +2,48 @@ import { Link, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/use-auth";
 import { useSiteSettings } from "@/hooks/use-settings";
-import { Truck, Menu, X } from "lucide-react";
-import { useState } from "react";
+import { Truck, Search, Menu, Briefcase, BookOpen, FileText, CreditCard, LayoutDashboard, LogIn, LogOut, UserPlus } from "lucide-react";
+import { useState, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 
 export function Navbar() {
-  const [location] = useLocation();
+  const [location, navigate] = useLocation();
   const { user, logout } = useAuth();
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const menuRef = useRef<HTMLDivElement>(null);
+  const buttonRef = useRef<HTMLButtonElement>(null);
   const settings = useSiteSettings();
 
-  const navLinks = [
-    { name: "Jobs", path: "/jobs" },
-    { name: "Employers", path: "/employers" },
-    { name: "Resources", path: "/resources" },
-    { name: "Blog", path: "/blog" },
-    { name: "Pricing", path: "/pricing" },
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (
+        menuRef.current && !menuRef.current.contains(e.target as Node) &&
+        buttonRef.current && !buttonRef.current.contains(e.target as Node)
+      ) {
+        setMenuOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const handleSearch = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (searchQuery.trim()) {
+      navigate(`/jobs?q=${encodeURIComponent(searchQuery.trim())}`);
+      setSearchQuery("");
+    } else {
+      navigate("/jobs");
+    }
+  };
+
+  const menuLinks = [
+    { name: "Jobs", path: "/jobs", icon: Search },
+    { name: "Employers", path: "/employers", icon: Briefcase },
+    { name: "Resources", path: "/resources", icon: BookOpen },
+    { name: "Blog", path: "/blog", icon: FileText },
+    { name: "Pricing", path: "/pricing", icon: CreditCard },
   ];
 
   return (
@@ -34,21 +60,21 @@ export function Navbar() {
         </div>
       )}
       <nav className="sticky top-0 z-50 w-full border-b border-border/40 bg-background/80 backdrop-blur-xl supports-[backdrop-filter]:bg-background/60">
-        <div className="container mx-auto px-4 md:px-6 min-h-16 py-2 flex items-center justify-between">
-          <Link href="/" className="flex items-center gap-2 group">
+        <div className="container mx-auto px-4 md:px-6 min-h-16 py-2 flex items-center gap-4">
+          <Link href="/" className="flex items-center gap-2 group shrink-0">
             {settings.logoBase64 ? (
               <img src={settings.logoBase64} alt={settings.siteName} className={`object-contain ${
                 settings.logoSize === "small" ? "h-10" :
                 settings.logoSize === "large" ? "h-20" :
                 settings.logoSize === "x-large" ? "h-24" :
                 "h-14"
-              }`} />
+              }`} data-testid="img-logo" />
             ) : (
               <>
                 <div className="w-10 h-10 rounded-xl bg-primary flex items-center justify-center text-primary-foreground group-hover:scale-105 transition-transform duration-200">
                   <Truck size={20} strokeWidth={2.5} />
                 </div>
-                <span className="font-display font-bold text-xl tracking-tight text-foreground">
+                <span className="font-display font-bold text-xl tracking-tight text-foreground hidden sm:inline">
                   {settings.siteName.includes("Jobs")
                     ? <>{settings.siteName.replace("Jobs", "")}<span className="text-primary">Jobs</span></>
                     : settings.siteName}
@@ -57,95 +83,118 @@ export function Navbar() {
             )}
           </Link>
 
-          {/* Desktop Nav */}
-          <div className="hidden md:flex items-center gap-6">
-            <div className="flex items-center gap-6 text-sm font-medium">
-              {navLinks.map((link) => (
-                <Link
-                  key={link.path}
-                  href={link.path}
-                  className={`transition-colors hover:text-primary ${location === link.path ? "text-primary" : "text-muted-foreground"}`}
-                >
-                  {link.name}
-                </Link>
-              ))}
+          <form onSubmit={handleSearch} className="flex-1 max-w-xl" data-testid="form-header-search">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={16} />
+              <input
+                type="text"
+                placeholder="Search jobs..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full h-10 pl-9 pr-4 rounded-full border border-border bg-muted/50 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary/50 transition-all"
+                data-testid="input-header-search"
+              />
             </div>
+          </form>
 
-            <div className="h-6 w-px bg-border mx-2"></div>
-
-            {user ? (
-              <div className="flex items-center gap-4">
-                <Link href="/dashboard" className="text-sm font-semibold hover:text-primary transition-colors">
-                  Dashboard
-                </Link>
-                <Button variant="outline" size="sm" onClick={() => logout()} className="hover-elevate">
-                  Log out
-                </Button>
-              </div>
-            ) : (
-              <div className="flex items-center gap-3">
-                <Link href="/login" className="text-sm font-semibold hover:text-primary transition-colors">
+          <div className="relative shrink-0">
+            <div className="flex items-center gap-2">
+              {!user && (
+                <Link href="/login" className="hidden md:inline-flex text-sm font-semibold hover:text-primary transition-colors" data-testid="link-header-login">
                   Log in
                 </Link>
-                <Button asChild size="sm" className="hover-elevate bg-primary text-primary-foreground shadow-lg shadow-primary/20">
-                  <Link href="/register">Post a Job</Link>
-                </Button>
-              </div>
-            )}
-          </div>
+              )}
+              <button
+                ref={buttonRef}
+                onClick={() => setMenuOpen(!menuOpen)}
+                className="flex items-center gap-1.5 p-2 rounded-full border border-border hover:shadow-md transition-all bg-background"
+                data-testid="button-header-menu"
+              >
+                <Menu size={18} />
+                <div className="w-7 h-7 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xs font-bold">
+                  {user ? user.fullName?.charAt(0).toUpperCase() || "U" : "?"}
+                </div>
+              </button>
+            </div>
 
-          {/* Mobile Toggle */}
-          <button
-            className="md:hidden text-foreground p-2"
-            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-          >
-            {mobileMenuOpen ? <X /> : <Menu />}
-          </button>
-        </div>
-
-        {/* Mobile Nav */}
-        <AnimatePresence>
-          {mobileMenuOpen && (
-            <motion.div
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: "auto" }}
-              exit={{ opacity: 0, height: 0 }}
-              className="md:hidden bg-background border-b border-border px-4 py-4 space-y-4"
-            >
-              {navLinks.map((link) => (
-                <Link
-                  key={link.path}
-                  href={link.path}
-                  className="block py-2 text-base font-medium text-foreground hover:text-primary"
-                  onClick={() => setMobileMenuOpen(false)}
+            <AnimatePresence>
+              {menuOpen && (
+                <motion.div
+                  ref={menuRef}
+                  initial={{ opacity: 0, scale: 0.95, y: -4 }}
+                  animate={{ opacity: 1, scale: 1, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.95, y: -4 }}
+                  transition={{ duration: 0.15 }}
+                  className="absolute right-0 top-full mt-2 w-56 bg-background rounded-xl border border-border shadow-xl py-2 z-50"
+                  data-testid="menu-header-dropdown"
                 >
-                  {link.name}
-                </Link>
-              ))}
-              <div className="pt-4 border-t border-border flex flex-col gap-3">
-                {user ? (
-                  <>
-                    <Link href="/dashboard" className="block py-2 font-medium" onClick={() => setMobileMenuOpen(false)}>
-                      Dashboard
+                  {user ? (
+                    <>
+                      <div className="px-4 py-2 border-b border-border mb-1">
+                        <p className="text-sm font-semibold truncate" data-testid="text-menu-username">{user.fullName || user.email}</p>
+                        <p className="text-xs text-muted-foreground truncate">{user.email}</p>
+                      </div>
+                      <Link
+                        href="/dashboard"
+                        className="flex items-center gap-3 px-4 py-2.5 text-sm hover:bg-muted transition-colors"
+                        onClick={() => setMenuOpen(false)}
+                        data-testid="link-menu-dashboard"
+                      >
+                        <LayoutDashboard size={16} className="text-muted-foreground" /> Dashboard
+                      </Link>
+                    </>
+                  ) : (
+                    <>
+                      <Link
+                        href="/register"
+                        className="flex items-center gap-3 px-4 py-2.5 text-sm font-semibold hover:bg-muted transition-colors"
+                        onClick={() => setMenuOpen(false)}
+                        data-testid="link-menu-signup"
+                      >
+                        <UserPlus size={16} className="text-muted-foreground" /> Sign up
+                      </Link>
+                      <Link
+                        href="/login"
+                        className="flex items-center gap-3 px-4 py-2.5 text-sm hover:bg-muted transition-colors"
+                        onClick={() => setMenuOpen(false)}
+                        data-testid="link-menu-login"
+                      >
+                        <LogIn size={16} className="text-muted-foreground" /> Log in
+                      </Link>
+                    </>
+                  )}
+
+                  <div className="border-t border-border my-1" />
+
+                  {menuLinks.map((link) => (
+                    <Link
+                      key={link.path}
+                      href={link.path}
+                      className={`flex items-center gap-3 px-4 py-2.5 text-sm hover:bg-muted transition-colors ${location === link.path ? "text-primary font-medium" : ""}`}
+                      onClick={() => setMenuOpen(false)}
+                      data-testid={`link-menu-${link.name.toLowerCase()}`}
+                    >
+                      <link.icon size={16} className="text-muted-foreground" /> {link.name}
                     </Link>
-                    <Button variant="outline" className="w-full" onClick={() => { logout(); setMobileMenuOpen(false); }}>
-                      Log out
-                    </Button>
-                  </>
-                ) : (
-                  <>
-                    <Button asChild variant="outline" className="w-full" onClick={() => setMobileMenuOpen(false)}>
-                      <Link href="/login">Log in</Link>
-                    </Button>
-                    <Button asChild className="w-full" onClick={() => setMobileMenuOpen(false)}>
-                      <Link href="/register">Sign up</Link>
-                    </Button>
-                  </>
-                )}
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
+                  ))}
+
+                  {user && (
+                    <>
+                      <div className="border-t border-border my-1" />
+                      <button
+                        onClick={() => { logout(); setMenuOpen(false); }}
+                        className="flex items-center gap-3 px-4 py-2.5 text-sm hover:bg-muted transition-colors w-full text-left text-red-500"
+                        data-testid="button-menu-logout"
+                      >
+                        <LogOut size={16} /> Log out
+                      </button>
+                    </>
+                  )}
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+        </div>
       </nav>
     </header>
   );
