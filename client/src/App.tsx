@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Switch, Route, useLocation, useParams, Redirect } from "wouter";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider, useQuery } from "@tanstack/react-query";
@@ -6,10 +7,9 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/not-found";
 import { useAuth } from "@/hooks/use-auth";
 import { useSettings } from "@/hooks/use-settings";
+import { AuthModalProvider, useAuthModal } from "@/components/AuthModal";
 
 import Home from "@/pages/Home";
-import Login from "@/pages/Login";
-import Register from "@/pages/Register";
 import Jobs from "@/pages/Jobs";
 import JobDetail from "@/pages/JobDetail";
 import Blog from "@/pages/Blog";
@@ -35,10 +35,26 @@ function ThemeInjector() {
   return null;
 }
 
+function LoginRedirect() {
+  const { open } = useAuthModal();
+  const [, navigate] = useLocation();
+  useState(() => { open("login"); navigate("/", { replace: true }); });
+  return null;
+}
+
+function RegisterRedirect() {
+  const { open } = useAuthModal();
+  const [, navigate] = useLocation();
+  useState(() => { open("signup"); navigate("/", { replace: true }); });
+  return null;
+}
+
 function DashboardRouter() {
   const { user, isLoading } = useAuth();
+  const { open: openAuth } = useAuthModal();
+  const [, nav] = useLocation();
   if (isLoading) return <div className="h-screen flex items-center justify-center">Loading...</div>;
-  if (!user) { window.location.href = "/login"; return null; }
+  if (!user) { openAuth("login"); nav("/", { replace: true }); return null; }
 
   if (user.role === "admin") return <AdminDashboard section="users" />;
   if (user.role === "employer") return <EmployerDashboard />;
@@ -47,8 +63,10 @@ function DashboardRouter() {
 
 function DashboardSectionRouter({ params }: { params: { section: string } }) {
   const { user, isLoading } = useAuth();
+  const { open: openAuth } = useAuthModal();
+  const [, nav] = useLocation();
   if (isLoading) return <div className="h-screen flex items-center justify-center">Loading...</div>;
-  if (!user) { window.location.href = "/login"; return null; }
+  if (!user) { openAuth("login"); nav("/", { replace: true }); return null; }
 
   if (user.role === "employer") return <EmployerDashboard section={params.section} />;
   return <JobSeekerDashboard section={params.section} />;
@@ -159,8 +177,8 @@ function Router() {
   return (
     <Switch>
       <Route path="/" component={Home} />
-      <Route path="/login" component={Login} />
-      <Route path="/register" component={Register} />
+      <Route path="/login" component={LoginRedirect} />
+      <Route path="/register" component={RegisterRedirect} />
 
       <Route path="/jobs" component={Jobs} />
       <Route path="/jobs/:id" component={JobDetailOrSeoPage} />
@@ -189,9 +207,11 @@ function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
-        <ThemeInjector />
-        <Toaster />
-        <Router />
+        <AuthModalProvider>
+          <ThemeInjector />
+          <Toaster />
+          <Router />
+        </AuthModalProvider>
       </TooltipProvider>
     </QueryClientProvider>
   );

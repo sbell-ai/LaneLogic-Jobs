@@ -2,6 +2,7 @@ import { Link, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/use-auth";
 import { useSiteSettings } from "@/hooks/use-settings";
+import { useAuthModal } from "@/components/AuthModal";
 import { Truck, Search, Menu, Briefcase, BookOpen, FileText, CreditCard, LayoutDashboard, LogIn, LogOut, UserPlus } from "lucide-react";
 import { useState, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
@@ -9,6 +10,7 @@ import { motion, AnimatePresence } from "framer-motion";
 export function Navbar() {
   const [location, navigate] = useLocation();
   const { user, logout } = useAuth();
+  const { open: openAuth } = useAuthModal();
   const [menuOpen, setMenuOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const menuRef = useRef<HTMLDivElement>(null);
@@ -100,12 +102,12 @@ export function Navbar() {
           <div className="relative shrink-0 ml-auto">
             <div className="flex items-center gap-5">
               {!user && (
-                <Link href="/login" className="hidden md:inline-flex text-sm font-semibold hover:text-primary transition-colors" data-testid="link-header-login">
+                <button onClick={() => openAuth("login")} className="hidden md:inline-flex text-sm font-semibold hover:text-primary transition-colors" data-testid="link-header-login">
                   Log in
-                </Link>
+                </button>
               )}
-              <Button asChild size="sm" className="hidden sm:inline-flex hover-elevate bg-primary text-primary-foreground shadow-lg shadow-primary/20" data-testid="button-header-post-job">
-                <Link href="/register">Post a Job</Link>
+              <Button size="sm" className="hidden sm:inline-flex hover-elevate bg-primary text-primary-foreground shadow-lg shadow-primary/20" onClick={() => user ? navigate("/dashboard") : openAuth("signup")} data-testid="button-header-post-job">
+                Post a Job
               </Button>
               <button
                 ref={buttonRef}
@@ -148,22 +150,20 @@ export function Navbar() {
                     </>
                   ) : (
                     <>
-                      <Link
-                        href="/register"
-                        className="flex items-center gap-3 px-4 py-2.5 text-sm font-semibold hover:bg-muted transition-colors"
-                        onClick={() => setMenuOpen(false)}
+                      <button
+                        className="flex items-center gap-3 px-4 py-2.5 text-sm font-semibold hover:bg-muted transition-colors w-full text-left"
+                        onClick={() => { setMenuOpen(false); openAuth("signup"); }}
                         data-testid="link-menu-signup"
                       >
                         <UserPlus size={16} className="text-muted-foreground" /> Sign up
-                      </Link>
-                      <Link
-                        href="/login"
-                        className="flex items-center gap-3 px-4 py-2.5 text-sm hover:bg-muted transition-colors"
-                        onClick={() => setMenuOpen(false)}
+                      </button>
+                      <button
+                        className="flex items-center gap-3 px-4 py-2.5 text-sm hover:bg-muted transition-colors w-full text-left"
+                        onClick={() => { setMenuOpen(false); openAuth("login"); }}
                         data-testid="link-menu-login"
                       >
                         <LogIn size={16} className="text-muted-foreground" /> Log in
-                      </Link>
+                      </button>
                     </>
                   )}
 
