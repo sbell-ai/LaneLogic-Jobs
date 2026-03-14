@@ -14,7 +14,7 @@ import multer from "multer";
 import path from "path";
 import { randomUUID } from "crypto";
 import { createHash } from "crypto";
-import { getPricingData, resolveUserEntitlements, checkEntitlement } from "./registry/entitlementResolver";
+import { getPricingData, resolveUserEntitlements, checkEntitlement, consumeEntitlement, getQuotaStatus } from "./registry/entitlementResolver";
 import { JOB_CATEGORIES, US_STATES as SEO_STATES } from "@shared/seoConfig";
 import { validateKeywords } from "./taggingValidator";
 import { validateCategoryPair, normalizeCategory, normalizeSubcategory, getCategories } from "@shared/jobTaxonomy";
@@ -663,9 +663,13 @@ export async function registerRoutes(
       if (req.isAuthenticated()) {
         const user = req.user as any;
         if (user.role === "job_seeker") {
-          const ent = await checkEntitlement(user, "applications_per_month");
-          if (!ent.allowed) {
-            return res.status(403).json({ message: "You have reached your application limit for this month. Please upgrade your plan." });
+          const result = await consumeEntitlement(user, "applications_per_month", { sourceEvent: "application" });
+          if (!result.allowed) {
+            return res.status(403).json({
+              message: "You have reached your application limit for this month. Purchase a top-up credit pack or wait until your quota resets.",
+              error: result.error,
+              resetDate: result.resetDate,
+            });
           }
         }
       }
@@ -1357,6 +1361,24 @@ export async function registerRoutes(
     }
   });
 
+  app.get("/api/user/quota-status", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.status(401).json({ message: "Not authenticated" });
+    }
+    try {
+      const user = req.user as any;
+      const keys = ["applications_per_month", "job_posts_per_month"];
+      const quotas: Record<string, any> = {};
+      for (const key of keys) {
+        quotas[key] = await getQuotaStatus(user, key);
+      }
+      res.json({ quotas });
+    } catch (err: any) {
+      console.error("Quota status error:", err);
+      res.status(500).json({ message: "Failed to load quota status" });
+    }
+  });
+
   app.get("/api/registry/pricing", async (_req, res) => {
     try {
       const data = await getPricingData();
@@ -1493,6 +1515,32 @@ export async function registerRoutes(
         await storage.updateUser(user.id, { featuredEmployerExpiresAt: newExpiry } as any);
         fulfilledSessions.add(sessionId);
         return res.json({ message: "Featured Employer activated", expiresAt: newExpiry.toISOString() });
+      }
+
+      const dbProduct = (await storage.getAdminProducts()).find(
+        (p) => p.stripePriceIdMonthly === paidPriceId || p.stripePriceIdYearly === paidPriceId || p.stripePriceIdOneTime === paidPriceId
+      );
+      if (dbProduct && dbProduct.grantEntitlementKey && dbProduct.grantAmount) {
+        const expiryMonths = dbProduct.creditExpiryMonths || 12;
+        const expiresAt = new Date(now);
+        expiresAt.setMonth(expiresAt.getMonth() + expiryMonths);
+
+        await storage.createCreditGrant({
+          userId: user.id,
+          entitlementKey: dbProduct.grantEntitlementKey,
+          amountGranted: dbProduct.grantAmount,
+          amountRemaining: dbProduct.grantAmount,
+          grantedAt: now,
+          expiresAt,
+          stripePaymentIntentId: session.payment_intent as string || null,
+          status: "Active",
+        });
+        fulfilledSessions.add(sessionId);
+        return res.json({
+          message: `${dbProduct.grantAmount} credits granted for ${dbProduct.grantEntitlementKey}`,
+          credits: dbProduct.grantAmount,
+          expiresAt: expiresAt.toISOString(),
+        });
       }
 
       return res.status(400).json({ message: "Unknown add-on type" });

@@ -41,6 +41,9 @@ const productSchema = z.object({
   planType: z.string().default("Subscription"),
   quotaSource: z.string().nullable().optional(),
   activeInstruction: z.string().nullable().optional(),
+  grantEntitlementKey: z.string().nullable().optional(),
+  grantAmount: z.number().int().positive().nullable().optional(),
+  creditExpiryMonths: z.number().int().positive().nullable().optional(),
   entitlementIds: z.array(z.number()).optional(),
 });
 

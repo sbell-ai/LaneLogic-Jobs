@@ -1,7 +1,7 @@
 import { SidebarProvider, SidebarTrigger, Sidebar, SidebarContent, SidebarGroup, SidebarGroupLabel, SidebarGroupContent, SidebarMenu, SidebarMenuItem, SidebarMenuButton } from "@/components/ui/sidebar";
 import { useAuth } from "@/hooks/use-auth";
 import { Link, useLocation } from "wouter";
-import { Briefcase, LayoutDashboard, FileText, LogOut, Users, BookOpen, Upload, CreditCard, UserPlus, PlusCircle, Palette, FileEdit, Tag, Ticket, UserCircle, FilePlus2, Share2, Database, Package } from "lucide-react";
+import { Briefcase, LayoutDashboard, FileText, LogOut, Users, BookOpen, Upload, CreditCard, UserPlus, PlusCircle, Palette, FileEdit, Tag, Ticket, UserCircle, FilePlus2, Share2, Database, Package, Gauge } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 interface AdminLink {
@@ -18,6 +18,7 @@ function AppSidebar({ role }: { role: string }) {
     { title: "Applied Jobs", path: "/dashboard/applications", icon: Briefcase },
     { title: "My Resume", path: "/dashboard/resume", icon: FileText },
     { title: "My Profile", path: "/dashboard/profile", icon: UserCircle },
+    { title: "Usage & Quota", path: "/dashboard/quota", icon: Gauge },
     { title: "Membership", path: "/dashboard/membership", icon: CreditCard },
   ];
 

@@ -446,6 +446,138 @@ export async function checkEntitlement(
   };
 }
 
+function computeRollingWindow(userCreatedAt: Date | null): { windowStart: Date; windowEnd: Date } {
+  const now = new Date();
+  const anchor = userCreatedAt ? new Date(userCreatedAt) : now;
+  const msPerDay = 24 * 60 * 60 * 1000;
+  const windowDays = 30;
+
+  const elapsed = now.getTime() - anchor.getTime();
+  const completedWindows = Math.floor(elapsed / (windowDays * msPerDay));
+  const windowStart = new Date(anchor.getTime() + completedWindows * windowDays * msPerDay);
+  const windowEnd = new Date(windowStart.getTime() + windowDays * msPerDay);
+
+  return { windowStart, windowEnd };
+}
+
+export async function consumeEntitlement(
+  user: { id: number; role: string; createdAt?: Date | string | null; stripeSubscriptionId?: string | null },
+  key: string,
+  opts?: { sourceEvent?: string; refId?: number }
+): Promise<{ allowed: boolean; consumed: boolean; source?: "free" | "credit"; remaining?: number; resetDate?: string; error?: string }> {
+  const entitlements = await resolveUserEntitlements(user);
+  const ent = entitlements[key];
+
+  if (!ent) {
+    return { allowed: false, consumed: false, error: "ENTITLEMENT_NOT_FOUND" };
+  }
+
+  if (ent.type === "Flag") {
+    return { allowed: ent.enabled, consumed: false };
+  }
+
+  if (ent.isUnlimited) {
+    return { allowed: true, consumed: true, source: "free" };
+  }
+
+  const quota = ent.value;
+  if (quota <= 0) {
+    return { allowed: false, consumed: false, error: "ENTITLEMENT_EXHAUSTED" };
+  }
+
+  const userCreatedAt = user.createdAt ? new Date(user.createdAt) : null;
+  const { windowStart, windowEnd } = computeRollingWindow(userCreatedAt);
+
+  const window = await storage.getOrCreateUsageWindow(user.id, key, windowStart, windowEnd);
+
+  const updated = await storage.incrementUsageWindowAtomic(window.id, quota);
+  if (updated) {
+    return {
+      allowed: true,
+      consumed: true,
+      source: "free",
+      remaining: quota - updated.usedCount,
+      resetDate: windowEnd.toISOString(),
+    };
+  }
+
+  const grants = await storage.getActiveCreditGrants(user.id, key);
+  for (const grant of grants) {
+    const updated = await storage.consumeCreditFromGrant(grant.id, 1);
+    if (updated) {
+      await storage.createCreditConsumption({
+        userId: user.id,
+        entitlementKey: key,
+        grantId: grant.id,
+        amount: 1,
+        consumedAt: new Date(),
+        sourceEvent: opts?.sourceEvent || null,
+        refId: opts?.refId || null,
+      });
+      const creditSummary = await storage.getUserCreditSummary(user.id, key);
+      return {
+        allowed: true,
+        consumed: true,
+        source: "credit",
+        remaining: creditSummary.totalRemaining,
+      };
+    }
+  }
+
+  return {
+    allowed: false,
+    consumed: false,
+    error: "ENTITLEMENT_EXHAUSTED",
+    remaining: 0,
+    resetDate: windowEnd.toISOString(),
+  };
+}
+
+export async function getQuotaStatus(
+  user: { id: number; role: string; createdAt?: Date | string | null; stripeSubscriptionId?: string | null },
+  key: string
+): Promise<{
+  freeQuota: number;
+  freeUsed: number;
+  freeRemaining: number;
+  isUnlimited: boolean;
+  windowResetDate: string;
+  creditPacks: { id: number; remaining: number; expiresAt: string; grantedAt: string }[];
+  totalCredits: number;
+}> {
+  const entitlements = await resolveUserEntitlements(user);
+  const ent = entitlements[key];
+
+  const userCreatedAt = user.createdAt ? new Date(user.createdAt) : null;
+  const { windowStart, windowEnd } = computeRollingWindow(userCreatedAt);
+
+  const freeQuota = ent?.isUnlimited ? Infinity : (ent?.value ?? 0);
+  const isUnlimited = ent?.isUnlimited ?? false;
+
+  let freeUsed = 0;
+  if (!isUnlimited) {
+    const window = await storage.getOrCreateUsageWindow(user.id, key, windowStart, windowEnd);
+    freeUsed = window.usedCount;
+  }
+
+  const creditSummary = await storage.getUserCreditSummary(user.id, key);
+
+  return {
+    freeQuota: isUnlimited ? -1 : freeQuota,
+    freeUsed,
+    freeRemaining: isUnlimited ? -1 : Math.max(0, freeQuota - freeUsed),
+    isUnlimited,
+    windowResetDate: windowEnd.toISOString(),
+    creditPacks: creditSummary.grants.map(g => ({
+      id: g.id,
+      remaining: g.amountRemaining,
+      expiresAt: g.expiresAt.toISOString(),
+      grantedAt: g.grantedAt.toISOString(),
+    })),
+    totalCredits: creditSummary.totalRemaining,
+  };
+}
+
 export async function getPricingData() {
   const data = await loadSnapshots();
   if (!data) return null;

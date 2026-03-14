@@ -426,6 +426,9 @@ export default function Pricing() {
                       />
                     ))}
                   </div>
+                  <p className="text-xs text-muted-foreground text-center mt-4" data-testid="text-credit-expiry-disclosure">
+                    Credits expire 12 months from purchase date. Unused credits are non-refundable.
+                  </p>
                 </div>
               )}
             </>

@@ -14,10 +14,11 @@ import { ImageUpload } from "@/components/ui/image-upload";
 import { Switch } from "@/components/ui/switch";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { FileText, Briefcase, CreditCard, Plus, CheckCircle2, Clock, XCircle, AlertCircle, Eye, EyeOff, User } from "lucide-react";
+import { Progress } from "@/components/ui/progress";
+import { FileText, Briefcase, CreditCard, Plus, CheckCircle2, Clock, XCircle, AlertCircle, Eye, EyeOff, User, Gauge, ShoppingCart, CalendarClock, Zap } from "lucide-react";
 import type { Application, Resume } from "@shared/schema";
 import { Link } from "wouter";
-import { formatDistanceToNow } from "date-fns";
+import { formatDistanceToNow, format } from "date-fns";
 
 const statusConfig: Record<string, { label: string; icon: typeof Clock; color: string }> = {
   pending: { label: "Pending", icon: Clock, color: "bg-yellow-100 text-yellow-700 border-yellow-200" },
@@ -191,6 +192,123 @@ function formatEntitlementLabel(key: string): string {
   return key.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
+type QuotaData = {
+  freeQuota: number;
+  freeUsed: number;
+  freeRemaining: number;
+  isUnlimited: boolean;
+  windowResetDate: string;
+  creditPacks: { id: number; remaining: number; expiresAt: string; grantedAt: string }[];
+  totalCredits: number;
+};
+
+function QuotaTab() {
+  const { data, isLoading } = useQuery<{ quotas: Record<string, QuotaData> }>({
+    queryKey: ["/api/user/quota-status"],
+  });
+
+  if (isLoading) return <div className="animate-pulse h-32 bg-slate-100 dark:bg-slate-800 rounded-xl" />;
+
+  const quotas = data?.quotas ?? {};
+  const appQuota = quotas["applications_per_month"];
+
+  return (
+    <div>
+      <h2 className="text-2xl font-bold font-display mb-6">Usage & Quota</h2>
+
+      {appQuota && (
+        <Card className="p-6 mb-6" data-testid="card-quota-applications">
+          <div className="flex items-center gap-3 mb-4">
+            <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center text-primary">
+              <Briefcase size={20} />
+            </div>
+            <div>
+              <h3 className="font-bold font-display text-lg">Applications</h3>
+              <p className="text-sm text-muted-foreground">Monthly free quota</p>
+            </div>
+          </div>
+
+          {appQuota.isUnlimited ? (
+            <div className="flex items-center gap-2 text-green-600 dark:text-green-400 font-semibold" data-testid="text-quota-unlimited">
+              <Zap size={16} />
+              <span>Unlimited applications</span>
+            </div>
+          ) : (
+            <>
+              <div className="mb-2 flex justify-between text-sm">
+                <span className="text-muted-foreground">
+                  {appQuota.freeUsed} / {appQuota.freeQuota} used this period
+                </span>
+                <span className="font-semibold text-primary" data-testid="text-quota-remaining">
+                  {appQuota.freeRemaining} remaining
+                </span>
+              </div>
+              <Progress
+                value={appQuota.freeQuota > 0 ? (appQuota.freeUsed / appQuota.freeQuota) * 100 : 0}
+                className="h-2.5 mb-3"
+                data-testid="progress-quota"
+              />
+              <div className="flex items-center gap-1.5 text-xs text-muted-foreground" data-testid="text-quota-reset">
+                <CalendarClock size={13} />
+                <span>Resets {format(new Date(appQuota.windowResetDate), "MMM d, yyyy")}</span>
+              </div>
+            </>
+          )}
+        </Card>
+      )}
+
+      {appQuota && appQuota.creditPacks.length > 0 && (
+        <Card className="p-6 mb-6" data-testid="card-credit-packs">
+          <div className="flex items-center gap-3 mb-4">
+            <div className="w-10 h-10 rounded-xl bg-orange-100 dark:bg-orange-900/30 flex items-center justify-center text-orange-600 dark:text-orange-400">
+              <ShoppingCart size={20} />
+            </div>
+            <div>
+              <h3 className="font-bold font-display text-lg">Credit Packs</h3>
+              <p className="text-sm text-muted-foreground">
+                {appQuota.totalCredits} total credits remaining
+              </p>
+            </div>
+          </div>
+          <div className="space-y-3">
+            {appQuota.creditPacks.map((pack) => (
+              <div key={pack.id} className="flex items-center justify-between bg-slate-50 dark:bg-slate-800 rounded-lg px-4 py-3 border border-border" data-testid={`credit-pack-${pack.id}`}>
+                <div>
+                  <p className="text-sm font-medium">{pack.remaining} credits remaining</p>
+                  <p className="text-xs text-muted-foreground">
+                    Purchased {format(new Date(pack.grantedAt), "MMM d, yyyy")}
+                  </p>
+                </div>
+                <Badge variant="outline" className="text-xs">
+                  Expires {format(new Date(pack.expiresAt), "MMM d, yyyy")}
+                </Badge>
+              </div>
+            ))}
+          </div>
+          <p className="text-xs text-muted-foreground mt-3 italic">
+            Credits are consumed automatically when your free monthly quota is exhausted. Oldest packs are used first.
+          </p>
+        </Card>
+      )}
+
+      {appQuota && !appQuota.isUnlimited && (
+        <Card className="p-6 bg-gradient-to-br from-primary/5 to-primary/10 border-primary/20" data-testid="card-topup-cta">
+          <div className="flex items-center gap-3 mb-3">
+            <Zap className="text-primary" size={24} />
+            <h3 className="font-bold font-display text-lg">Need more applications?</h3>
+          </div>
+          <p className="text-sm text-muted-foreground mb-4">
+            Purchase a top-up credit pack to apply beyond your free monthly quota. Credits expire 12 months from purchase date.
+          </p>
+          <Button asChild size="sm" data-testid="button-buy-topup">
+            <Link href="/pricing">View Top-Up Packs</Link>
+          </Button>
+        </Card>
+      )}
+    </div>
+  );
+}
+
 function MembershipTab({ user }: { user: NonNullable<ReturnType<typeof useAuth>["user"]> }) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -210,6 +328,7 @@ function MembershipTab({ user }: { user: NonNullable<ReturnType<typeof useAuth>[
         .then((data) => {
           toast({ title: "Add-on activated!", description: data.message });
           queryClient.invalidateQueries({ queryKey: ["/api/user/entitlements"] });
+          queryClient.invalidateQueries({ queryKey: ["/api/user/quota-status"] });
           queryClient.invalidateQueries({ queryKey: ["/api/me"] });
           window.history.replaceState({}, "", window.location.pathname);
         })
@@ -428,6 +547,7 @@ export default function JobSeekerDashboard({ section }: { section?: string }) {
   const content = () => {
     if (section === "resume") return <ResumeTab userId={user.id} />;
     if (section === "profile") return <SeekerProfileTab />;
+    if (section === "quota") return <QuotaTab />;
     if (section === "membership") return <MembershipTab user={user} />;
     return <ApplicationsTab userId={user.id} />;
   };

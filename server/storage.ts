@@ -3,6 +3,7 @@ import {
   users, jobs, applications, resources, blogPosts, resumes, siteSettings, categories, coupons, pages,
   importRuns, importArtifacts, socialPosts,
   adminProducts, adminEntitlements, adminProductOverrides, adminProductEntitlements, migrationState,
+  entitlementUsageWindows, entitlementCreditGrants, entitlementCreditConsumptions,
   type User, type InsertUser, type Job, type InsertJob,
   type Application, type InsertApplication,
   type Resource, type InsertResource,
@@ -19,9 +20,12 @@ import {
   type AdminProductOverride, type InsertAdminProductOverride,
   type AdminProductEntitlement, type InsertAdminProductEntitlement,
   type MigrationState, type InsertMigrationState,
+  type EntitlementUsageWindow, type InsertEntitlementUsageWindow,
+  type EntitlementCreditGrant, type InsertEntitlementCreditGrant,
+  type EntitlementCreditConsumption, type InsertEntitlementCreditConsumption,
   type SiteSettingsData, DEFAULT_SETTINGS
 } from "@shared/schema";
-import { eq, and, sql, desc, isNotNull } from "drizzle-orm";
+import { eq, and, sql, desc, asc, isNotNull, gte, lte, gt } from "drizzle-orm";
 
 export interface IStorage {
   // Users
@@ -132,6 +136,18 @@ export interface IStorage {
   // Migration State
   getMigrationState(key: string): Promise<MigrationState | undefined>;
   setMigrationState(state: InsertMigrationState): Promise<MigrationState>;
+
+  // Entitlement Usage Windows
+  getOrCreateUsageWindow(userId: number, entitlementKey: string, windowStart: Date, windowEnd: Date): Promise<EntitlementUsageWindow>;
+  incrementUsageWindow(windowId: number): Promise<EntitlementUsageWindow>;
+  incrementUsageWindowAtomic(windowId: number, maxCount: number): Promise<EntitlementUsageWindow | null>;
+
+  // Entitlement Credit Grants
+  createCreditGrant(grant: InsertEntitlementCreditGrant): Promise<EntitlementCreditGrant>;
+  getActiveCreditGrants(userId: number, entitlementKey: string): Promise<EntitlementCreditGrant[]>;
+  consumeCreditFromGrant(grantId: number, amount: number): Promise<EntitlementCreditGrant>;
+  createCreditConsumption(consumption: InsertEntitlementCreditConsumption): Promise<EntitlementCreditConsumption>;
+  getUserCreditSummary(userId: number, entitlementKey: string): Promise<{ totalRemaining: number; grants: EntitlementCreditGrant[] }>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -488,6 +504,82 @@ export class DatabaseStorage implements IStorage {
     }
     const [m] = await db.insert(migrationState).values(state).returning();
     return m;
+  }
+
+  // Entitlement Usage Windows
+  async getOrCreateUsageWindow(userId: number, entitlementKey: string, windowStart: Date, windowEnd: Date): Promise<EntitlementUsageWindow> {
+    const existing = await db.select().from(entitlementUsageWindows).where(
+      and(
+        eq(entitlementUsageWindows.userId, userId),
+        eq(entitlementUsageWindows.entitlementKey, entitlementKey),
+        eq(entitlementUsageWindows.windowStart, windowStart)
+      )
+    );
+    if (existing.length > 0) return existing[0];
+    const [w] = await db.insert(entitlementUsageWindows).values({
+      userId, entitlementKey, windowStart, windowEnd, usedCount: 0
+    }).returning();
+    return w;
+  }
+
+  async incrementUsageWindow(windowId: number): Promise<EntitlementUsageWindow> {
+    const [w] = await db.update(entitlementUsageWindows)
+      .set({ usedCount: sql`${entitlementUsageWindows.usedCount} + 1` })
+      .where(eq(entitlementUsageWindows.id, windowId))
+      .returning();
+    return w;
+  }
+
+  async incrementUsageWindowAtomic(windowId: number, maxCount: number): Promise<EntitlementUsageWindow | null> {
+    const rows = await db.update(entitlementUsageWindows)
+      .set({ usedCount: sql`${entitlementUsageWindows.usedCount} + 1` })
+      .where(and(
+        eq(entitlementUsageWindows.id, windowId),
+        sql`${entitlementUsageWindows.usedCount} < ${maxCount}`
+      ))
+      .returning();
+    return rows.length > 0 ? rows[0] : null;
+  }
+
+  // Entitlement Credit Grants
+  async createCreditGrant(grant: InsertEntitlementCreditGrant): Promise<EntitlementCreditGrant> {
+    const [g] = await db.insert(entitlementCreditGrants).values(grant).returning();
+    return g;
+  }
+
+  async getActiveCreditGrants(userId: number, entitlementKey: string): Promise<EntitlementCreditGrant[]> {
+    const now = new Date();
+    return await db.select().from(entitlementCreditGrants).where(
+      and(
+        eq(entitlementCreditGrants.userId, userId),
+        eq(entitlementCreditGrants.entitlementKey, entitlementKey),
+        eq(entitlementCreditGrants.status, "Active"),
+        gt(entitlementCreditGrants.amountRemaining, 0),
+        gt(entitlementCreditGrants.expiresAt, now)
+      )
+    ).orderBy(asc(entitlementCreditGrants.grantedAt));
+  }
+
+  async consumeCreditFromGrant(grantId: number, amount: number): Promise<EntitlementCreditGrant> {
+    const [g] = await db.update(entitlementCreditGrants)
+      .set({ amountRemaining: sql`${entitlementCreditGrants.amountRemaining} - ${amount}` })
+      .where(and(
+        eq(entitlementCreditGrants.id, grantId),
+        gte(entitlementCreditGrants.amountRemaining, amount)
+      ))
+      .returning();
+    return g;
+  }
+
+  async createCreditConsumption(consumption: InsertEntitlementCreditConsumption): Promise<EntitlementCreditConsumption> {
+    const [c] = await db.insert(entitlementCreditConsumptions).values(consumption).returning();
+    return c;
+  }
+
+  async getUserCreditSummary(userId: number, entitlementKey: string): Promise<{ totalRemaining: number; grants: EntitlementCreditGrant[] }> {
+    const grants = await this.getActiveCreditGrants(userId, entitlementKey);
+    const totalRemaining = grants.reduce((sum, g) => sum + g.amountRemaining, 0);
+    return { totalRemaining, grants };
   }
 }
 

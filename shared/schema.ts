@@ -249,6 +249,9 @@ export const adminProducts = pgTable("admin_products", {
   planType: text("plan_type").notNull().default("Subscription"), // Subscription | Top-up | Admin/Flag
   quotaSource: text("quota_source"),
   activeInstruction: text("active_instruction"),
+  grantEntitlementKey: text("grant_entitlement_key"),
+  grantAmount: integer("grant_amount"),
+  creditExpiryMonths: integer("credit_expiry_months").default(12),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -295,6 +298,51 @@ export const migrationState = pgTable("migration_state", {
   result: jsonb("result"),
   createdAt: timestamp("created_at").defaultNow(),
 });
+
+export const entitlementUsageWindows = pgTable("entitlement_usage_windows", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull(),
+  entitlementKey: text("entitlement_key").notNull(),
+  windowStart: timestamp("window_start").notNull(),
+  windowEnd: timestamp("window_end").notNull(),
+  usedCount: integer("used_count").notNull().default(0),
+}, (table) => [
+  uniqueIndex("entitlement_usage_windows_user_key_start_idx").on(table.userId, table.entitlementKey, table.windowStart),
+]);
+
+export const entitlementCreditGrants = pgTable("entitlement_credit_grants", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull(),
+  entitlementKey: text("entitlement_key").notNull(),
+  amountGranted: integer("amount_granted").notNull(),
+  amountRemaining: integer("amount_remaining").notNull(),
+  grantedAt: timestamp("granted_at").notNull().defaultNow(),
+  expiresAt: timestamp("expires_at").notNull(),
+  stripePaymentIntentId: text("stripe_payment_intent_id"),
+  status: text("status").notNull().default("Active"),
+});
+
+export const entitlementCreditConsumptions = pgTable("entitlement_credit_consumptions", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull(),
+  entitlementKey: text("entitlement_key").notNull(),
+  grantId: integer("grant_id").notNull(),
+  amount: integer("amount").notNull().default(1),
+  consumedAt: timestamp("consumed_at").notNull().defaultNow(),
+  sourceEvent: text("source_event"),
+  refId: integer("ref_id"),
+});
+
+export const insertEntitlementUsageWindowSchema = createInsertSchema(entitlementUsageWindows).omit({ id: true });
+export const insertEntitlementCreditGrantSchema = createInsertSchema(entitlementCreditGrants).omit({ id: true });
+export const insertEntitlementCreditConsumptionSchema = createInsertSchema(entitlementCreditConsumptions).omit({ id: true });
+
+export type EntitlementUsageWindow = typeof entitlementUsageWindows.$inferSelect;
+export type InsertEntitlementUsageWindow = z.infer<typeof insertEntitlementUsageWindowSchema>;
+export type EntitlementCreditGrant = typeof entitlementCreditGrants.$inferSelect;
+export type InsertEntitlementCreditGrant = z.infer<typeof insertEntitlementCreditGrantSchema>;
+export type EntitlementCreditConsumption = typeof entitlementCreditConsumptions.$inferSelect;
+export type InsertEntitlementCreditConsumption = z.infer<typeof insertEntitlementCreditConsumptionSchema>;
 
 export const insertAdminProductSchema = createInsertSchema(adminProducts).omit({ id: true, createdAt: true, updatedAt: true });
 export const insertAdminEntitlementSchema = createInsertSchema(adminEntitlements).omit({ id: true, createdAt: true, updatedAt: true });

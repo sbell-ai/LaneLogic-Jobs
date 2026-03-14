@@ -47,6 +47,9 @@ function ProductsTab() {
     trialDays: "0",
     status: "Active",
     entitlementIds: [] as number[],
+    grantEntitlementKey: "",
+    grantAmount: "",
+    creditExpiryMonths: "12",
   });
 
   const resetForm = () => {
@@ -55,6 +58,7 @@ function ProductsTab() {
       billingType: "subscription", planType: "Subscription",
       priceMonthly: "", priceYearly: "", priceOneTime: "",
       logicKey: "", trialDays: "0", status: "Active", entitlementIds: [],
+      grantEntitlementKey: "", grantAmount: "", creditExpiryMonths: "12",
     });
     setEditId(null);
     setShowForm(false);
@@ -75,6 +79,9 @@ function ProductsTab() {
         trialDays: parseInt(form.trialDays) || 0,
         status: form.status,
         entitlementIds: form.entitlementIds,
+        grantEntitlementKey: form.grantEntitlementKey || null,
+        grantAmount: form.grantAmount ? parseInt(form.grantAmount) : null,
+        creditExpiryMonths: form.creditExpiryMonths ? parseInt(form.creditExpiryMonths) : null,
       };
       if (editId) {
         return apiRequest("PATCH", `/api/admin/products/${editId}`, body);
@@ -131,6 +138,9 @@ function ProductsTab() {
       trialDays: p.trialDays.toString(),
       status: p.status,
       entitlementIds: p.entitlementIds || [],
+      grantEntitlementKey: p.grantEntitlementKey || "",
+      grantAmount: p.grantAmount?.toString() || "",
+      creditExpiryMonths: p.creditExpiryMonths?.toString() || "12",
     });
     setEditId(p.id);
     setShowForm(true);
@@ -339,6 +349,25 @@ function ProductsTab() {
                 </SelectContent>
               </Select>
             </div>
+            {form.planType === "Top-up" && (
+              <div className="border border-orange-200 dark:border-orange-800 rounded-lg p-4 bg-orange-50 dark:bg-orange-900/20 space-y-3">
+                <Label className="text-sm font-semibold text-orange-700 dark:text-orange-400">Credit Grant Settings (Top-Up)</Label>
+                <div className="grid grid-cols-3 gap-3">
+                  <div>
+                    <Label className="text-xs">Entitlement Key</Label>
+                    <Input value={form.grantEntitlementKey} onChange={(e) => setForm({ ...form, grantEntitlementKey: e.target.value })} placeholder="applications_per_month" data-testid="input-grant-key" />
+                  </div>
+                  <div>
+                    <Label className="text-xs">Credits to Grant</Label>
+                    <Input type="number" value={form.grantAmount} onChange={(e) => setForm({ ...form, grantAmount: e.target.value })} placeholder="10" data-testid="input-grant-amount" />
+                  </div>
+                  <div>
+                    <Label className="text-xs">Expiry (Months)</Label>
+                    <Input type="number" value={form.creditExpiryMonths} onChange={(e) => setForm({ ...form, creditExpiryMonths: e.target.value })} placeholder="12" data-testid="input-credit-expiry" />
+                  </div>
+                </div>
+              </div>
+            )}
             {entitlements && entitlements.length > 0 && (
               <div>
                 <Label>Entitlements</Label>
