@@ -53,10 +53,27 @@ export const jobs = pgTable("jobs", {
   publishedAt: timestamp("published_at"),
   expiresAt: timestamp("expires_at"),
   createdAt: timestamp("created_at").defaultNow(),
+  sourceId: integer("source_id"),
+  importTargetId: integer("import_target_id"),
+  externalJobId: text("external_job_id"),
+  sourceUrl: text("source_url"),
+  externalPostedAt: timestamp("external_posted_at"),
+  externalCreatedAt: timestamp("external_created_at"),
+  externalValidThrough: timestamp("external_valid_through"),
+  employmentType: text("employment_type"),
+  isRemote: boolean("is_remote"),
+  status: text("status").notNull().default("active"),
+  importedAt: timestamp("imported_at"),
+  lastImportedAt: timestamp("last_imported_at"),
+  lastAdminEditedAt: timestamp("last_admin_edited_at"),
+  rawSourceSnippet: text("raw_source_snippet"),
 }, (table) => [
   uniqueIndex("jobs_employer_external_key_idx")
     .on(table.employerId, table.externalJobKey)
     .where(sql`${table.externalJobKey} IS NOT NULL`),
+  uniqueIndex("jobs_source_target_external_idx")
+    .on(table.sourceId, table.importTargetId, table.externalJobId)
+    .where(sql`${table.sourceId} IS NOT NULL AND ${table.externalJobId} IS NOT NULL`),
 ]);
 
 export const applications = pgTable("applications", {
@@ -183,6 +200,52 @@ export const pages = pgTable("pages", {
   isPublished: boolean("is_published").notNull().default(false),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const jobSources = pgTable("job_sources", {
+  id: serial("id").primaryKey(),
+  provider: text("provider").notNull().default("apify"),
+  name: text("name").notNull(),
+  actorId: text("actor_id").notNull(),
+  actorInputJson: jsonb("actor_input_json").notNull(),
+  pollIntervalMinutes: integer("poll_interval_minutes").notNull().default(360),
+  status: text("status").notNull().default("active"),
+  lastRunAt: timestamp("last_run_at"),
+  lastSuccessfulRunAt: timestamp("last_successful_run_at"),
+  consecutiveFailures: integer("consecutive_failures").notNull().default(0),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const importTargets = pgTable("import_targets", {
+  id: serial("id").primaryKey(),
+  sourceId: integer("source_id").notNull(),
+  sourceDomain: text("source_domain").notNull(),
+  companyName: text("company_name").notNull(),
+  employerWebsiteDomain: text("employer_website_domain"),
+  status: text("status").notNull().default("pending_review"),
+  firstSeenAt: timestamp("first_seen_at").defaultNow(),
+  lastSeenAt: timestamp("last_seen_at").defaultNow(),
+}, (table) => [
+  uniqueIndex("import_targets_source_domain_idx").on(table.sourceId, table.sourceDomain),
+]);
+
+export const jobImportRuns = pgTable("job_import_runs", {
+  id: serial("id").primaryKey(),
+  sourceId: integer("source_id").notNull(),
+  status: text("status").notNull().default("queued"),
+  startedAt: timestamp("started_at"),
+  finishedAt: timestamp("finished_at"),
+  apifyRunId: text("apify_run_id"),
+  apifyDatasetId: text("apify_dataset_id"),
+  actorInputJson: jsonb("actor_input_json"),
+  statsCreated: integer("stats_created").notNull().default(0),
+  statsUpdated: integer("stats_updated").notNull().default(0),
+  statsSkipped: integer("stats_skipped").notNull().default(0),
+  statsExpired: integer("stats_expired").notNull().default(0),
+  warnings: jsonb("warnings"),
+  lastError: text("last_error"),
+  createdAt: timestamp("created_at").defaultNow(),
 });
 
 export const importRuns = pgTable("import_runs", {
@@ -343,6 +406,17 @@ export type EntitlementCreditGrant = typeof entitlementCreditGrants.$inferSelect
 export type InsertEntitlementCreditGrant = z.infer<typeof insertEntitlementCreditGrantSchema>;
 export type EntitlementCreditConsumption = typeof entitlementCreditConsumptions.$inferSelect;
 export type InsertEntitlementCreditConsumption = z.infer<typeof insertEntitlementCreditConsumptionSchema>;
+
+export const insertJobSourceSchema = createInsertSchema(jobSources).omit({ id: true, createdAt: true, updatedAt: true });
+export const insertImportTargetSchema = createInsertSchema(importTargets).omit({ id: true });
+export const insertJobImportRunSchema = createInsertSchema(jobImportRuns).omit({ id: true, createdAt: true });
+
+export type JobSource = typeof jobSources.$inferSelect;
+export type InsertJobSource = z.infer<typeof insertJobSourceSchema>;
+export type ImportTarget = typeof importTargets.$inferSelect;
+export type InsertImportTarget = z.infer<typeof insertImportTargetSchema>;
+export type JobImportRun = typeof jobImportRuns.$inferSelect;
+export type InsertJobImportRun = z.infer<typeof insertJobImportRunSchema>;
 
 export const insertAdminProductSchema = createInsertSchema(adminProducts).omit({ id: true, createdAt: true, updatedAt: true });
 export const insertAdminEntitlementSchema = createInsertSchema(adminEntitlements).omit({ id: true, createdAt: true, updatedAt: true });

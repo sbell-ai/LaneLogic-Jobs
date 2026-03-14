@@ -1,0 +1,63 @@
+## Yellow (tighten these before they build)
+
+### 1) Seeding job_source “on first startup” can create drift
+
+If they seed on startup without a guard, you risk:
+
+- duplicate seeding
+- surprise config changes in production if code changes
+
+**Edit:** Seed only if no `job_sources` exists (or use a `migration_state` key). After that, the org list should be editable only in Admin UI.
+
+### 2) “Expire missing jobs on next successful full run” needs a precise definition
+
+You already have cap-hit logic, but define “full run” explicitly:
+
+- **Only expire when** the run finishes with `status='succeeded'` (not `succeeded_with_warnings`)
+- And only for domains that were actually processed (touched) in that run
+
+This prevents accidental mass expiry when the run is partial or truncated.
+
+### 3) Add a “quarantine” step for newly discovered domains (recommended)
+
+Because you allow close matches, new Workday domains will appear. You want control.
+
+**Edit:** When an unseen `source_domain` is first discovered:
+
+- create `import_targets` with `status='paused'` (or a new `status='pending_review'`)
+- still log it in “Discovered Companies”
+- do not import jobs until you activate it
+
+If you want maximum automation, keep your current approach, but quarantine is the safer default.
+
+### 4) Add a “domain job count anomaly” warning (high leverage)
+
+This catches actor changes or parsing failures.
+
+- If a domain previously imported N jobs and suddenly imports 0 (or drops by 90%), flag it as a warning and skip expiry for that domain.
+
+### 5) Use `applyUrl` as canonical source URL and always sanitize it
+
+Workday URLs can be messy.
+
+- Normalize and validate that `applyUrl` is a proper URL before storing.
+- If invalid, skip row with a warning.
+
+## Red (change this line)
+
+### Stripe/product routes file reference looks off
+
+They list `server/adminProductRoutes.ts` under “Relevant files.” This import pipeline should not depend on product routes. It’s not harmful, but it signals they might wire admin APIs in an odd place.
+
+**Edit:** Keep import routes in a dedicated file, e.g.:
+
+- `server/adminImportRoutes.ts` (clean separation)
+
+## Two small “Done looks like” additions (so it’s truly operable)
+
+Add:
+
+- “Admin can edit the `organizationSearch` list and poll interval from Job Sources page (stored in DB).”
+- “Imports can be manually re-run for a single domain (importTargetId) for debugging.”
+
+##

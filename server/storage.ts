@@ -4,6 +4,7 @@ import {
   importRuns, importArtifacts, socialPosts,
   adminProducts, adminEntitlements, adminProductOverrides, adminProductEntitlements, migrationState,
   entitlementUsageWindows, entitlementCreditGrants, entitlementCreditConsumptions,
+  jobSources, importTargets, jobImportRuns,
   type User, type InsertUser, type Job, type InsertJob,
   type Application, type InsertApplication,
   type Resource, type InsertResource,
@@ -23,9 +24,12 @@ import {
   type EntitlementUsageWindow, type InsertEntitlementUsageWindow,
   type EntitlementCreditGrant, type InsertEntitlementCreditGrant,
   type EntitlementCreditConsumption, type InsertEntitlementCreditConsumption,
-  type SiteSettingsData, DEFAULT_SETTINGS
+  type SiteSettingsData, DEFAULT_SETTINGS,
+  type JobSource, type InsertJobSource,
+  type ImportTarget, type InsertImportTarget,
+  type JobImportRun, type InsertJobImportRun,
 } from "@shared/schema";
-import { eq, and, sql, desc, asc, isNotNull, gte, lte, gt } from "drizzle-orm";
+import { eq, and, sql, desc, asc, isNotNull, gte, lte, gt, ne, notInArray, inArray, count } from "drizzle-orm";
 
 export interface IStorage {
   // Users
@@ -149,6 +153,32 @@ export interface IStorage {
   createCreditConsumption(consumption: InsertEntitlementCreditConsumption): Promise<EntitlementCreditConsumption>;
   getUserCreditSummary(userId: number, entitlementKey: string): Promise<{ totalRemaining: number; grants: EntitlementCreditGrant[] }>;
   getCreditGrantByPaymentIntent(paymentIntentId: string): Promise<EntitlementCreditGrant | undefined>;
+
+  // Job Sources (Apify import pipeline)
+  getJobSources(): Promise<JobSource[]>;
+  getJobSource(id: number): Promise<JobSource | undefined>;
+  createJobSource(source: InsertJobSource): Promise<JobSource>;
+  updateJobSource(id: number, updates: Partial<InsertJobSource>): Promise<JobSource>;
+  getActiveJobSourcesDueForPoll(): Promise<JobSource[]>;
+  claimJobSourceForRun(sourceId: number): Promise<boolean>;
+
+  // Import Targets (discovered Workday domains)
+  getImportTargets(sourceId?: number): Promise<ImportTarget[]>;
+  getImportTarget(id: number): Promise<ImportTarget | undefined>;
+  upsertImportTarget(sourceId: number, sourceDomain: string, companyName: string, employerWebsiteDomain?: string | null): Promise<ImportTarget>;
+  updateImportTarget(id: number, updates: Partial<InsertImportTarget>): Promise<ImportTarget>;
+  getJobCountByImportTarget(importTargetId: number): Promise<number>;
+
+  // Job Import Runs
+  createJobImportRun(run: InsertJobImportRun): Promise<JobImportRun>;
+  updateJobImportRun(id: number, updates: Partial<InsertJobImportRun>): Promise<JobImportRun>;
+  getJobImportRuns(sourceId?: number, limit?: number): Promise<JobImportRun[]>;
+  getJobImportRun(id: number): Promise<JobImportRun | undefined>;
+
+  // Apify job upsert
+  upsertImportedJob(sourceId: number, importTargetId: number, externalJobId: string, jobData: Partial<InsertJob>): Promise<{ job: Job; action: "created" | "updated" | "skipped" }>;
+  expireJobsNotInSet(importTargetId: number, seenExternalJobIds: string[]): Promise<number>;
+  expireJobsByImportTarget(importTargetId: number): Promise<number>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -593,6 +623,195 @@ export class DatabaseStorage implements IStorage {
 
   async runTransaction<T>(fn: (tx: any) => Promise<T>): Promise<T> {
     return db.transaction(fn);
+  }
+
+  // Job Sources
+  async getJobSources(): Promise<JobSource[]> {
+    return await db.select().from(jobSources).orderBy(desc(jobSources.createdAt));
+  }
+  async getJobSource(id: number): Promise<JobSource | undefined> {
+    const [s] = await db.select().from(jobSources).where(eq(jobSources.id, id));
+    return s;
+  }
+  async createJobSource(source: InsertJobSource): Promise<JobSource> {
+    const [s] = await db.insert(jobSources).values(source).returning();
+    return s;
+  }
+  async updateJobSource(id: number, updates: Partial<InsertJobSource>): Promise<JobSource> {
+    const [s] = await db.update(jobSources).set({ ...updates, updatedAt: new Date() }).where(eq(jobSources.id, id)).returning();
+    return s;
+  }
+  async getActiveJobSourcesDueForPoll(): Promise<JobSource[]> {
+    return await db.select().from(jobSources).where(
+      and(
+        eq(jobSources.status, "active"),
+        sql`(${jobSources.lastRunAt} IS NULL OR ${jobSources.lastRunAt} < NOW() - (${jobSources.pollIntervalMinutes} || ' minutes')::interval)`
+      )
+    );
+  }
+  async claimJobSourceForRun(sourceId: number): Promise<boolean> {
+    const rows = await db.update(jobSources)
+      .set({ lastRunAt: new Date() })
+      .where(
+        and(
+          eq(jobSources.id, sourceId),
+          eq(jobSources.status, "active"),
+          sql`(${jobSources.lastRunAt} IS NULL OR ${jobSources.lastRunAt} < NOW() - (${jobSources.pollIntervalMinutes} || ' minutes')::interval)`
+        )
+      )
+      .returning();
+    return rows.length > 0;
+  }
+
+  // Import Targets
+  async getImportTargets(sourceId?: number): Promise<ImportTarget[]> {
+    if (sourceId !== undefined) {
+      return await db.select().from(importTargets).where(eq(importTargets.sourceId, sourceId)).orderBy(desc(importTargets.lastSeenAt));
+    }
+    return await db.select().from(importTargets).orderBy(desc(importTargets.lastSeenAt));
+  }
+  async getImportTarget(id: number): Promise<ImportTarget | undefined> {
+    const [t] = await db.select().from(importTargets).where(eq(importTargets.id, id));
+    return t;
+  }
+  async upsertImportTarget(sourceId: number, sourceDomain: string, companyName: string, employerWebsiteDomain?: string | null): Promise<ImportTarget> {
+    const existing = await db.select().from(importTargets).where(
+      and(eq(importTargets.sourceId, sourceId), eq(importTargets.sourceDomain, sourceDomain))
+    );
+    if (existing.length > 0) {
+      const updates: any = { companyName, lastSeenAt: new Date() };
+      if (employerWebsiteDomain) updates.employerWebsiteDomain = employerWebsiteDomain;
+      const [t] = await db.update(importTargets).set(updates).where(eq(importTargets.id, existing[0].id)).returning();
+      return t;
+    }
+    const [t] = await db.insert(importTargets).values({
+      sourceId, sourceDomain, companyName,
+      employerWebsiteDomain: employerWebsiteDomain || null,
+      status: "pending_review",
+      firstSeenAt: new Date(),
+      lastSeenAt: new Date(),
+    }).returning();
+    return t;
+  }
+  async updateImportTarget(id: number, updates: Partial<InsertImportTarget>): Promise<ImportTarget> {
+    const [t] = await db.update(importTargets).set(updates).where(eq(importTargets.id, id)).returning();
+    return t;
+  }
+  async getJobCountByImportTarget(importTargetId: number): Promise<number> {
+    const [result] = await db.select({ cnt: count() }).from(jobs).where(
+      and(eq(jobs.importTargetId, importTargetId), ne(jobs.status, "expired"))
+    );
+    return Number(result?.cnt || 0);
+  }
+
+  // Job Import Runs
+  async createJobImportRun(run: InsertJobImportRun): Promise<JobImportRun> {
+    const [r] = await db.insert(jobImportRuns).values(run).returning();
+    return r;
+  }
+  async updateJobImportRun(id: number, updates: Partial<InsertJobImportRun>): Promise<JobImportRun> {
+    const [r] = await db.update(jobImportRuns).set(updates).where(eq(jobImportRuns.id, id)).returning();
+    return r;
+  }
+  async getJobImportRuns(sourceId?: number, limit: number = 50): Promise<JobImportRun[]> {
+    if (sourceId !== undefined) {
+      return await db.select().from(jobImportRuns).where(eq(jobImportRuns.sourceId, sourceId)).orderBy(desc(jobImportRuns.createdAt)).limit(limit);
+    }
+    return await db.select().from(jobImportRuns).orderBy(desc(jobImportRuns.createdAt)).limit(limit);
+  }
+  async getJobImportRun(id: number): Promise<JobImportRun | undefined> {
+    const [r] = await db.select().from(jobImportRuns).where(eq(jobImportRuns.id, id));
+    return r;
+  }
+
+  // Apify job upsert (idempotent)
+  async upsertImportedJob(sourceId: number, importTargetId: number, externalJobId: string, jobData: Partial<InsertJob>): Promise<{ job: Job; action: "created" | "updated" | "skipped" }> {
+    const [existing] = await db.select().from(jobs).where(
+      and(
+        eq(jobs.sourceId, sourceId),
+        eq(jobs.importTargetId, importTargetId),
+        eq(jobs.externalJobId, externalJobId)
+      )
+    );
+    const now = new Date();
+    if (!existing) {
+      const [job] = await db.insert(jobs).values({
+        employerId: 0,
+        title: jobData.title || "Untitled",
+        description: jobData.description || "",
+        requirements: jobData.requirements || "",
+        companyName: jobData.companyName,
+        jobType: jobData.jobType,
+        locationCity: jobData.locationCity,
+        locationState: jobData.locationState,
+        locationCountry: jobData.locationCountry,
+        applyUrl: jobData.applyUrl,
+        isExternalApply: true,
+        isPublished: false,
+        sourceId,
+        importTargetId,
+        externalJobId,
+        sourceUrl: jobData.sourceUrl,
+        externalPostedAt: jobData.externalPostedAt,
+        externalCreatedAt: jobData.externalCreatedAt,
+        externalValidThrough: jobData.externalValidThrough,
+        employmentType: jobData.employmentType,
+        isRemote: jobData.isRemote,
+        status: "draft",
+        importedAt: now,
+        lastImportedAt: now,
+        rawSourceSnippet: jobData.rawSourceSnippet,
+      } as InsertJob).returning();
+      return { job, action: "created" };
+    }
+
+    const safeUpdates: any = {
+      sourceUrl: jobData.sourceUrl,
+      externalPostedAt: jobData.externalPostedAt,
+      externalCreatedAt: jobData.externalCreatedAt,
+      externalValidThrough: jobData.externalValidThrough,
+      locationCity: jobData.locationCity,
+      locationState: jobData.locationState,
+      locationCountry: jobData.locationCountry,
+      employmentType: jobData.employmentType,
+      isRemote: jobData.isRemote,
+      lastImportedAt: now,
+      rawSourceSnippet: jobData.rawSourceSnippet,
+    };
+    if (existing.status === "expired") {
+      safeUpdates.status = "draft";
+    }
+    if (!existing.lastAdminEditedAt) {
+      if (jobData.title) safeUpdates.title = jobData.title;
+      if (jobData.description) safeUpdates.description = jobData.description;
+    }
+
+    const [job] = await db.update(jobs).set(safeUpdates).where(eq(jobs.id, existing.id)).returning();
+    return { job, action: "updated" };
+  }
+
+  async expireJobsNotInSet(importTargetId: number, seenExternalJobIds: string[]): Promise<number> {
+    const conditions = [
+      eq(jobs.importTargetId, importTargetId),
+      ne(jobs.status, "expired"),
+    ];
+    if (seenExternalJobIds.length > 0) {
+      conditions.push(sql`${jobs.externalJobId} IS NOT NULL`);
+      conditions.push(notInArray(jobs.externalJobId, seenExternalJobIds));
+    }
+    const rows = await db.update(jobs)
+      .set({ status: "expired", isPublished: false })
+      .where(and(...conditions))
+      .returning();
+    return rows.length;
+  }
+
+  async expireJobsByImportTarget(importTargetId: number): Promise<number> {
+    const rows = await db.update(jobs)
+      .set({ status: "expired", isPublished: false })
+      .where(and(eq(jobs.importTargetId, importTargetId), ne(jobs.status, "expired")))
+      .returning();
+    return rows.length;
   }
 }
 

@@ -187,6 +187,7 @@ async function startServer() {
 
   initStripeBackground();
   initRegistrySync();
+  initImportScheduler();
 }
 
 async function seedDatabaseIfEmpty() {
@@ -389,6 +390,58 @@ async function initRegistrySync() {
       console.error("[registry-sync] Periodic sync error:", err);
     }
   }, SYNC_INTERVAL_MS);
+}
+
+const IMPORT_SCHEDULER_INTERVAL_MS = 15 * 60 * 1000;
+
+async function seedDefaultJobSource() {
+  try {
+    const { storage } = await import("./storage");
+    const sources = await storage.getJobSources();
+    if (sources.length > 0) {
+      console.log("[import-scheduler] Job sources already exist, skipping seed");
+      return;
+    }
+    await storage.createJobSource({
+      name: "Apify Workday Scraper",
+      type: "apify",
+      actorId: "apify/workday-scraper",
+      actorInputJson: {
+        searchTerms: ["driver", "logistics", "transportation", "warehouse", "freight", "supply chain", "trucking", "CDL"],
+        maxResults: 5000,
+      },
+      pollIntervalMinutes: 720,
+      status: "paused",
+    });
+    console.log("[import-scheduler] Seeded default job source (paused)");
+  } catch (err) {
+    console.error("[import-scheduler] Seed error:", err);
+  }
+}
+
+async function initImportScheduler() {
+  await seedDefaultJobSource();
+
+  setInterval(async () => {
+    try {
+      const { storage } = await import("./storage");
+      const dueSources = await storage.getActiveJobSourcesDueForPoll();
+      if (dueSources.length === 0) return;
+
+      for (const source of dueSources) {
+        const claimed = await storage.claimJobSourceForRun(source.id);
+        if (!claimed) continue;
+
+        console.log(`[import-scheduler] Starting import for source ${source.id} (${source.name})`);
+        const { runImport } = await import("./import/importOrchestrator");
+        runImport(source).catch(err => {
+          console.error(`[import-scheduler] Import error for source ${source.id}:`, err);
+        });
+      }
+    } catch (err) {
+      console.error("[import-scheduler] Scheduler error:", err);
+    }
+  }, IMPORT_SCHEDULER_INTERVAL_MS);
 }
 
 startServer().catch((err) => {

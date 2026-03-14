@@ -1,0 +1,419 @@
+## Replit Implementation Spec — Apify Workday “API” Scrape → Draft Job Import (Multi-company, TSV)
+
+### Goal
+
+Implement a recurring, automatic pipeline that:
+
+1) Runs Apify Actor `fantastic-jobs/workday-jobs-api` using an `organizationSearch` list.  
+
+2) Fetches results and parses them as **TSV** (tab-delimited with header row).  
+
+3) Upserts jobs into Postgres **idempotently** (no duplicates).  
+
+4) Imports as **Drafts** (`isPublished=false`) and preserves admin edits.  
+
+5) Expires/unpublishes jobs that disappear from the source.  
+
+6) Supports “close matches are fine” discovery, with admin **pause/block** controls per Workday domain.  
+
+7) **MVP:** ignore all `ai_*` enrichment fields.
+
+---
+
+## Recommended polling + run limits (use these defaults)
+
+These values are chosen to keep costs reasonable, avoid long-running imports, and reduce “job list churn” from frequent crawls.
+
+### Poll interval
+
+- **Default:** `pollIntervalMinutes = 360` (every **6 hours**) for the multi-company list.
+- **Optional “fresher” mode:** `pollIntervalMinutes = 120` (every **2 hours**) if you want faster freshness and can tolerate more Apify cost.
+
+Why not 15–60 minutes? With 50 org names and close-match discovery, you can generate large datasets and repeated runs will mostly re-import the same jobs. 2–6 hours is usually the sweet spot.
+
+### Run limits (hard caps)
+
+- `MAX_RUNTIME_MINUTES = 12`
+- `MAX_ROWS_PER_RUN = 8_000`
+- `MAX_DOMAINS_TOUCHED_PER_RUN = 250` (safety valve for broad discovery)
+
+Behavior:
+
+- If a run hits any cap, mark it `succeeded_with_warnings`.
+- Do **not** expire missing jobs for domains you did not fully process (see expiry rules below).
+
+---
+
+# 0) Definitions and policy
+
+### Matching policy
+
+- Close matches are acceptable (broad discovery).
+- **Canonical company key is `source_domain`**, not the `organizationSearch` term.
+
+### Draft policy
+
+- All imported jobs must be created as **drafts** and remain editable:
+    - `isPublished=false`
+    - `status='draft'` (or equivalent)
+
+### MVP field policy
+
+- Import only core fields. **Ignore** all `ai_*` columns for now.
+
+---
+
+# 1) Environment / secrets
+
+Add environment variables:
+
+- `APIFY_TOKEN` (required)
+
+---
+
+# 2) Database schema (minimum viable)
+
+## 2.1 `job_sources` (one row = one Apify pipeline)
+
+Fields:
+
+- `id` (pk)
+- `provider` = `'apify'`
+- `name` (string)
+- `actorId` = `'fantastic-jobs/workday-jobs-api'`
+- `actorInputJson` (JSON) — includes `organizationSearch: string[]`
+- `pollIntervalMinutes` (int, default **360**)
+- `status` = `active|paused`
+- `lastRunAt` (datetime nullable)
+- `lastSuccessfulRunAt` (datetime nullable)
+
+## 2.2 `import_targets` (one row per discovered Workday domain)
+
+Keyed by domain. Fields:
+
+- `id` (pk)
+- `sourceId` (FK → job_sources)
+- `sourceDomain` (string) ← TSV `source_domain`
+- `companyName` (string) ← TSV `companyName` (latest seen)
+- `employerWebsiteDomain` (string nullable) ← TSV `domain_derived` (optional)
+- `status` = `active|paused|blocked`
+- `firstSeenAt` (datetime)
+- `lastSeenAt` (datetime)
+- Unique index: `(sourceId, sourceDomain)`
+
+## 2.3 `job_import_runs` (track each run and debugging)
+
+Fields:
+
+- `id` (pk)
+- `sourceId` (FK)
+- `status` = `queued|running|succeeded|failed|succeeded_with_warnings`
+- `startedAt`, `finishedAt`
+- `apifyRunId` (string nullable)
+- `apifyDatasetId` (string nullable)
+- `actorInputJson` (JSON)  ← snapshot of the input used for that run
+- `statsCreated`, `statsUpdated`, `statsSkipped`, `statsExpired` (int)
+- `warnings` (text/json nullable)
+- `lastError` (text nullable)
+
+## 2.4 `jobs` table additions (idempotency + drafts + edit protection)
+
+Add fields:
+
+- `sourceId` (FK)
+- `importTargetId` (FK → import_targets)
+- `externalJobId` (string) ← TSV `externalJobKey`
+- `sourceUrl` (string) ← TSV `applyUrl`
+- `externalPostedAt` (datetime nullable) ← TSV `date_posted`
+- `externalCreatedAt` (datetime nullable) ← TSV `date_created`
+- `externalValidThrough` (datetime nullable) ← TSV `date_validthrough`
+- `employmentType` (string nullable) ← TSV `jobType`
+- `locationCity`, `locationState`, `locationCountry` (strings nullable)
+- `isRemote` (boolean nullable) ← TSV `remote_derived`
+- `description` (text)
+- `isPublished` boolean default `false`
+- `status` = `draft|expired|...`
+- `importedAt` (datetime)
+- `lastImportedAt` (datetime)
+- `lastAdminEditedAt` (datetime nullable)
+
+Unique index:
+
+- `(sourceId, importTargetId, externalJobId)`
+
+---
+
+# 3) Scheduling / recurrence
+
+Implement a server-side scheduler (cron) that runs every 5 minutes:
+
+- Find `job_sources` where `status='active'` and `now - lastRunAt >= pollIntervalMinutes`.
+- Enqueue a `job_import_runs` row.
+- Claim/lock the source so only one run per source occurs at a time.
+
+### Locking requirement (must)
+
+Use a robust approach (DB advisory lock, transactional claim, row lock). Acceptance criteria:
+
+- If the scheduler fires twice, **only one run** executes per `sourceId`.
+
+---
+
+# 4) Running Apify and fetching results
+
+## 4.1 Start run
+
+Implement:
+
+- `startApifyRun(sourceId)`:
+    - calls Apify “Run actor” endpoint with:
+        - actorId = `fantastic-jobs/workday-jobs-api`
+        - input = `job_sources.actorInputJson`
+    - stores `apifyRunId`
+    - writes `job_import_runs.actorInputJson` snapshot for that run (for audit/debug)
+
+## 4.2 Poll run status
+
+- Poll until completion:
+    - SUCCEEDED → proceed
+    - FAILED/ABORTED or timeout → mark failed with `lastError`
+
+## 4.3 Fetch dataset export as TSV
+
+- Get `datasetId` from run.
+- Fetch TSV export.
+- Stream rows; do not load the whole dataset into memory.
+- Enforce caps:
+    - stop processing after `MAX_ROWS_PER_RUN`
+    - stop after `MAX_RUNTIME_MINUTES`
+- Record a warning and set status `succeeded_with_warnings` if any cap is hit.
+
+---
+
+# 5) TSV parsing (non-negotiable)
+
+The export is **TSV with a header**. Parse it properly.
+
+Node requirement:
+
+- Use a TSV-capable CSV parser configured with:
+    - `delimiter: '\t'`
+    - `columns: true`
+    - `skip_empty_lines: true`
+    - `relax_column_count: true`
+    - Must support long/multiline `description` fields.
+
+Do NOT split by whitespace or URLs.
+
+---
+
+# 6) Import mapping (MVP: core fields only, ignore `ai_*`)
+
+For each record (row):
+
+## 6.1 Determine/import target (company)
+
+- `sourceDomain = row['source_domain']`
+- Upsert `import_targets` where `(sourceId, sourceDomain)`:
+    - `companyName = row['companyName']`
+    - `lastSeenAt = now()`
+    - if new: set `firstSeenAt = now()`
+
+Skip if:
+
+- `import_targets.status = 'blocked'` (increment skipped + log warning)
+
+## 6.2 Idempotency key
+
+- `externalJobId = row['externalJobKey']` (preferred)
+- Fallback if missing:
+    - `externalJobId = sha256(sourceDomain + row['applyUrl'])`
+
+## 6.3 Normalize fields (core)
+
+Map:
+
+- `title = row['title']`
+- `sourceUrl = row['applyUrl']`
+- `employmentType = row['jobType']`
+- `locationCity = row['locationCity']`
+- `locationState = row['locationState']`
+- `locationCountry = row['locationCountry']`
+- `isRemote = parseBoolean(row['remote_derived'])`
+- `description = row['description']`
+- `externalPostedAt = parseDate(row['date_posted'])`
+- `externalCreatedAt = parseDate(row['date_created'])`
+- `externalValidThrough = parseDate(row['date_validthrough'])`
+
+Ignore:
+
+- all columns prefixed with `ai_`
+- enrichment columns (benefits, skills, keywords, education)
+- category fields for now
+
+---
+
+# 7) Upsert rules (draft + preserve admin edits)
+
+## 7.1 Insert
+
+If no job exists for `(sourceId, importTargetId, externalJobId)`:
+
+- Insert job with:
+    - `isPublished=false`
+    - `status='draft'`
+    - `importedAt=now()`
+    - `lastImportedAt=now()`
+
+## 7.2 Update
+
+If job exists:
+
+- Always update “safe” source fields:
+    - `sourceUrl`
+    - `externalPostedAt`, `externalCreatedAt`, `externalValidThrough`
+    - location fields (optional; safe)
+- Protect admin edits:
+    - If `lastAdminEditedAt IS NOT NULL`, do not overwrite:
+        - `title`
+        - `description`
+    - Else, allow updating `title` and `description` from source.
+
+---
+
+# 8) Expire missing jobs (per domain) — with cap-safe behavior
+
+After importing rows, expire missing jobs per `importTargetId` **only if that domain was fully processed**.
+
+### Rule
+
+- Track `seenExternalJobIds` per `importTargetId`.
+- If the run ended with warnings due to `MAX_ROWS_PER_RUN` or `MAX_RUNTIME_MINUTES`, do **not** expire jobs for domains that might have been partially processed.
+    - Practical approach: only expire for domains where you are confident you processed all rows for that domain in this run (or skip expiry entirely on warning runs).
+
+### Normal expiry behavior (when run completes without caps)
+
+For each `importTargetId` touched:
+
+- Expire jobs where `externalJobId NOT IN seen set`:
+    - set `status='expired'`
+    - set `isPublished=false`
+- Increment `statsExpired`
+
+---
+
+# 9) Admin controls + UI
+
+Add Admin → Imports:
+
+## 9.1 Job Sources page
+
+- List sources + status
+- Show poll interval (default 6 hours)
+- “Run now” button
+- Show last run counts and last error
+
+## 9.2 Discovered Companies (Domains) page
+
+Table columns:
+
+- Company (from source)
+- Workday domain (`sourceDomain`)
+- Status (Active / Paused / Blocked)
+- Last seen
+- Jobs imported (last run)
+- Actions: Pause / Block / Activate
+
+Behavior:
+
+- **Paused**: skip importing new jobs for that domain (existing remain)
+- **Blocked**: permanently skip importing jobs for that domain
+- Block modal includes optional checkbox:
+    - “Also expire all existing jobs from this domain” (default unchecked)
+
+UI disclosure text:
+
+- “Close matches allowed. All imports are Draft until you publish.”
+
+---
+
+# 10) Failure handling & logging
+
+- If Apify run fails: mark run failed, store error, do not change `lastSuccessfulRunAt`.
+- Persist run stats and warnings.
+- If repeated failures (e.g., 3 in a row): surface a visible warning in Admin.
+
+---
+
+# 11) Acceptance tests (must pass)
+
+- Running twice produces **no duplicates** (idempotency holds).
+- All imported jobs are **draft** (`isPublished=false`).
+- Admin edits are preserved across future imports.
+- Jobs missing upstream become expired/unpublished after the next successful import (on non-warning runs).
+- Multi-domain separation: jobs from different `source_domain` never collide.
+- Blocked domains never import new jobs.
+
+---
+
+## Actor input (current)
+
+Use this as `job_sources.actorInputJson`:
+
+```json
+{
+  "organizationSearch": [
+    "UPS",
+    "FedEx",
+    "DHL",
+    "J.B. Hunt Transport Services",
+    "Schneider National",
+    "Werner Enterprises",
+    "Knight-Swift Transportation",
+    "Landstar System",
+    "Old Dominion Freight Line",
+    "Saia",
+    "ArcBest",
+    "Estes Express Lines",
+    "R+L Carriers",
+    "Hub Group",
+    "XPO",
+    "Ryder System",
+    "Penske Logistics",
+    "TFI International",
+    "C.H. Robinson",
+    "Expeditors",
+    "Kuehne+Nagel",
+    "DB Schenker",
+    "DSV",
+    "CEVA Logistics",
+    "Flexport",
+    "Echo Global Logistics",
+    "Total Quality Logistics",
+    "NFI Industries",
+    "Universal Logistics Holdings",
+    "CRST International",
+    "Prime Inc.",
+    "Crete Carrier",
+    "Heartland Express",
+    "Western Express",
+    "Covenant Logistics",
+    "Marten Transport",
+    "Melton Truck Lines",
+    "Swift Transportation",
+    "US Xpress",
+    "Anderson Trucking Service",
+    "Averitt Express",
+    "Maersk",
+    "MSC Mediterranean Shipping",
+    "CMA CGM",
+    "Hapag-Lloyd",
+    "Evergreen Marine",
+    "COSCO Shipping",
+    "Yang Ming Marine",
+    "ZIM Integrated Shipping",
+    "Atlas Air",
+    "Cargolux"
+  ]
+}
+```

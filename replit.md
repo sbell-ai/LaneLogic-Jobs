@@ -47,3 +47,22 @@ The front end utilizes React, TypeScript, Wouter for routing, and Tailwind CSS w
 - **Mailgun**: Email service for sending notifications and contact form submissions.
 - **Notion API**: Legacy integration for product/pricing data, now primarily a fallback.
 - **Zapier Webhooks**: Used for automating social media posts.
+- **Apify**: Web scraping platform used for automated Workday job imports. Requires `APIFY_TOKEN` env var.
+
+## Apify Job Import Pipeline (Task #21)
+The import pipeline automates scraping Workday job listings via Apify for transportation companies:
+
+### Architecture
+- **Database tables**: `job_sources` (scraper configurations), `import_targets` (discovered company domains), `job_import_runs` (run history/stats). Extended `jobs` table with `sourceId`, `importTargetId`, `externalJobId`, `sourceUrl`, `externalPostedAt`, `isRemote`, `status`, `importedAt`, `lastImportedAt`, `lastAdminEditedAt`, `rawSourceSnippet`.
+- **Backend modules** (`server/import/`): `apifyClient.ts` (Apify API client), `tsvParser.ts` (TSV parsing via csv-parse), `fieldMapper.ts` (row-to-job field mapping with validation), `importOrchestrator.ts` (orchestration with anomaly detection, admin edit protection, expiry logic).
+- **Admin API routes** (`server/adminImportRoutes.ts`): REST endpoints for managing sources, targets, and runs at `/api/admin/imports/*`.
+- **Scheduler** (`server/index.ts`): 15-minute interval checking for sources due for polling. Seeds a default "Apify Workday Scraper" source (paused) on first run.
+- **Admin UI** (`client/src/pages/dashboard/ImportManagement.tsx`): Three-tab interface (Sources, Discovered Companies, Run History) at `/dashboard/admin/imports`.
+
+### Key Design Decisions
+- New domains discovered by Apify start as `pending_review` — no jobs imported until admin activates.
+- Anomaly guard: skips expiry for domains with 90%+ job count drop.
+- Admin edit protection: title/description NOT overwritten if `lastAdminEditedAt` is set.
+- `rawSourceSnippet`: first 2048 chars of JSON-stringified source row for debugging.
+- `applyUrl` validated before storing; invalid rows skipped with warning.
+- Imports use `employerId: 0` (no employer account linking for now).

@@ -30,6 +30,7 @@ import type { User, Job, Resource, BlogPost, Category, Coupon, SiteSettingsData,
 import { ShareToSocialModal } from "@/components/ShareToSocialModal";
 import SocialPublishing from "./SocialPublishing";
 import ProductManagement from "./ProductManagement";
+import ImportManagement from "./ImportManagement";
 import { insertResourceSchema, insertBlogPostSchema, insertJobSchema } from "@shared/schema";
 import { INTRO_TRUNCATE_LENGTH } from "@shared/constants";
 import { tokenize } from "@/lib/linkify";
@@ -3086,6 +3087,7 @@ export default function AdminDashboard({ section, subsection }: { section?: stri
       case "custom-pages": return <CustomPagesTab />;
       case "social": return <SocialPublishing />;
       case "products": return <ProductManagement />;
+      case "imports": return <ImportManagement />;
       default: return <UsersLandingTab />;
     }
   };
