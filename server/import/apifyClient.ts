@@ -14,7 +14,7 @@ export interface ApifyRunResult {
 
 export async function startActorRun(actorId: string, input: any): Promise<ApifyRunResult> {
   const token = getToken();
-  const url = `${APIFY_BASE_URL}/acts/${actorId}/runs?token=${token}`;
+  const url = `${APIFY_BASE_URL}/acts/${encodeURIComponent(actorId)}/runs?token=${token}`;
   const res = await fetch(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },

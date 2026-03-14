@@ -36,9 +36,10 @@ export function registerAdminImportRoutes(app: Express) {
   app.patch("/api/admin/imports/sources/:id", async (req, res) => {
     if (!requireAdmin(req, res)) return;
     try {
-      const { actorInputJson, pollIntervalMinutes, status, name } = req.body;
+      const { actorInputJson, actorId, pollIntervalMinutes, status, name } = req.body;
       const updates: any = {};
       if (actorInputJson !== undefined) updates.actorInputJson = actorInputJson;
+      if (actorId !== undefined) updates.actorId = actorId;
       if (pollIntervalMinutes !== undefined) updates.pollIntervalMinutes = pollIntervalMinutes;
       if (status !== undefined) updates.status = status;
       if (name !== undefined) updates.name = name;

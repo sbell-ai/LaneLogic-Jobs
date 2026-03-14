@@ -4,12 +4,14 @@ import { apiRequest } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import {
-  AlertCircle, Play, Pause, RefreshCw, ExternalLink, ChevronDown, ChevronRight,
-  Search as SearchIcon, Clock, CheckCircle2, XCircle, AlertTriangle, Eye
+  AlertCircle, Play, Pause, RefreshCw, ChevronDown, ChevronRight,
+  Search as SearchIcon, Clock, Settings
 } from "lucide-react";
 import { formatDistanceToNow, format } from "date-fns";
 
@@ -76,6 +78,20 @@ function SourcesSection() {
   const { data: sources, isLoading } = useQuery<JobSource[]>({ queryKey: ["/api/admin/imports/sources"] });
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const [editSource, setEditSource] = useState<JobSource | null>(null);
+  const [editForm, setEditForm] = useState({ name: "", actorId: "", actorInputJson: "", pollIntervalMinutes: "720" });
+  const [jsonError, setJsonError] = useState("");
+
+  const openEdit = (source: JobSource) => {
+    setEditForm({
+      name: source.name,
+      actorId: source.actorId,
+      actorInputJson: JSON.stringify(source.actorInputJson, null, 2),
+      pollIntervalMinutes: String(source.pollIntervalMinutes),
+    });
+    setJsonError("");
+    setEditSource(source);
+  };
 
   const updateMutation = useMutation({
     mutationFn: ({ id, ...updates }: { id: number; [key: string]: any }) =>
@@ -83,6 +99,7 @@ function SourcesSection() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/imports/sources"] });
       toast({ title: "Source updated" });
+      setEditSource(null);
     },
   });
 
@@ -93,13 +110,97 @@ function SourcesSection() {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/imports/runs"] });
       toast({ title: "Import run started" });
     },
+    onError: (err: any) => {
+      toast({ title: "Run failed", description: err.message, variant: "destructive" });
+    },
   });
+
+  const handleSaveEdit = () => {
+    if (!editSource) return;
+    let parsedJson: any;
+    try {
+      parsedJson = JSON.parse(editForm.actorInputJson);
+    } catch {
+      setJsonError("Invalid JSON — please fix before saving.");
+      return;
+    }
+    setJsonError("");
+    updateMutation.mutate({
+      id: editSource.id,
+      name: editForm.name,
+      actorId: editForm.actorId,
+      actorInputJson: parsedJson,
+      pollIntervalMinutes: Number(editForm.pollIntervalMinutes),
+    });
+  };
 
   if (isLoading) return <div className="text-muted-foreground" data-testid="text-sources-loading">Loading sources...</div>;
   if (!sources?.length) return <div className="text-muted-foreground" data-testid="text-sources-empty">No job sources configured.</div>;
 
   return (
     <div className="space-y-4" data-testid="section-sources">
+      {editSource && (
+        <Dialog open onOpenChange={() => setEditSource(null)}>
+          <DialogContent className="max-w-lg">
+            <DialogHeader>
+              <DialogTitle>Configure Source</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4 py-2">
+              <div className="space-y-1">
+                <Label htmlFor="edit-name">Name</Label>
+                <Input
+                  id="edit-name"
+                  value={editForm.name}
+                  onChange={e => setEditForm(f => ({ ...f, name: e.target.value }))}
+                  data-testid="input-edit-source-name"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="edit-actor-id">
+                  Apify Actor ID
+                  <span className="text-xs text-muted-foreground ml-2">e.g. username~actor-name</span>
+                </Label>
+                <Input
+                  id="edit-actor-id"
+                  value={editForm.actorId}
+                  onChange={e => setEditForm(f => ({ ...f, actorId: e.target.value }))}
+                  placeholder="username~actor-name"
+                  data-testid="input-edit-actor-id"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="edit-poll-interval">Poll Interval (minutes)</Label>
+                <Input
+                  id="edit-poll-interval"
+                  type="number"
+                  value={editForm.pollIntervalMinutes}
+                  onChange={e => setEditForm(f => ({ ...f, pollIntervalMinutes: e.target.value }))}
+                  data-testid="input-edit-poll-interval"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="edit-actor-input">Actor Input JSON</Label>
+                <Textarea
+                  id="edit-actor-input"
+                  value={editForm.actorInputJson}
+                  onChange={e => { setEditForm(f => ({ ...f, actorInputJson: e.target.value })); setJsonError(""); }}
+                  rows={8}
+                  className="font-mono text-xs"
+                  data-testid="textarea-edit-actor-input"
+                />
+                {jsonError && <p className="text-xs text-destructive">{jsonError}</p>}
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setEditSource(null)}>Cancel</Button>
+              <Button onClick={handleSaveEdit} disabled={updateMutation.isPending} data-testid="button-save-source-config">
+                Save
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
+
       {sources.map(source => (
         <div key={source.id} className="border rounded-lg p-4 space-y-3" data-testid={`card-source-${source.id}`}>
           <div className="flex items-center justify-between">
@@ -113,6 +214,14 @@ function SourcesSection() {
               )}
             </div>
             <div className="flex items-center gap-2">
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => openEdit(source)}
+                data-testid={`button-configure-source-${source.id}`}
+              >
+                <Settings className="h-4 w-4 mr-1" /> Configure
+              </Button>
               {source.status === "paused" && (
                 <Button
                   size="sm"
@@ -141,9 +250,12 @@ function SourcesSection() {
                 disabled={runMutation.isPending}
                 data-testid={`button-run-source-${source.id}`}
               >
-                <RefreshCw className="h-4 w-4 mr-1" /> Run Now
+                <RefreshCw className={`h-4 w-4 mr-1 ${runMutation.isPending ? "animate-spin" : ""}`} /> Run Now
               </Button>
             </div>
+          </div>
+          <div className="text-xs text-muted-foreground font-mono bg-muted/40 rounded px-2 py-1" data-testid={`text-actor-id-${source.id}`}>
+            Actor: {source.actorId}
           </div>
           <div className="grid grid-cols-3 gap-4 text-sm text-muted-foreground">
             <div data-testid={`text-poll-interval-${source.id}`}>
