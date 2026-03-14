@@ -52,10 +52,10 @@ The platform uses React with TypeScript, Wouter for routing, and Tailwind CSS + 
 - **Employers**: All revenue comes from employer subscriptions (job posting limits, featured listings, resume access) and one-time add-ons (Resume Access, Featured Employer).
 - Current state: Pricing page shows tiers for both job seekers and employers. Needs update to reflect free-for-seekers model.
 
-#### Job Seeker Quotas & Optional Top-Ups (PLANNED — implementation pending)
+#### Job Seeker Quotas (PLANNED — implementation pending)
 - Fair-use rolling 30-day quotas tied to signup date for metered actions (applications, searches).
 - Quotas are free and reset automatically every 30 days.
-- **Future monetization option**: optional paid credit packs that carry over across windows and expire 12 months from purchase (FIFO consumption). This is a secondary revenue stream and not part of the core employer-funded model. Implementation details in Task #20.
+- See Phase 4 in the Product Roadmap for implementation plan.
 
 #### Job Listings
 - Comprehensive job posts with internal/external apply options. Job descriptions support Markdown rendering via `react-markdown` + `remark-gfm` (component: `client/src/components/MarkdownDescription.tsx`); raw HTML is disallowed; plain-text descriptions get a pretty-print fallback that converts common labels to headings.
