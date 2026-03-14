@@ -3,7 +3,7 @@
 ## Overview
 LaneLogic Jobs is a search-first job board purpose-built for the transportation and logistics industry, inspired by the HiringCafe model but focused on a niche vertical. The platform prioritizes immediate job discovery — the homepage IS the search, with jobs loading instantly and infinite scroll replacing pagination. Marketing is minimal; the experience is built around getting job seekers to relevant roles as fast as possible.
 
-**Business model:** Free for job seekers (account required to apply). Revenue comes from employer subscriptions, add-ons, and premium placement. Job seekers have generous free rolling quotas for metered actions (applications, searches), with optional paid credit packs for power users.
+**Business model:** Free for job seekers (account required to apply). Revenue comes entirely from employer subscriptions, add-ons, and premium placement. Job seekers browse, search, and apply at no cost with fair-use quotas on metered actions.
 
 **Core differentiators:**
 - Deep transportation taxonomy (15 categories, CDL types, route types, endorsements)
@@ -48,16 +48,14 @@ The platform uses React with TypeScript, Wouter for routing, and Tailwind CSS + 
 - Current state: `/employers` page shows a searchable card directory linking to job search filtered by company name. No dedicated company profile pages exist yet.
 
 #### Pricing Model: Free for Job Seekers, Employers Pay
-- **Job seekers**: Free to browse, search, and apply. Account required to apply. Metered actions (applications, searches) have generous free rolling 30-day quotas. Optional paid credit packs for power users (PLANNED — see Job Seeker Top-Ups).
-- **Employers**: Revenue comes from employer subscriptions (job posting limits, featured listings, resume access) and one-time add-ons (Resume Access, Featured Employer).
+- **Job seekers**: Free to browse, search, and apply. Account required to apply. Metered actions (applications, searches) have fair-use rolling 30-day quotas to prevent abuse.
+- **Employers**: All revenue comes from employer subscriptions (job posting limits, featured listings, resume access) and one-time add-ons (Resume Access, Featured Employer).
 - Current state: Pricing page shows tiers for both job seekers and employers. Needs update to reflect free-for-seekers model.
 
-#### Job Seeker Top-Ups (PLANNED — implementation pending)
-- Rolling 30-day free quota tied to signup date for metered actions.
-- Purchased credit packs carry over across windows, expire 12 months from purchase date.
-- FIFO consumption: free quota first, then soonest-expiring purchased credits.
-- Seeker dashboard shows: free quota remaining, next reset date, purchased credits with per-pack expiration.
-- Purchase UI discloses "Credits expire 12 months from purchase date."
+#### Job Seeker Quotas & Optional Top-Ups (PLANNED — implementation pending)
+- Fair-use rolling 30-day quotas tied to signup date for metered actions (applications, searches).
+- Quotas are free and reset automatically every 30 days.
+- **Future monetization option**: optional paid credit packs that carry over across windows and expire 12 months from purchase (FIFO consumption). This is a secondary revenue stream and not part of the core employer-funded model. Implementation details in Task #20.
 
 #### Job Listings
 - Comprehensive job posts with internal/external apply options. Job descriptions support Markdown rendering via `react-markdown` + `remark-gfm` (component: `client/src/components/MarkdownDescription.tsx`); raw HTML is disallowed; plain-text descriptions get a pretty-print fallback that converts common labels to headings.
@@ -68,7 +66,7 @@ The platform uses React with TypeScript, Wouter for routing, and Tailwind CSS + 
 - Routes: `/dashboard/admin/:section` and `/dashboard/admin/:section/:subsection`.
 
 #### Stripe Integration
-- Handles employer subscription-based memberships and one-time add-on purchases (Resume Access, Featured Employer).
+- Handles employer-only subscription-based memberships and one-time add-on purchases (Resume Access, Featured Employer). Job seekers do not pay.
 - The system uses `stripe-replit-sync` for webhook management and database synchronization.
 
 #### Resume Management
@@ -155,17 +153,13 @@ The platform uses React with TypeScript, Wouter for routing, and Tailwind CSS + 
 - [ ] Allow employers to manage their company profile from dashboard
 - [ ] Support unclaimed company profiles (auto-generated from job listings)
 
-### Phase 4: Free for Seekers + Top-Ups
+### Phase 4: Free for Seekers + Quota Enforcement
 - [ ] Remove job seeker subscription tiers from pricing page
 - [ ] Implement rolling 30-day free quota enforcement for metered actions
-- [ ] Add credit grant tables (entitlement_usage_windows, entitlement_credit_grants, entitlement_credit_consumptions)
-- [ ] Build FIFO credit consumption logic
-- [ ] Wire Stripe one-time top-up purchase to credit grants
-- [ ] Build seeker dashboard quota/credits UI
-- [ ] Add purchase disclosure ("Credits expire 12 months from purchase date")
+- [ ] Build seeker dashboard showing quota usage and reset date
+- [ ] (Future) Optional paid credit top-ups: add credit grant tables, FIFO consumption, Stripe purchase flow, expiry disclosure
 
 ### Phase 5: Polish & Growth
-- [ ] Expiration reminder notifications for credit packs
 - [ ] Enhanced job search (relevance scoring, saved searches)
 - [ ] Employer analytics dashboard
 - [ ] Mobile-optimized experience
