@@ -26,7 +26,7 @@ The front end utilizes React, TypeScript, Wouter for routing, and Tailwind CSS w
 - **Search-First Homepage**: Planned redesign to remove the hero section by default, immediately displaying search, filters, and infinite-scrolling job results.
 - **Rich Company Profile Pages**: Planned feature for dedicated, storefront-like company profiles with detailed information and active job listings.
 - **Pricing Model**: Free for job seekers (with fair-use quotas), revenue from employer subscriptions and add-ons.
-- **Job Seeker Quotas**: Implemented rolling 30-day quotas for metered actions, with a system for credit top-ups and expiration.
+- **Job Seeker Quotas**: Rolling 30-day quotas for metered actions (anchored to user signup date), with purchasable credit top-ups (FIFO expiring-first consumption). Application creation and entitlement consumption are wrapped in a single DB transaction. Shared fulfillment logic (`server/utils/fulfillTopUp.ts`) is used by both the Stripe webhook handler (primary, server-side) and the client-side success-page fallback endpoint.
 - **Job Listings**: Support Markdown for descriptions; comprehensive job posts with internal/external apply options.
 - **User Dashboards**: Role-specific dashboards for job seekers, employers, and administrators, providing relevant management and viewing capabilities.
 - **Stripe Integration**: Manages employer subscriptions and one-time purchases, utilizing `stripe-replit-sync` for webhooks and data synchronization.

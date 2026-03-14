@@ -200,10 +200,6 @@ export class DatabaseStorage implements IStorage {
   async getApplications(): Promise<Application[]> {
     return await db.select().from(applications);
   }
-  async createApplication(insertApp: InsertApplication): Promise<Application> {
-    const [app] = await db.insert(applications).values(insertApp).returning();
-    return app;
-  }
   async updateApplication(id: number, updates: Partial<InsertApplication>): Promise<Application> {
     const [app] = await db.update(applications).set(updates).where(eq(applications.id, id)).returning();
     return app;
@@ -508,12 +504,12 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Entitlement Usage Windows
-  async getOrCreateUsageWindow(userId: number, entitlementKey: string, windowStart: Date, windowEnd: Date): Promise<EntitlementUsageWindow> {
-    const [w] = await db.insert(entitlementUsageWindows).values({
+  async getOrCreateUsageWindow(userId: number, entitlementKey: string, windowStart: Date, windowEnd: Date, txDb: any = db): Promise<EntitlementUsageWindow> {
+    const [w] = await txDb.insert(entitlementUsageWindows).values({
       userId, entitlementKey, windowStart, windowEnd, usedCount: 0
     }).onConflictDoNothing().returning();
     if (w) return w;
-    const [existing] = await db.select().from(entitlementUsageWindows).where(
+    const [existing] = await txDb.select().from(entitlementUsageWindows).where(
       and(
         eq(entitlementUsageWindows.userId, userId),
         eq(entitlementUsageWindows.entitlementKey, entitlementKey),
@@ -523,16 +519,16 @@ export class DatabaseStorage implements IStorage {
     return existing;
   }
 
-  async incrementUsageWindow(windowId: number): Promise<EntitlementUsageWindow> {
-    const [w] = await db.update(entitlementUsageWindows)
+  async incrementUsageWindow(windowId: number, txDb: any = db): Promise<EntitlementUsageWindow> {
+    const [w] = await txDb.update(entitlementUsageWindows)
       .set({ usedCount: sql`${entitlementUsageWindows.usedCount} + 1` })
       .where(eq(entitlementUsageWindows.id, windowId))
       .returning();
     return w;
   }
 
-  async incrementUsageWindowAtomic(windowId: number, maxCount: number): Promise<EntitlementUsageWindow | null> {
-    const rows = await db.update(entitlementUsageWindows)
+  async incrementUsageWindowAtomic(windowId: number, maxCount: number, txDb: any = db): Promise<EntitlementUsageWindow | null> {
+    const rows = await txDb.update(entitlementUsageWindows)
       .set({ usedCount: sql`${entitlementUsageWindows.usedCount} + 1` })
       .where(and(
         eq(entitlementUsageWindows.id, windowId),
@@ -543,14 +539,14 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Entitlement Credit Grants
-  async createCreditGrant(grant: InsertEntitlementCreditGrant): Promise<EntitlementCreditGrant> {
-    const [g] = await db.insert(entitlementCreditGrants).values(grant).returning();
+  async createCreditGrant(grant: InsertEntitlementCreditGrant, txDb: any = db): Promise<EntitlementCreditGrant> {
+    const [g] = await txDb.insert(entitlementCreditGrants).values(grant).returning();
     return g;
   }
 
-  async getActiveCreditGrants(userId: number, entitlementKey: string): Promise<EntitlementCreditGrant[]> {
+  async getActiveCreditGrants(userId: number, entitlementKey: string, txDb: any = db): Promise<EntitlementCreditGrant[]> {
     const now = new Date();
-    return await db.select().from(entitlementCreditGrants).where(
+    return await txDb.select().from(entitlementCreditGrants).where(
       and(
         eq(entitlementCreditGrants.userId, userId),
         eq(entitlementCreditGrants.entitlementKey, entitlementKey),
@@ -561,8 +557,8 @@ export class DatabaseStorage implements IStorage {
     ).orderBy(asc(entitlementCreditGrants.expiresAt), asc(entitlementCreditGrants.grantedAt));
   }
 
-  async consumeCreditFromGrant(grantId: number, amount: number): Promise<EntitlementCreditGrant> {
-    const [g] = await db.update(entitlementCreditGrants)
+  async consumeCreditFromGrant(grantId: number, amount: number, txDb: any = db): Promise<EntitlementCreditGrant> {
+    const [g] = await txDb.update(entitlementCreditGrants)
       .set({ amountRemaining: sql`${entitlementCreditGrants.amountRemaining} - ${amount}` })
       .where(and(
         eq(entitlementCreditGrants.id, grantId),
@@ -572,22 +568,31 @@ export class DatabaseStorage implements IStorage {
     return g;
   }
 
-  async createCreditConsumption(consumption: InsertEntitlementCreditConsumption): Promise<EntitlementCreditConsumption> {
-    const [c] = await db.insert(entitlementCreditConsumptions).values(consumption).returning();
+  async createCreditConsumption(consumption: InsertEntitlementCreditConsumption, txDb: any = db): Promise<EntitlementCreditConsumption> {
+    const [c] = await txDb.insert(entitlementCreditConsumptions).values(consumption).returning();
     return c;
   }
 
-  async getUserCreditSummary(userId: number, entitlementKey: string): Promise<{ totalRemaining: number; grants: EntitlementCreditGrant[] }> {
-    const grants = await this.getActiveCreditGrants(userId, entitlementKey);
+  async getUserCreditSummary(userId: number, entitlementKey: string, txDb: any = db): Promise<{ totalRemaining: number; grants: EntitlementCreditGrant[] }> {
+    const grants = await this.getActiveCreditGrants(userId, entitlementKey, txDb);
     const totalRemaining = grants.reduce((sum, g) => sum + g.amountRemaining, 0);
     return { totalRemaining, grants };
   }
 
-  async getCreditGrantByPaymentIntent(paymentIntentId: string): Promise<EntitlementCreditGrant | undefined> {
-    const [g] = await db.select().from(entitlementCreditGrants).where(
+  async getCreditGrantByPaymentIntent(paymentIntentId: string, txDb: any = db): Promise<EntitlementCreditGrant | undefined> {
+    const [g] = await txDb.select().from(entitlementCreditGrants).where(
       eq(entitlementCreditGrants.stripePaymentIntentId, paymentIntentId)
     );
     return g;
+  }
+
+  async createApplication(insertApp: InsertApplication, txDb: any = db): Promise<Application> {
+    const [app] = await txDb.insert(applications).values(insertApp).returning();
+    return app;
+  }
+
+  async runTransaction<T>(fn: (tx: any) => Promise<T>): Promise<T> {
+    return db.transaction(fn);
   }
 }
 

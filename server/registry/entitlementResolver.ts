@@ -477,8 +477,9 @@ function computeRollingWindow(userCreatedAt: Date | null): { windowStart: Date; 
 export async function consumeEntitlement(
   user: { id: number; role: string; createdAt?: Date | string | null; stripeSubscriptionId?: string | null },
   key: string,
-  opts?: { sourceEvent?: string; refId?: number }
+  opts?: { sourceEvent?: string; refId?: number; tx?: any }
 ): Promise<{ allowed: boolean; consumed: boolean; source?: "free" | "credit"; remaining?: number; resetDate?: string; error?: string }> {
+  const txDb = opts?.tx;
   const entitlements = await resolveUserEntitlements(user);
   const ent = entitlements[key];
 
@@ -502,9 +503,9 @@ export async function consumeEntitlement(
   const userCreatedAt = user.createdAt ? new Date(user.createdAt) : null;
   const { windowStart, windowEnd } = computeRollingWindow(userCreatedAt);
 
-  const window = await storage.getOrCreateUsageWindow(user.id, key, windowStart, windowEnd);
+  const window = await storage.getOrCreateUsageWindow(user.id, key, windowStart, windowEnd, txDb);
 
-  const updated = await storage.incrementUsageWindowAtomic(window.id, quota);
+  const updated = await storage.incrementUsageWindowAtomic(window.id, quota, txDb);
   if (updated) {
     return {
       allowed: true,
@@ -515,9 +516,9 @@ export async function consumeEntitlement(
     };
   }
 
-  const grants = await storage.getActiveCreditGrants(user.id, key);
+  const grants = await storage.getActiveCreditGrants(user.id, key, txDb);
   for (const grant of grants) {
-    const updated = await storage.consumeCreditFromGrant(grant.id, 1);
+    const updated = await storage.consumeCreditFromGrant(grant.id, 1, txDb);
     if (updated) {
       await storage.createCreditConsumption({
         userId: user.id,
@@ -527,8 +528,8 @@ export async function consumeEntitlement(
         consumedAt: new Date(),
         sourceEvent: opts?.sourceEvent || null,
         refId: opts?.refId || null,
-      });
-      const creditSummary = await storage.getUserCreditSummary(user.id, key);
+      }, txDb);
+      const creditSummary = await storage.getUserCreditSummary(user.id, key, txDb);
       return {
         allowed: true,
         consumed: true,

@@ -669,14 +669,24 @@ export async function registerRoutes(
       if (user.role === "job_seeker") {
         input.jobSeekerId = user.id;
 
-        const result = await consumeEntitlement(user, "applications_per_month", { sourceEvent: "application" });
-        if (!result.allowed) {
+        const txResult = await storage.runTransaction(async (tx) => {
+          const result = await consumeEntitlement(user, "applications_per_month", { sourceEvent: "application", tx });
+          if (!result.allowed) {
+            return { denied: true, result };
+          }
+          const appData = await storage.createApplication(input, tx);
+          return { denied: false, appData, result };
+        });
+
+        if (txResult.denied) {
           return res.status(403).json({
             message: "You have reached your application limit for this month. Purchase a top-up credit pack or wait until your quota resets.",
-            error: result.error,
-            resetDate: result.resetDate,
+            error: txResult.result.error,
+            resetDate: txResult.result.resetDate,
           });
         }
+
+        return res.status(201).json(txResult.appData);
       }
 
       const appData = await storage.createApplication(input);
@@ -1475,89 +1485,39 @@ export async function registerRoutes(
       const stripe = await getUncachableStripeClient();
       const session = await stripe.checkout.sessions.retrieve(sessionId);
 
-      if (session.payment_status !== "paid") {
-        return res.status(400).json({ message: "Payment not completed" });
-      }
-
       const userId = parseInt(session.metadata?.userId || "0", 10);
       const user = req.user as any;
       if (userId !== user.id) {
         return res.status(403).json({ message: "Session does not belong to this user" });
       }
 
-      const planType = session.metadata?.planType;
-      if (planType !== "Top-up") {
-        return res.status(400).json({ message: "Not a top-up purchase" });
+      const { fulfillTopUpFromSession } = await import("./utils/fulfillTopUp");
+      const result = await fulfillTopUpFromSession({
+        payment_status: session.payment_status,
+        payment_intent: session.payment_intent as string | null,
+        metadata: session.metadata as Record<string, string> | null,
+      });
+
+      if (!result.fulfilled) {
+        return res.status(400).json({ message: result.reason });
       }
 
-      const pricingData = await getPricingData();
-      const paidPriceId = session.metadata?.stripePriceId;
-      if (!pricingData || !paidPriceId) {
-        return res.status(400).json({ message: "Cannot resolve product" });
+      fulfilledSessions.add(sessionId);
+
+      if (result.type === "already_fulfilled") {
+        return res.json({ message: "Already fulfilled", alreadyFulfilled: true });
+      }
+      if (result.type === "credit_grant") {
+        return res.json({ message: `${result.credits} credits granted`, credits: result.credits, expiresAt: result.expiresAt });
+      }
+      if (result.type === "resume_access") {
+        return res.json({ message: "Resume Access activated", expiresAt: result.expiresAt });
+      }
+      if (result.type === "featured_employer") {
+        return res.json({ message: "Featured Employer activated", expiresAt: result.expiresAt });
       }
 
-      const product = pricingData.products.find((p) => p.stripePriceId === paidPriceId);
-      if (!product) {
-        return res.status(400).json({ message: "Product not found" });
-      }
-
-      const now = new Date();
-      const productNameLower = product.name.toLowerCase();
-
-      if (productNameLower.includes("resume")) {
-        const currentExpiry = user.resumeAccessExpiresAt ? new Date(user.resumeAccessExpiresAt) : null;
-        const baseDate = currentExpiry && currentExpiry > now ? currentExpiry : now;
-        const newExpiry = new Date(baseDate.getTime() + 365 * 24 * 60 * 60 * 1000);
-        await storage.updateUser(user.id, { resumeAccessExpiresAt: newExpiry } as any);
-        fulfilledSessions.add(sessionId);
-        return res.json({ message: "Resume Access activated", expiresAt: newExpiry.toISOString() });
-      }
-
-      if (productNameLower.includes("featured")) {
-        const currentExpiry = user.featuredEmployerExpiresAt ? new Date(user.featuredEmployerExpiresAt) : null;
-        const baseDate = currentExpiry && currentExpiry > now ? currentExpiry : now;
-        const newExpiry = new Date(baseDate.getTime() + 7 * 24 * 60 * 60 * 1000);
-        await storage.updateUser(user.id, { featuredEmployerExpiresAt: newExpiry } as any);
-        fulfilledSessions.add(sessionId);
-        return res.json({ message: "Featured Employer activated", expiresAt: newExpiry.toISOString() });
-      }
-
-      const dbProduct = (await storage.getAdminProducts()).find(
-        (p) => p.stripePriceIdMonthly === paidPriceId || p.stripePriceIdYearly === paidPriceId || p.stripePriceIdOneTime === paidPriceId
-      );
-      if (dbProduct && dbProduct.grantEntitlementKey && dbProduct.grantAmount) {
-        const paymentIntentId = session.payment_intent as string || null;
-        if (paymentIntentId) {
-          const existingGrant = await storage.getCreditGrantByPaymentIntent(paymentIntentId);
-          if (existingGrant) {
-            fulfilledSessions.add(sessionId);
-            return res.json({ message: "Credits already granted", alreadyFulfilled: true });
-          }
-        }
-
-        const expiryMonths = dbProduct.creditExpiryMonths || 12;
-        const expiresAt = new Date(now);
-        expiresAt.setMonth(expiresAt.getMonth() + expiryMonths);
-
-        await storage.createCreditGrant({
-          userId: user.id,
-          entitlementKey: dbProduct.grantEntitlementKey,
-          amountGranted: dbProduct.grantAmount,
-          amountRemaining: dbProduct.grantAmount,
-          grantedAt: now,
-          expiresAt,
-          stripePaymentIntentId: paymentIntentId,
-          status: "Active",
-        });
-        fulfilledSessions.add(sessionId);
-        return res.json({
-          message: `${dbProduct.grantAmount} credits granted for ${dbProduct.grantEntitlementKey}`,
-          credits: dbProduct.grantAmount,
-          expiresAt: expiresAt.toISOString(),
-        });
-      }
-
-      return res.status(400).json({ message: "Unknown add-on type" });
+      return res.json({ message: "Fulfilled" });
     } catch (err: any) {
       console.error("Add-on fulfillment error:", err);
       res.status(500).json({ message: err.message || "Fulfillment error" });
