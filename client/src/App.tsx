@@ -7,6 +7,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/not-found";
 import { useAuth } from "@/hooks/use-auth";
 import { useSettings } from "@/hooks/use-settings";
+import { useCanonical } from "@/hooks/use-canonical";
 import { AuthModalProvider, useAuthModal } from "@/components/AuthModal";
 
 import Home from "@/pages/Home";
@@ -32,6 +33,7 @@ import DesignSettings from "@/pages/dashboard/DesignSettings";
 
 function ThemeInjector() {
   useSettings();
+  useCanonical();
   return null;
 }
 

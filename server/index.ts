@@ -13,6 +13,19 @@ import { syncAllRegistries } from "./registry/syncAll";
 
 const app = express();
 const httpServer = createServer(app);
+
+const CANONICAL_HOST = process.env.CANONICAL_HOST || "";
+if (CANONICAL_HOST) {
+  const canonicalUrl = new URL(CANONICAL_HOST);
+  app.use((req, res, next) => {
+    const host = req.hostname;
+    if (host === `www.${canonicalUrl.hostname}`) {
+      return res.redirect(301, `${CANONICAL_HOST}${req.originalUrl}`);
+    }
+    next();
+  });
+}
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use("/admin", requireAdminSecret);

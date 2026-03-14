@@ -20,6 +20,7 @@ The front end utilizes React, TypeScript, Wouter for routing, and Tailwind CSS w
 - **Authentication**: Passport.js with session-based authentication, using a modal-based flow.
 - **Admin Product Management**: Products, entitlements, and overrides are managed directly via an admin dashboard, serving as the authoritative source. This includes auto-creation of Stripe products/prices.
 - **Entitlement Enforcement**: A runtime resolver, keyed by Stripe Price ID, enforces access based on defined entitlements.
+- **AI Crawlability / GEO**: Canonical host enforcement (`https://lanelogicjobs.com`, non-www, 301 redirect from www), `robots.txt` allowing AI bots (GPTBot, ChatGPT-User, ClaudeBot) while blocking private routes, dynamic `sitemap.xml` with published-only entities and `lastmod`, `<link rel="canonical">` on all pages via `useCanonical` hook, `llms.txt` for AI systems. Spec from Notion SOT.
 - **Programmatic SEO**: Dynamic generation of job listing pages for specific categories and locations, with tiered keyword matching and dynamic metadata.
 - **Admin Bulk Job Import**: CSV-based job upload functionality with validation and error reporting, including handling of experience levels and a fixed 2-level job category taxonomy.
 - **Job Category Taxonomy**: A canonical 2-level taxonomy defined in `shared/jobTaxonomy.ts`, enforced across the platform.
