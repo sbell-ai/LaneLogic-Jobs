@@ -1,0 +1,211 @@
+### Replit plan add-on: Job Seeker Top-Ups (Rolling Quota + Carryover Credits + 12-Month Expiry, FIFO)
+
+**What & Why**  
+
+We want job seekers to be free to browse and apply (with account required to apply), while preserving the ability to **monetize job seeker entitlements later** via paid top-ups. The model must support:
+
+- **Free baseline quotas** that reset on a **rolling 30-day window from signup**.
+- **Purchased credits** that **carry over until used** but **expire 12 months from purchase date**, with clear disclosure to the buyer.
+- **Consumption order:** free quota first, then purchased credits, consuming **soonest-expiring credits first (FIFO by expiry)**.
+
+---
+
+## Done looks like
+
+- Metered seeker actions (for example `job_search`, `application_submit`) enforce limits via:
+    
+    1) free rolling 30-day quota bucket, then
+    
+    2) purchased credits bucket
+    
+- Free quota resets automatically every 30 days from `users.createdAt`.
+- Purchased credits:
+    - carry over across windows
+    - expire 12 months after purchase
+    - are consumed **soonest-expiring first**
+- Top-up purchase flow (Stripe one-time add-on SKUs) grants credits to the user and records:
+    - grant amount
+    - purchase date
+    - expiration date
+- UI shows seekers:
+    - free quota remaining (current window)
+    - purchased credits remaining
+    - next reset date
+    - per-pack expiration dates
+- Purchase UI clearly states: “Credits expire 12 months from purchase date.”
+- Optional reminders exist (recommended): notify at 30 days and 7 days before expiry if credits remain.
+
+---
+
+## Scope
+
+**In scope**
+
+- Data model to support rolling windows + credit packs + expiry + FIFO consumption
+- Enforcement logic for metered actions
+- Stripe purchase → credit grant creation (one-time)
+- UI surfaces for balances + expiry disclosure
+
+**Out of scope (for now)**
+
+- Employer entitlements changes
+- Discounts/coupons for seeker top-ups
+- Refund workflows beyond Stripe defaults (can add later)
+
+---
+
+## Schema / data model
+
+### A) Rolling usage window table (free quota)
+
+**Table:** `entitlement_usage_windows`
+
+- `id`
+- `userId` (FK)
+- `entitlementKey` (string)
+- `windowStart` (datetime)
+- `windowEnd` (datetime)
+- `usedCount` (int)
+- Unique index: `(userId, entitlementKey, windowStart)`
+
+**How to calculate the rolling window**
+
+- `signupAt = users.createdAt`
+- `k = floor((now - signupAt) / (30 days))`
+- `windowStart = signupAt + k * 30 days`
+- `windowEnd = windowStart + 30 days`
+
+*(Use a deterministic 30-day duration: `30*  24  *60*  60  *1000` ms.)*
+
+### B) Credit pack grants + consumption (purchased credits)
+
+**Table:** `entitlement_credit_grants`
+
+- `id` (grantId, UUID)
+- `userId` (FK)
+- `entitlementKey`
+- `amountGranted` (int)
+- `amountRemaining` (int)  [optional: can be computed, but storing simplifies FIFO]
+- `grantedAt` (datetime)
+- `expiresAt` (datetime) = `grantedAt + 365 days`
+- `purchaseId` (nullable FK to purchases)
+- `stripePaymentIntentId` (nullable)
+- `status` (Active/Expired/Voided)
+
+**Table:** `entitlement_credit_consumptions`
+
+- `id`
+- `userId`
+- `entitlementKey`
+- `grantId` (FK to `entitlement_credit_grants`)
+- `amount` (int, usually 1)
+- `consumedAt` (datetime)
+- `sourceEvent` (string, e.g., `application_submit`)
+- `refId` (nullable: applicationId, etc.)
+
+**Note:** This two-table approach is the easiest way to guarantee “soonest-expiring first” and to audit it. If you prefer a single ledger table, it’s doable, but FIFO attribution becomes harder and more error-prone.
+
+### C) Products (top-up SKUs)
+
+Since Replit is now the SOT for products:
+
+- Create job seeker top-ups as:
+    - `kind = add_on`
+    - `billingType = one_time`
+    - `audience = job_seeker`
+- Add product fields for grants:
+    - `grantEntitlementKey` (string)
+    - `grantAmount` (int)
+    - `creditExpiryMonths = 12` (or derive globally)
+
+---
+
+## Enforcement rules (server-side)
+
+### Metered action flow (example: submit application)
+
+1) Determine entitlement key for the action, e.g.:
+
+- apply → `applications`
+- search → `searches`
+
+2) **Consume free quota first**
+
+- Resolve `planLimit` for the user’s plan (or default free tier).
+- Resolve the current rolling window for the user (based on signup timestamp).
+- Fetch or create usage row for `(userId, entitlementKey, windowStart)`.
+- If `usedCount < planLimit`:
+    - increment `usedCount`
+    - allow action
+    - stop
+
+3) **Then consume purchased credits (FIFO by soonest expiry)**
+
+- Query active, non-expired grants:
+    - `expiresAt > now()`
+    - `amountRemaining > 0`
+    - sort `expiresAt ASC, grantedAt ASC`
+- If a grant exists:
+    - decrement `amountRemaining` on the first grant (atomic update)
+    - insert a `consumption` row pointing to that `grantId`
+    - allow action
+- Else:
+    - block with structured error: `ENTITLEMENT_EXHAUSTED`
+
+### Race condition protection (must)
+
+Consumption must be atomic. Recommended:
+
+- DB transaction with `SELECT ... FOR UPDATE` on the chosen grant row
+- Or an atomic update like:
+    - `UPDATE grants SET amountRemaining = amountRemaining - 1 WHERE id = ? AND amountRemaining > 0`
+
+---
+
+## Stripe flow (one-time top-ups)
+
+### Purchase
+
+- Checkout for one-time add-on SKU completes (PaymentIntent succeeds).
+- Server receives webhook and verifies signature (required).
+- Server creates a grant:
+    - `amountGranted = product.grantAmount`
+    - `amountRemaining = amountGranted`
+    - `expiresAt = grantedAt + 365 days`
+    - link `purchaseId` and `stripePaymentIntentId`
+
+### Required disclosure (UI)
+
+On purchase screen and confirmation:
+
+- “Credits expire 12 months from purchase date.”
+
+---
+
+## UI requirements
+
+### Seeker dashboard (or account page)
+
+Show:
+
+- **Free quota remaining** for each metered entitlement
+- **Window resets at:** `<timestamp>`
+- **Purchased credits remaining** total
+- Breakdown by pack:
+    - credits remaining
+    - expires on date
+
+### Expiration reminders (recommended)
+
+- Background job checks packs expiring in 30 days / 7 days with remaining credits.
+- Sends email/in-app notification.
+
+---
+
+## Acceptance tests (examples)
+
+- User signs up at `T0`. At `T0 + 29 days`, free quota is still same window. At `T0 + 30 days + 1 min`, usage resets automatically.
+- User exhausts free quota, then has a purchased pack expiring sooner than another pack. System consumes from the sooner-expiring pack first.
+- Purchased credits remain available after the free window resets.
+- Credits are not spendable after `expiresAt`.
+- Purchase confirmation always displays “expires 12 months from purchase date,” and dashboard displays the expiration date.
