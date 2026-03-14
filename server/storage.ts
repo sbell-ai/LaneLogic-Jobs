@@ -148,6 +148,7 @@ export interface IStorage {
   consumeCreditFromGrant(grantId: number, amount: number): Promise<EntitlementCreditGrant>;
   createCreditConsumption(consumption: InsertEntitlementCreditConsumption): Promise<EntitlementCreditConsumption>;
   getUserCreditSummary(userId: number, entitlementKey: string): Promise<{ totalRemaining: number; grants: EntitlementCreditGrant[] }>;
+  getCreditGrantByPaymentIntent(paymentIntentId: string): Promise<EntitlementCreditGrant | undefined>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -557,7 +558,7 @@ export class DatabaseStorage implements IStorage {
         gt(entitlementCreditGrants.amountRemaining, 0),
         gt(entitlementCreditGrants.expiresAt, now)
       )
-    ).orderBy(asc(entitlementCreditGrants.grantedAt));
+    ).orderBy(asc(entitlementCreditGrants.expiresAt), asc(entitlementCreditGrants.grantedAt));
   }
 
   async consumeCreditFromGrant(grantId: number, amount: number): Promise<EntitlementCreditGrant> {
@@ -580,6 +581,13 @@ export class DatabaseStorage implements IStorage {
     const grants = await this.getActiveCreditGrants(userId, entitlementKey);
     const totalRemaining = grants.reduce((sum, g) => sum + g.amountRemaining, 0);
     return { totalRemaining, grants };
+  }
+
+  async getCreditGrantByPaymentIntent(paymentIntentId: string): Promise<EntitlementCreditGrant | undefined> {
+    const [g] = await db.select().from(entitlementCreditGrants).where(
+      eq(entitlementCreditGrants.stripePaymentIntentId, paymentIntentId)
+    );
+    return g;
   }
 }
 

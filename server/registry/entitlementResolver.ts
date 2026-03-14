@@ -425,9 +425,9 @@ export async function resolveUserEntitlements(
 }
 
 export async function checkEntitlement(
-  user: { id: number; role: string; stripeSubscriptionId?: string | null },
+  user: { id: number; role: string; createdAt?: Date | string | null; stripeSubscriptionId?: string | null },
   key: string
-): Promise<{ allowed: boolean; value?: number; isUnlimited?: boolean }> {
+): Promise<{ allowed: boolean; value?: number; isUnlimited?: boolean; freeRemaining?: number; creditsRemaining?: number }> {
   const entitlements = await resolveUserEntitlements(user);
   const ent = entitlements[key];
 
@@ -439,10 +439,24 @@ export async function checkEntitlement(
     return { allowed: ent.enabled };
   }
 
+  if (ent.isUnlimited) {
+    return { allowed: true, value: ent.value, isUnlimited: true };
+  }
+
+  const quota = ent.value;
+  const userCreatedAt = user.createdAt ? new Date(user.createdAt) : null;
+  const { windowStart, windowEnd } = computeRollingWindow(userCreatedAt);
+  const window = await storage.getOrCreateUsageWindow(user.id, key, windowStart, windowEnd);
+  const freeRemaining = Math.max(0, quota - window.usedCount);
+
+  const creditSummary = await storage.getUserCreditSummary(user.id, key);
+
   return {
-    allowed: ent.isUnlimited || ent.value > 0,
-    value: ent.value,
-    isUnlimited: ent.isUnlimited,
+    allowed: freeRemaining > 0 || creditSummary.totalRemaining > 0,
+    value: quota,
+    isUnlimited: false,
+    freeRemaining,
+    creditsRemaining: creditSummary.totalRemaining,
   };
 }
 
