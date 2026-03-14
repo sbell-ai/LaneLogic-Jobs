@@ -509,18 +509,18 @@ export class DatabaseStorage implements IStorage {
 
   // Entitlement Usage Windows
   async getOrCreateUsageWindow(userId: number, entitlementKey: string, windowStart: Date, windowEnd: Date): Promise<EntitlementUsageWindow> {
-    const existing = await db.select().from(entitlementUsageWindows).where(
+    const [w] = await db.insert(entitlementUsageWindows).values({
+      userId, entitlementKey, windowStart, windowEnd, usedCount: 0
+    }).onConflictDoNothing().returning();
+    if (w) return w;
+    const [existing] = await db.select().from(entitlementUsageWindows).where(
       and(
         eq(entitlementUsageWindows.userId, userId),
         eq(entitlementUsageWindows.entitlementKey, entitlementKey),
         eq(entitlementUsageWindows.windowStart, windowStart)
       )
     );
-    if (existing.length > 0) return existing[0];
-    const [w] = await db.insert(entitlementUsageWindows).values({
-      userId, entitlementKey, windowStart, windowEnd, usedCount: 0
-    }).returning();
-    return w;
+    return existing;
   }
 
   async incrementUsageWindow(windowId: number): Promise<EntitlementUsageWindow> {

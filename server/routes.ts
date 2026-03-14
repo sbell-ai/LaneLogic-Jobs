@@ -665,28 +665,18 @@ export async function registerRoutes(
       if (req.isAuthenticated()) {
         const user = req.user as any;
         if (user.role === "job_seeker") {
-          const check = await checkEntitlement(user, "applications_per_month");
-          if (!check.allowed) {
-            const creditSummary = await storage.getUserCreditSummary(user.id, "applications_per_month");
-            if (creditSummary.totalRemaining <= 0) {
-              return res.status(403).json({
-                message: "You have reached your application limit for this month. Purchase a top-up credit pack or wait until your quota resets.",
-                error: "ENTITLEMENT_EXHAUSTED",
-              });
-            }
+          const result = await consumeEntitlement(user, "applications_per_month", { sourceEvent: "application" });
+          if (!result.allowed) {
+            return res.status(403).json({
+              message: "You have reached your application limit for this month. Purchase a top-up credit pack or wait until your quota resets.",
+              error: result.error,
+              resetDate: result.resetDate,
+            });
           }
         }
       }
 
       const appData = await storage.createApplication(input);
-
-      if (req.isAuthenticated()) {
-        const user = req.user as any;
-        if (user.role === "job_seeker") {
-          await consumeEntitlement(user, "applications_per_month", { sourceEvent: "application", refId: appData.id });
-        }
-      }
-
       res.status(201).json(appData);
     } catch (err) {
       if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
