@@ -660,19 +660,22 @@ export async function registerRoutes(
 
   app.post(api.applications.create.path, async (req, res) => {
     try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "You must be logged in to apply for jobs." });
+      }
+      const user = req.user as any;
       const input = api.applications.create.input.parse(req.body);
 
-      if (req.isAuthenticated()) {
-        const user = req.user as any;
-        if (user.role === "job_seeker") {
-          const result = await consumeEntitlement(user, "applications_per_month", { sourceEvent: "application" });
-          if (!result.allowed) {
-            return res.status(403).json({
-              message: "You have reached your application limit for this month. Purchase a top-up credit pack or wait until your quota resets.",
-              error: result.error,
-              resetDate: result.resetDate,
-            });
-          }
+      if (user.role === "job_seeker") {
+        input.jobSeekerId = user.id;
+
+        const result = await consumeEntitlement(user, "applications_per_month", { sourceEvent: "application" });
+        if (!result.allowed) {
+          return res.status(403).json({
+            message: "You have reached your application limit for this month. Purchase a top-up credit pack or wait until your quota resets.",
+            error: result.error,
+            resetDate: result.resetDate,
+          });
         }
       }
 
