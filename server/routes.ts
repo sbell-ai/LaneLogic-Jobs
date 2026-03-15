@@ -1095,12 +1095,34 @@ export async function registerRoutes(
       let imported = 0;
       let skipped = 0;
 
+      // Pre-resolve employer profiles for unique company names in this CSV
+      const companyEmployerMap = new Map<string, number>();
+      for (const row of rows) {
+        const record: Record<string, string> = {};
+        headers.forEach((h, idx) => { record[h] = row[idx] || ""; });
+        const companyName = (record["companyName"] || "").trim();
+        if (companyName && !companyEmployerMap.has(companyName.toLowerCase())) {
+          try {
+            const employer = await storage.findOrCreateEmployerByCompanyName(companyName);
+            companyEmployerMap.set(companyName.toLowerCase(), employer.id);
+          } catch {
+            // Fall back to uploader's ID if employer creation fails
+            companyEmployerMap.set(companyName.toLowerCase(), user.id);
+          }
+        }
+      }
+
       for (let i = 0; i < rows.length; i++) {
         const row = rows[i];
         const record: Record<string, string> = {};
         headers.forEach((h, idx) => { record[h] = row[idx] || ""; });
 
-        const { job, errors } = validateAndMapCsvRow(record, i + 2, user.id);
+        const companyName = (record["companyName"] || "").trim();
+        const resolvedEmployerId = companyName
+          ? (companyEmployerMap.get(companyName.toLowerCase()) ?? user.id)
+          : user.id;
+
+        const { job, errors } = validateAndMapCsvRow(record, i + 2, resolvedEmployerId);
 
         if (errors.length > 0) {
           allErrors.push(...errors);
@@ -1109,7 +1131,7 @@ export async function registerRoutes(
         }
 
         try {
-          await storage.upsertJobByExternalKey(user.id, job.externalJobKey!, job);
+          await storage.upsertJobByExternalKey(resolvedEmployerId, job.externalJobKey!, job);
           imported++;
         } catch (dbErr: any) {
           allErrors.push({

@@ -37,6 +37,7 @@ export interface IStorage {
   getUserByEmail(email: string): Promise<User | undefined>;
   getUsers(): Promise<User[]>;
   createUser(user: InsertUser): Promise<User>;
+  findOrCreateEmployerByCompanyName(companyName: string): Promise<User>;
   updateUser(id: number, updates: Partial<InsertUser>): Promise<User>;
   deleteUser(id: number): Promise<void>;
 
@@ -197,6 +198,33 @@ export class DatabaseStorage implements IStorage {
   async createUser(insertUser: InsertUser): Promise<User> {
     const [user] = await db.insert(users).values(insertUser).returning();
     return user;
+  }
+  async findOrCreateEmployerByCompanyName(companyName: string): Promise<User> {
+    const normalized = companyName.trim();
+    const [existing] = await db
+      .select()
+      .from(users)
+      .where(
+        and(
+          eq(users.role, "employer"),
+          sql`lower(${users.companyName}) = lower(${normalized})`
+        )
+      )
+      .limit(1);
+    if (existing) return existing;
+    const slug = normalized.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 40);
+    const baseEmail = `employer+${slug}@auto.lanelogicjobs.com`;
+    let email = baseEmail;
+    let suffix = 1;
+    while (await this.getUserByEmail(email)) {
+      email = `employer+${slug}-${suffix}@auto.lanelogicjobs.com`;
+      suffix++;
+    }
+    const [created] = await db
+      .insert(users)
+      .values({ email, password: "", role: "employer", companyName: normalized, membershipTier: "free" })
+      .returning();
+    return created;
   }
   async updateUser(id: number, updates: Partial<InsertUser>): Promise<User> {
     const [user] = await db.update(users).set(updates).where(eq(users.id, id)).returning();
