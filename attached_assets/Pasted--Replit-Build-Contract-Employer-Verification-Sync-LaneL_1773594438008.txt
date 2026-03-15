@@ -1,0 +1,135 @@
+### Replit Build Contract: Employer Verification Sync (LaneLogic Jobs)
+
+#### Objective
+
+Implement and verify a safe, deterministic employer verification pipeline where:
+
+- Notion is the underwriting workbench.
+- The app syncs Notion registry snapshots.
+- The app **fails closed** on verified status.
+
+#### Scope (do only this)
+
+- Touch only the employer registry sync surface and its immediate dependencies:
+    - `server/routes/admin.ts` (endpoint wiring)
+    - `server/middleware/requireAdminSecret.ts` (admin auth)
+    - `server/registry/syncEmployers.ts` (sync logic + response payload)
+    - `server/registry/notionSync.ts` (types/mapping, only if required)
+    - `server/registry/snapshotStore.ts` (only if required by types)
+- Do **not** attempt to fix global TypeScript errors across client or node_modules.
+- Do **not** add new product features, UI, or Postgres upserts.
+
+#### Definitions (must match Notion)
+
+- Employers registry: **🏢 Employers**
+- Evidence registry: **🧾 Employer Evidence**
+- Employer is allowed to be treated as verified only if:
+    
+    1) Employer `Status === "Verified"`, and
+    
+    2) there exist **≥ 2** linked evidence rows with:
+    
+    - `Decision === "Accepted"`, and
+    - **distinct** `Source Type` values.
+- Any missing requirements **fails closed** (employer treated as unverified).
+
+#### Endpoint Contract (required behavior)
+
+Endpoint:
+
+- `POST /admin/registry-sync/employers`
+
+Authentication:
+
+- Protected by middleware applied via `adminRouter.use(requireAdminSecret);`
+- Middleware reads header: `x-admin-sync-secret`
+- Middleware compares to env var: `ADMIN_SYNC_SECRET`
+- Behavior:
+    - Missing header → `401 Unauthorized`
+    - Wrong secret → `403 Forbidden`
+    - Missing env var `ADMIN_SYNC_SECRET` → `500` with JSON `{ ok:false, error:"ADMIN_SYNC_SECRET not set" }`
+
+Response body (must be JSON; must be stable keys):
+
+- Always include:
+    - `ok: boolean`
+    - `elapsed: number` (ms)
+    - `employers: number` (count fetched)
+    - `evidence: number` (count fetched)
+    - `verifiedEmployers: number` (count where `EmployerRow.status === "Verified"`)
+    - `unverifiedEmployers: number` (employers - verifiedEmployers)
+- If fetch fails:
+    - `ok:false`
+    - `error:"fetch_failed"`
+    - include a human-readable `message`
+- If validation has SEV-1:
+    - `ok:false`
+    - `error:"validation_failed"`
+    - include `errorCount` and a compact list of `{ ruleId, severity, reason }`
+    - **Do not promote** snapshots to Active/LKG in this case.
+
+#### Snapshot Contract (must not regress)
+
+- `syncEmployers()` must write snapshots for:
+    - `registryName: "employers"`
+    - `registryName: "employer_evidence"`
+- If no SEV-1 validation errors:
+    - Promote both snapshots to `Active` and `LastKnownGood`.
+- If SEV-1 exists:
+    - Keep prior Active/LKG unchanged (fail closed).
+
+#### Prohibited Output / Guardrails (hard stop)
+
+- **No linkified artifacts** in any server code. Reject any code containing patterns like:
+    - `](http://`
+    - `[w.id](http://w.id/)`
+    - `[snap.name](http://snap.name/)`
+- Do not copy code from Notion chat bubbles. Edit directly in Replit editor or via shell patch commands.
+- Do not log secrets.
+
+#### Verification Procedure (Definition of Done)
+
+Run these exact checks and paste the outputs:
+
+1) Missing header returns 401:
+
+```bash
+curl -i -X POST "http://127.0.0.1:5000/admin/registry-sync/employers"
+```
+
+2) Correct header returns 200 and includes required JSON keys:
+
+```bash
+curl -i -X POST "http://127.0.0.1:5000/admin/registry-sync/employers" \
+  -H "x-admin-sync-secret: $ADMIN_SYNC_SECRET"
+```
+
+3) Fail-closed proof with Notion toggle:
+
+- Set Republic Services Employer `Status = Unverified` in Notion.
+- Run sync.
+- Response must show:
+    - `verifiedEmployers: 0`
+    - `unverifiedEmployers: 1`
+- Set `Status = Verified` again.
+- Run sync.
+- Response must show:
+    - `verifiedEmployers: 1`
+    - `unverifiedEmployers: 0`
+
+4) Codebase corruption check (must be clean):
+
+```bash
+grep -R "\](http://" -n server
+```
+
+Expected: **no matches**.
+
+#### Deliverable
+
+A single PR / change set that:
+
+- meets the Endpoint Contract,
+- meets the Snapshot Contract,
+- passes the Verification Procedure,
+- contains no prohibited linkified artifacts.
