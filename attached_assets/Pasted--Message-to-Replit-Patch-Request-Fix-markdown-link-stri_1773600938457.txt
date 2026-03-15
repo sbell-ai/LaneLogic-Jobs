@@ -1,0 +1,82 @@
+## Message to Replit (Patch Request): Fix markdown link stripping + domain normalization in `employerRegistryLoader.ts`
+
+### Problem
+
+`GET /admin/registry/employers` is still returning Notion-markdown link strings in runtime JSON (for example `"[republicservices.com](http://republicservices.com/)"`). The loader attempts to strip these, but the regexes are wrong because they escape `^` and `$` (so they never match). We need the API to return **plain strings only**.
+
+### Required changes (only in `server/registry/employerRegistryLoader.ts`)
+
+1) Replace the current `plainText` and `plainUrl` regex logic with a single shared regex:
+
+- Use:
+
+```tsx
+const MARKDOWN_LINK_RE = /^\[(.+?)\]\((.+?)\)$/;
+```
+
+- Implement:
+
+```tsx
+function plainText(s: string): string {
+  if (!s) return s;
+  const m = s.match(MARKDOWN_LINK_RE);
+  return m ? m[1] : s;
+}
+
+function plainUrl(s: string): string {
+  if (!s) return s;
+  const m = s.match(MARKDOWN_LINK_RE);
+  return m ? m[2] : s;
+}
+```
+
+2) Normalize domain so it is a true domain (no protocol, no path). Add:
+
+```tsx
+function normalizeDomain(s: string): string {
+  const raw = plainText(s).trim();
+  return raw.replace(/^https?:\/\//, "").replace(/\/.*$/, "");
+}
+```
+
+Then change the employer mapping to:
+
+- `domain: normalizeDomain(employer.domain)`
+- `website: plainUrl(employer.website)`
+- `primarySource: plainUrl(employer.primarySource)`
+- `secondarySource: plainUrl(employer.secondarySource)`
+
+3) Make `acceptedSourceTypes` stable (sort it):
+
+```tsx
+const acceptedSourceTypes = [...new Set(accepted.map((ev) => ev.sourceType))].sort();
+```
+
+### Acceptance criteria
+
+After re-syncing, this must be true:
+
+```bash
+curl -sS "http://127.0.0.1:5000/admin/registry/employers" \
+  -H "x-admin-sync-secret: $ADMIN_SYNC_SECRET" | cat
+```
+
+- `domain` is exactly `republicservices.com` (no `[` or `](`).
+- `website` is exactly `https://www.republicservices.com` (plain URL).
+- `primarySource` and `secondarySource` are plain URLs.
+- No markdown link syntax appears anywhere in the JSON.
+
+Optional guard:
+
+```bash
+curl -sS "http://127.0.0.1:5000/admin/registry/employers" \
+  -H "x-admin-sync-secret: $ADMIN_SYNC_SECRET" | grep -E "\]\(http"
+```
+
+Expected: no output.
+
+### Scope constraints
+
+- Do not touch client code.
+- Do not touch `requireAdminSecret` or admin auth.
+- No global TS cleanup.

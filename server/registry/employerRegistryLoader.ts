@@ -1,16 +1,23 @@
 import { getActiveRegistrySnapshot } from "./snapshotStore.ts";
 import type { EmployersSnapshot, EmployerEvidenceSnapshot, EmployerEvidenceRow } from "./notionSync.ts";
 
+const MARKDOWN_LINK_RE = /^\[(.+?)\]\((.+?)\)$/;
+
 function plainText(s: string): string {
   if (!s) return s;
-  const m = s.match(/^\[(.+?)\]\(.+?\)$/);
+  const m = s.match(MARKDOWN_LINK_RE);
   return m ? m[1] : s;
 }
 
 function plainUrl(s: string): string {
   if (!s) return s;
-  const m = s.match(/^\[.+?\]\((.+?)\)$/);
-  return m ? m[1] : s;
+  const m = s.match(MARKDOWN_LINK_RE);
+  return m ? m[2] : s;
+}
+
+function normalizeDomain(s: string): string {
+  const raw = plainText(s).trim();
+  return raw.replace(/^https?:\/\//, "").replace(/\/.*$/, "");
 }
 
 export type VerificationBasis = {
@@ -78,7 +85,7 @@ export async function loadEmployerRegistry(environment: string): Promise<LoadRes
     );
 
     const acceptedEvidenceCount = accepted.length;
-    const distinctSourceTypes = [...new Set(accepted.map((ev) => ev.sourceType))];
+    const distinctSourceTypes = [...new Set(accepted.map((ev) => ev.sourceType))].sort();
     const acceptedSourceTypes = distinctSourceTypes;
 
     const isVerified =
@@ -89,7 +96,7 @@ export async function loadEmployerRegistry(environment: string): Promise<LoadRes
     return {
       notionPageId: employer.notionPageId,
       employer: employer.employer,
-      domain: plainText(employer.domain),
+      domain: normalizeDomain(employer.domain),
       website: plainUrl(employer.website),
       primarySource: plainUrl(employer.primarySource),
       secondarySource: plainUrl(employer.secondarySource),
