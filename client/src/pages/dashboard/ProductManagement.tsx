@@ -12,7 +12,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Plus, Trash2, Pencil, Package, Shield, Settings2,
-  Download, AlertCircle, Loader2, Check, X, Users, Briefcase
+  Download, AlertCircle, Loader2, Check, X, Users, Briefcase, RefreshCw
 } from "lucide-react";
 import type {
   AdminProduct, AdminEntitlement, AdminProductOverride
@@ -803,6 +803,59 @@ function OverridesTab() {
   );
 }
 
+function StripeSyncSection() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  const [lastResult, setLastResult] = useState<{ created: number; updated: number; total: number } | null>(null);
+
+  const syncMutation = useMutation({
+    mutationFn: () => apiRequest("POST", "/api/admin/products/sync-from-stripe"),
+    onSuccess: async (res) => {
+      const data = await res.json();
+      setLastResult(data);
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/products"] });
+      toast({
+        title: "Stripe sync complete",
+        description: `${data.created} created, ${data.updated} updated (${data.total} Stripe products found).`,
+      });
+    },
+    onError: (err: any) => {
+      toast({ title: "Stripe sync failed", description: err.message, variant: "destructive" });
+    },
+  });
+
+  return (
+    <div className="border rounded-lg p-5 bg-blue-50 dark:bg-blue-950/20 border-blue-200 dark:border-blue-800" data-testid="stripe-sync-section">
+      <div className="flex items-start gap-3">
+        <RefreshCw className="text-blue-600 mt-0.5" size={20} />
+        <div className="flex-1">
+          <h3 className="font-semibold text-blue-800 dark:text-blue-200">Sync from Stripe</h3>
+          <p className="text-sm text-blue-700 dark:text-blue-300 mt-1">
+            Import active Stripe products and prices into this dashboard. Existing products are updated with current Stripe price IDs. New Stripe products are created as Active entries.
+          </p>
+          {lastResult && (
+            <p className="text-sm text-blue-800 dark:text-blue-200 mt-2 font-medium" data-testid="text-stripe-sync-result">
+              Last sync: {lastResult.created} created, {lastResult.updated} updated ({lastResult.total} Stripe products)
+            </p>
+          )}
+          <div className="mt-4">
+            <Button
+              onClick={() => syncMutation.mutate()}
+              disabled={syncMutation.isPending}
+              variant="outline"
+              className="border-blue-300 text-blue-700 hover:bg-blue-100 dark:text-blue-200 dark:hover:bg-blue-900/40"
+              data-testid="button-sync-stripe"
+            >
+              {syncMutation.isPending ? <Loader2 className="animate-spin mr-2" size={16} /> : <RefreshCw size={16} className="mr-2" />}
+              {syncMutation.isPending ? "Syncing…" : "Sync from Stripe"}
+            </Button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function SeedSection() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -929,6 +982,7 @@ export default function ProductManagement() {
         <p className="text-muted-foreground mt-1">Manage products, entitlements, and overrides. Changes auto-sync with Stripe.</p>
       </div>
 
+      <StripeSyncSection />
       <SeedSection />
 
       <Tabs defaultValue="products">

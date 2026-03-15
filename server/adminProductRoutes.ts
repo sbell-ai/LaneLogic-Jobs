@@ -471,6 +471,96 @@ export function registerAdminProductRoutes(app: Express) {
     }
   });
 
+  app.post("/api/admin/products/sync-from-stripe", async (req, res) => {
+    if (!requireAdmin(req, res)) return;
+    try {
+      const { getUncachableStripeClient } = await import("./stripeClient");
+      const stripe = await getUncachableStripeClient();
+
+      const stripeProducts = await stripe.products.list({ active: true, limit: 100 });
+      const existingProducts = await storage.getAdminProducts();
+      const existingByStripeId = new Map(
+        existingProducts
+          .filter((p) => p.stripeProductId)
+          .map((p) => [p.stripeProductId!, p])
+      );
+
+      let created = 0;
+      let updated = 0;
+
+      for (const sp of stripeProducts.data) {
+        const prices = await stripe.prices.list({ product: sp.id, active: true, limit: 20 });
+
+        let monthlyPriceId: string | null = null;
+        let yearlyPriceId: string | null = null;
+        let oneTimePriceId: string | null = null;
+        let monthlyAmount: number | null = null;
+        let yearlyAmount: number | null = null;
+        let oneTimeAmount: number | null = null;
+
+        for (const price of prices.data) {
+          const amount = price.unit_amount != null ? price.unit_amount / 100 : null;
+          if (price.type === "recurring") {
+            if (price.recurring?.interval === "month") {
+              monthlyPriceId = price.id;
+              monthlyAmount = amount;
+            } else if (price.recurring?.interval === "year") {
+              yearlyPriceId = price.id;
+              yearlyAmount = amount;
+            }
+          } else if (price.type === "one_time") {
+            oneTimePriceId = price.id;
+            oneTimeAmount = amount;
+          }
+        }
+
+        const existing = existingByStripeId.get(sp.id);
+
+        if (existing) {
+          await storage.updateAdminProduct(existing.id, {
+            stripePriceIdMonthly: monthlyPriceId ?? existing.stripePriceIdMonthly,
+            stripePriceIdYearly: yearlyPriceId ?? existing.stripePriceIdYearly,
+            stripePriceIdOneTime: oneTimePriceId ?? existing.stripePriceIdOneTime,
+            priceMonthly: monthlyAmount ?? existing.priceMonthly,
+            priceYearly: yearlyAmount ?? existing.priceYearly,
+            priceOneTime: oneTimeAmount ?? existing.priceOneTime,
+          });
+          updated++;
+        } else {
+          const isOneTime = !monthlyPriceId && !yearlyPriceId && !!oneTimePriceId;
+          const audience = (sp.metadata?.audience as string) || "Job Seeker";
+          const kind = isOneTime ? "add_on" : "base_plan";
+          const billingType = isOneTime ? "one_time" : "subscription";
+          const planType = isOneTime ? "Top-up" : "Subscription";
+
+          await storage.createAdminProduct({
+            name: sp.name,
+            audience,
+            kind,
+            billingType,
+            priceMonthly: monthlyAmount,
+            priceYearly: yearlyAmount,
+            priceOneTime: oneTimeAmount,
+            stripeProductId: sp.id,
+            stripePriceIdMonthly: monthlyPriceId,
+            stripePriceIdYearly: yearlyPriceId,
+            stripePriceIdOneTime: oneTimePriceId,
+            logicKey: (sp.metadata?.logicKey as string) || null,
+            trialDays: 0,
+            status: "Active",
+            planType,
+          });
+          created++;
+        }
+      }
+
+      res.json({ success: true, created, updated, total: stripeProducts.data.length });
+    } catch (err: any) {
+      console.error("[stripe-sync] Error:", err.message);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   app.get("/api/admin/products/seed-status", async (req, res) => {
     if (!requireAdmin(req, res)) return;
     try {
