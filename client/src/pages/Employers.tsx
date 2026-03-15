@@ -61,7 +61,7 @@ export default function Employers() {
           {isLoading ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {Array.from({ length: 6 }).map((_, i) => (
-                <div key={i} className="bg-white dark:bg-slate-900 rounded-xl border border-border p-6 animate-pulse">
+                <div key={i} className="bg-white dark:bg-slate-900 rounded-2xl border border-border p-6 shadow-sm animate-pulse">
                   <div className="flex items-center gap-4 mb-4">
                     <div className="w-14 h-14 rounded-lg bg-muted" />
                     <div className="flex-1">
@@ -97,7 +97,7 @@ export default function Employers() {
                   >
                     <Link href={emp.id ? `/employers/${emp.id}` : `/jobs?q=${encodeURIComponent(emp.companyName)}`}>
                       <div
-                        className="bg-white dark:bg-slate-900 rounded-xl border border-border p-6 hover:shadow-lg hover:border-primary/30 transition-all cursor-pointer h-full flex flex-col"
+                        className="bg-white dark:bg-slate-900 rounded-2xl border border-border p-6 shadow-sm hover:shadow-lg hover:border-primary/40 transition-all duration-200 cursor-pointer h-full flex flex-col"
                         data-testid={`card-employer-${emp.companyName.replace(/\s+/g, '-').toLowerCase()}`}
                       >
                         <div className="flex items-center gap-4 mb-4">
@@ -108,8 +108,8 @@ export default function Employers() {
                               className="w-14 h-14 rounded-lg object-contain border border-border bg-white"
                             />
                           ) : (
-                            <div className="w-14 h-14 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
-                              <Building2 className="h-7 w-7 text-primary" />
+                            <div className="w-14 h-14 rounded-xl bg-primary flex items-center justify-center text-white font-bold text-xl shrink-0">
+                              {emp.companyName.charAt(0).toUpperCase()}
                             </div>
                           )}
                           <div className="min-w-0 flex-1">
@@ -121,12 +121,10 @@ export default function Employers() {
                                 <CheckCircle2 className="h-4 w-4 text-primary shrink-0" title="Verified employer" />
                               )}
                             </div>
-                            <div className="flex items-center gap-1 text-sm text-muted-foreground">
-                              <Briefcase className="h-3.5 w-3.5" />
-                              <span>
-                                {emp.jobCount} active job{emp.jobCount !== 1 ? "s" : ""}
-                              </span>
-                            </div>
+                            <span className="inline-flex items-center gap-1 text-xs font-semibold bg-primary/10 text-primary px-2 py-0.5 rounded-full">
+                              <Briefcase className="h-3 w-3" />
+                              {emp.jobCount} {emp.jobCount === 1 ? "job" : "jobs"}
+                            </span>
                           </div>
                         </div>
 
