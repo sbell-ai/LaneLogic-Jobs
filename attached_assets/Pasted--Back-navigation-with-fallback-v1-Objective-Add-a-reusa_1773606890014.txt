@@ -1,0 +1,69 @@
+## Back navigation with `/` fallback (v1)
+
+### Objective
+
+Add a reusable **Back** control that navigates to the previous in-app page when possible, and otherwise falls back to **`/`** (home). This is to improve navigation across the SPA, especially deep-linked pages.
+
+### Scope constraints
+
+- No new packages
+- No routing overhaul
+- Implement once and reuse
+- Wouter-compatible
+
+### Requirements
+
+#### 1) Create a reusable component
+
+Create: `client/src/components/nav/BackButton.tsx`
+
+Props:
+
+- `fallback?: string` (default `"/"`)
+
+Behavior on click:
+
+1) If there is a usable previous in-app route, navigate back to it.
+
+2) Otherwise navigate to `fallback` (defaults to `/`).
+
+Implementation approach (preferred; deterministic in SPAs):
+
+- Track `previousPath` in an app-level place that runs on every route change (App shell), using Wouter’s `useLocation()`.
+- Store the last path in a ref (or small module singleton).
+- BackButton uses that stored `previousPath` when available and different from the current path.
+
+Alternative acceptable approach:
+
+- Use `window.history.length > 1` + `window.history.back()` but still implement a fallback to `/` for direct-entry cases.
+
+#### 2) UI spec (minimal)
+
+- Icon: left chevron
+- Label: “Back”
+- Use a real `<button>`
+- `aria-label="Back"`
+- Visible focus ring
+
+#### 3) Add BackButton to key surfaces (minimum set)
+
+Add at the top-left of the page header area for:
+
+- Job detail pages
+- Resource/blog detail pages (if applicable)
+- Admin pages under `/dashboard/admin/*` (including Employer Registry)
+
+#### 4) Definition of done (tests)
+
+1) Navigate List → Detail → click Back → returns to List.
+
+2) Open a Detail page directly in a new tab → click Back → goes to `/`.
+
+3) Admin: `/dashboard/admin` → `/dashboard/admin/employer-registry` → Back → returns to `/dashboard/admin` (use `fallback="/dashboard/admin"` for this page only).
+
+### Guardrails
+
+- Do not hardcode secrets.
+- Do not change existing route structure.
+
+If Replit needs clarification: use `/` as the universal fallback, and allow per-page override via the `fallback` prop (admin pages should set `fallback="/dashboard/admin"`).
