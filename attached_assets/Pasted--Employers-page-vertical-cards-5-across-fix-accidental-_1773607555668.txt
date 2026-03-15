@@ -1,0 +1,108 @@
+## Employers page — vertical cards + 5 across + fix accidental linkification
+
+### Objective
+
+Update **`client/src/pages/Employers.tsx`** so employer cards are **vertical** and the grid is **5 across on xl** (currently 3 across on lg). Also fix a bug where the Link href is being treated as a markdown link (`[emp.id](http://emp.id/)`) in the code.
+
+### Required changes (in `client/src/pages/Employers.tsx` only)
+
+#### 1) Grid: make it 5 across on desktop
+
+Replace the grid container class:
+
+**Current:**
+
+```tsx
+<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+```
+
+**Replace with:**
+
+```tsx
+<div className="grid gap-6 grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+```
+
+#### 2) Card orientation: change the header row from horizontal to vertical stack
+
+Inside the card, replace:
+
+**Current:**
+
+```tsx
+<div className="flex items-center gap-4 mb-4">
+```
+
+**Replace with:**
+
+```tsx
+<div className="flex flex-col items-start gap-3 mb-4">
+```
+
+Then update the logo block sizing so it works vertically:
+
+- change `w-14 h-14` to `w-16 h-16` (optional but recommended)
+- for the logo `<img>`, add `self-start`
+
+Example updates:
+
+```tsx
+<img ... className="w-16 h-16 self-start rounded-lg object-contain border border-border bg-white" />
+```
+
+and for the fallback initial:
+
+```tsx
+<div className="w-16 h-16 rounded-xl bg-primary flex items-center justify-center text-white font-bold text-xl shrink-0">
+```
+
+#### 3) Title line wrapping (avoid truncate on vertical cards)
+
+Change:
+
+```tsx
+<h3 className="font-semibold text-lg truncate">
+```
+
+to:
+
+```tsx
+<h3 className="font-semibold text-lg line-clamp-2">
+```
+
+#### 4) Fix accidental markdown linkification in the Link href
+
+You currently have:
+
+```tsx
+<Link href={[emp.id](http://emp.id/) ? `/employers/${emp.id}` : `/jobs?q=${encodeURIComponent(emp.companyName)}`}>
+```
+
+That is corrupted. Replace it with:
+
+```tsx
+<Link href={emp.id ? `/employers/${emp.id}` : `/jobs?q=${encodeURIComponent(emp.companyName)}`}>
+```
+
+#### 5) Fix the claimed check (it currently contains a broken “AND …”)
+
+You currently have something like:
+
+```tsx
+{emp.claimed && ( AND {emp.claimed && (
+```
+
+Replace that whole fragment with the single correct block:
+
+```tsx
+{emp.claimed && (
+  <CheckCircle2 className="h-4 w-4 text-primary shrink-0" title="Verified employer" />
+)}
+```
+
+### Definition of done
+
+- Employers page shows a vertical card layout.
+- Grid is 5 across at xl (≥1280px).
+- No `[emp.id](http://emp.id/)` appears anywhere in the file.
+- No broken `emp.claimed` fragment remains.
+- Page still navigates correctly when clicking a card.
