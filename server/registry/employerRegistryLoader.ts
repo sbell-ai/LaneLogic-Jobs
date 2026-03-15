@@ -1,22 +1,31 @@
 import { getActiveRegistrySnapshot } from "./snapshotStore.ts";
 import type { EmployersSnapshot, EmployerEvidenceSnapshot, EmployerEvidenceRow } from "./notionSync.ts";
 
-const MARKDOWN_LINK_RE = /^\[(.+?)\]\((.+?)\)$/;
+const FULL_MD_RE = /^\[(.+?)\]\((.+?)\)$/;
+const EMBED_MD_RE = /\[(.+?)\]\((.+?)\)/;
 
 function plainText(s: string): string {
   if (!s) return s;
-  const m = s.match(MARKDOWN_LINK_RE);
-  return m ? m[1] : s;
+  const t = s.trim();
+  const mFull = t.match(FULL_MD_RE);
+  if (mFull) return mFull[1];
+  const mEmbed = t.match(EMBED_MD_RE);
+  if (mEmbed) return mEmbed[1];
+  return t;
 }
 
 function plainUrl(s: string): string {
   if (!s) return s;
-  const m = s.match(MARKDOWN_LINK_RE);
-  return m ? m[2] : s;
+  const t = s.trim();
+  const mFull = t.match(FULL_MD_RE);
+  if (mFull) return mFull[2];
+  const mEmbed = t.match(EMBED_MD_RE);
+  if (mEmbed) return mEmbed[2];
+  return t;
 }
 
 function normalizeDomain(s: string): string {
-  const raw = plainText(s).trim();
+  const raw = plainText(s);
   return raw.replace(/^https?:\/\//, "").replace(/\/.*$/, "");
 }
 
@@ -108,6 +117,17 @@ export async function loadEmployerRegistry(environment: string): Promise<LoadRes
       },
     };
   });
+
+  for (const r of results) {
+    const isBad = (v: string) => v && (v.includes("](") || v.startsWith("["));
+    if (isBad(r.domain) || isBad(r.website) || isBad(r.primarySource) || isBad(r.secondarySource)) {
+      console.warn(`[employer-registry] Residual markdown detected for "${r.employer}", re-normalizing`);
+      r.domain = normalizeDomain(r.domain);
+      r.website = plainUrl(r.website);
+      r.primarySource = plainUrl(r.primarySource);
+      r.secondarySource = plainUrl(r.secondarySource);
+    }
+  }
 
   const verifiedEligible = results.filter((r) => r.isVerified).length;
 

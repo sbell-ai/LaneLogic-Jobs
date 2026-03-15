@@ -1,14 +1,14 @@
 import { Client } from "@notionhq/client";
 
   const NOTION_DB_IDS = {
-	productsPricing: "3154caed-dabf-803d-a6a8-cc7b8f17b80a",
-	featuresEntitlements: "23d7f753-a0d1-48bc-be8f-7cb3e9706956",
-	productEntitlementOverrides: "90052bfc-79c9-418d-98b2-41b295be9dad",
-	complianceRules: "37c447b4-7e93-4939-961e-2f82c158e41f",
+        productsPricing: "3154caed-dabf-803d-a6a8-cc7b8f17b80a",
+        featuresEntitlements: "23d7f753-a0d1-48bc-be8f-7cb3e9706956",
+        productEntitlementOverrides: "90052bfc-79c9-418d-98b2-41b295be9dad",
+        complianceRules: "37c447b4-7e93-4939-961e-2f82c158e41f",
 
-	// env-driven:
-	employers: process.env.NOTION_EMPLOYERS_DB_ID!,
-	employerEvidence: process.env.NOTION_EVIDENCE_DB_ID!,
+        // env-driven:
+        employers: process.env.NOTION_EMPLOYERS_DB_ID!,
+        employerEvidence: process.env.NOTION_EVIDENCE_DB_ID!,
 } as const;
 
 export type ProductRow = {
@@ -116,6 +116,34 @@ export type EmployerEvidenceSnapshot = {
   generatedAt: string;
   rows: EmployerEvidenceRow[];
 };
+
+const FULL_MD_RE = /^\[(.+?)\]\((.+?)\)$/;
+const EMBED_MD_RE = /\[(.+?)\]\((.+?)\)/;
+
+function stripMdText(s: string): string {
+  if (!s) return s;
+  const t = s.trim();
+  const mFull = t.match(FULL_MD_RE);
+  if (mFull) return mFull[1];
+  const mEmbed = t.match(EMBED_MD_RE);
+  if (mEmbed) return mEmbed[1];
+  return t;
+}
+
+function stripMdUrl(s: string): string {
+  if (!s) return s;
+  const t = s.trim();
+  const mFull = t.match(FULL_MD_RE);
+  if (mFull) return mFull[2];
+  const mEmbed = t.match(EMBED_MD_RE);
+  if (mEmbed) return mEmbed[2];
+  return t;
+}
+
+function normalizeDomainAtSource(s: string): string {
+  const raw = stripMdText(s);
+  return raw.replace(/^https?:\/\//, "").replace(/\/.*$/, "");
+}
 
 function extractPageIdFromUrl(url: string): string {
   const cleaned = url.replace("https://www.notion.so/", "").replace(/-/g, "");
@@ -348,15 +376,15 @@ export async function fetchEmployers(): Promise<EmployersSnapshot> {
       notionPageId: page.id,
       employer: getPropText(props, "Employer"),
       status: getPropSelect(props, "Status"),
-      website: getPropUrl(props, "Website"),
-      domain: getPropText(props, "Domain"),
+      website: stripMdUrl(getPropUrl(props, "Website") || getPropText(props, "Website")),
+      domain: normalizeDomainAtSource(getPropText(props, "Domain")),
       hqLocation: getPropText(props, "HQ Location"),
       operatingRegions: getPropMultiSelect(props, "Operating Regions"),
       remotePolicy: getPropSelect(props, "Remote Policy"),
       industryTags: getPropMultiSelect(props, "Industry Tags"),
       verificationRisk: getPropSelect(props, "Verification Risk"),
-      primarySource: getPropUrl(props, "Primary Source"),
-      secondarySource: getPropUrl(props, "Secondary Source"),
+      primarySource: stripMdUrl(getPropUrl(props, "Primary Source") || getPropText(props, "Primary Source")),
+      secondarySource: stripMdUrl(getPropUrl(props, "Secondary Source") || getPropText(props, "Secondary Source")),
       lastVerified: getPropDate(props, "Last Verified"),
       notesInternal: getPropText(props, "Notes (Internal)"),
     };
@@ -381,8 +409,8 @@ export async function fetchEmployerEvidence(): Promise<EmployerEvidenceSnapshot>
       notionPageId: page.id,
       evidence: getPropText(props, "Evidence"),
       employerPageIds: getPropRelation(props, "Employer"),
-      sourceUrl: getPropUrl(props, "Source URL"),
-      sourceType: getPropSelect(props, "Source Type"),
+      sourceUrl: stripMdUrl(getPropUrl(props, "Source URL") || getPropText(props, "Source URL")),
+      sourceType: getPropSelect(props, "Source Type").trim().replace(/\]\(.*$/, ""),
       retrieved: getPropDate(props, "Retrieved"),
       claim: getPropText(props, "Claim"),
       excerpt: getPropText(props, "Excerpt"),
