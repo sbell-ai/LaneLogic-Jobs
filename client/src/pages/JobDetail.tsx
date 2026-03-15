@@ -3,7 +3,8 @@ import { Navbar } from "@/components/layout/Navbar";
 import { Footer } from "@/components/layout/Footer";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { MapPin, DollarSign, Clock, ArrowLeft, ExternalLink, CheckCircle2, Briefcase, Building2, Star } from "lucide-react";
+import { MapPin, DollarSign, Clock, ExternalLink, CheckCircle2, Briefcase, Building2, Star } from "lucide-react";
+import { BackButton } from "@/components/nav/BackButton";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
@@ -94,14 +95,7 @@ export default function JobDetail() {
       <Navbar />
       <main className="flex-grow bg-slate-50 dark:bg-slate-950 py-10">
         <div className="container mx-auto px-4 md:px-6 max-w-4xl">
-          <Button
-            variant="ghost"
-            className="mb-6 text-muted-foreground hover:text-foreground"
-            onClick={() => setLocation("/jobs")}
-            data-testid="button-back-jobs"
-          >
-            <ArrowLeft size={16} className="mr-2" /> Back to Jobs
-          </Button>
+          <BackButton fallback="/jobs" />
 
           <div className="bg-white dark:bg-slate-900 rounded-2xl border border-border shadow-sm overflow-hidden">
             {/* Header */}

@@ -4,6 +4,7 @@ import { Footer } from "@/components/layout/Footer";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ArrowLeft, BookOpen, Briefcase, Users } from "lucide-react";
+import { BackButton } from "@/components/nav/BackButton";
 import { useQuery } from "@tanstack/react-query";
 import type { Resource } from "@shared/schema";
 import { tokenize } from "@/lib/linkify";
@@ -94,14 +95,7 @@ export default function ResourceDetail() {
       <Navbar />
       <main className="flex-grow bg-slate-50 dark:bg-slate-950 py-10">
         <div className="container mx-auto px-4 md:px-6 max-w-3xl">
-          <Button
-            variant="ghost"
-            className="mb-6 text-muted-foreground hover:text-foreground"
-            onClick={() => setLocation("/resources")}
-            data-testid="button-back-resources-top"
-          >
-            <ArrowLeft size={16} className="mr-2" /> Back to Resources
-          </Button>
+          <BackButton fallback="/resources" />
 
           <article className="bg-white dark:bg-slate-900 rounded-2xl border border-border shadow-sm overflow-hidden">
             <div className="h-56 bg-gradient-to-br from-primary/15 via-primary/5 to-accent/10 flex items-center justify-center">

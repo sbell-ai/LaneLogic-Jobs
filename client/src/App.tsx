@@ -1,5 +1,6 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Switch, Route, useLocation, useParams, Redirect } from "wouter";
+import { updateHistory } from "@/lib/navigationHistory";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider, useQuery } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
@@ -207,12 +208,21 @@ function Router() {
   );
 }
 
+function NavigationTracker() {
+  const [location] = useLocation();
+  useEffect(() => {
+    updateHistory(location);
+  }, [location]);
+  return null;
+}
+
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
         <AuthModalProvider>
           <ThemeInjector />
+          <NavigationTracker />
           <Toaster />
           <Router />
         </AuthModalProvider>

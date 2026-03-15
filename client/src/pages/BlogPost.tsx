@@ -3,6 +3,7 @@ import { Navbar } from "@/components/layout/Navbar";
 import { Footer } from "@/components/layout/Footer";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, Clock, Newspaper, User } from "lucide-react";
+import { BackButton } from "@/components/nav/BackButton";
 import { useQuery } from "@tanstack/react-query";
 import type { BlogPost } from "@shared/schema";
 import { formatDistanceToNow, format } from "date-fns";
@@ -51,14 +52,7 @@ export default function BlogPostPage() {
       <Navbar />
       <main className="flex-grow bg-slate-50 dark:bg-slate-950 py-10">
         <div className="container mx-auto px-4 md:px-6 max-w-3xl">
-          <Button
-            variant="ghost"
-            className="mb-6 text-muted-foreground hover:text-foreground"
-            onClick={() => setLocation("/blog")}
-            data-testid="button-back-blog"
-          >
-            <ArrowLeft size={16} className="mr-2" /> Back to Blog
-          </Button>
+          <BackButton fallback="/blog" />
 
           <article className="bg-white dark:bg-slate-900 rounded-2xl border border-border shadow-sm overflow-hidden">
             <div className="h-56 bg-gradient-to-br from-primary/15 via-primary/5 to-accent/10 flex items-center justify-center">

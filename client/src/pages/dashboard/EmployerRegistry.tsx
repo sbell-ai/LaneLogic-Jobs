@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { RefreshCw, ShieldCheck, ExternalLink, Loader2, AlertCircle } from "lucide-react";
+import { BackButton } from "@/components/nav/BackButton";
 
 type VerificationBasis = {
   acceptedEvidenceCount: number;
@@ -54,6 +55,7 @@ export default function EmployerRegistry() {
 
   return (
     <div>
+      <BackButton fallback="/dashboard/admin" />
       <div className="flex flex-wrap justify-between items-center gap-4 mb-6">
         <div className="flex items-center gap-2">
           <ShieldCheck size={22} className="text-primary" />
