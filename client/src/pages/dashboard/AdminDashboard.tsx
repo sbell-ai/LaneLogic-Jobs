@@ -31,6 +31,7 @@ import { ShareToSocialModal } from "@/components/ShareToSocialModal";
 import SocialPublishing from "./SocialPublishing";
 import ProductManagement from "./ProductManagement";
 import ImportManagement from "./ImportManagement";
+import EmployerRegistry from "./EmployerRegistry";
 import { insertResourceSchema, insertBlogPostSchema, insertJobSchema } from "@shared/schema";
 import { INTRO_TRUNCATE_LENGTH } from "@shared/constants";
 import { tokenize } from "@/lib/linkify";
@@ -3088,6 +3089,7 @@ export default function AdminDashboard({ section, subsection }: { section?: stri
       case "social": return <SocialPublishing />;
       case "products": return <ProductManagement />;
       case "imports": return <ImportManagement />;
+      case "employer-registry": return <EmployerRegistry />;
       default: return <UsersLandingTab />;
     }
   };

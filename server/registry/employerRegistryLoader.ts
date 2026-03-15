@@ -23,6 +23,8 @@ export type EmployerResult = {
   employer: string;
   domain: string;
   website: string;
+  primarySource: string;
+  secondarySource: string;
   status: string;
   isVerified: boolean;
   verificationBasis: VerificationBasis;
@@ -89,6 +91,8 @@ export async function loadEmployerRegistry(environment: string): Promise<LoadRes
       employer: employer.employer,
       domain: plainText(employer.domain),
       website: plainUrl(employer.website),
+      primarySource: plainUrl(employer.primarySource),
+      secondarySource: plainUrl(employer.secondarySource),
       status: employer.status,
       isVerified,
       verificationBasis: {

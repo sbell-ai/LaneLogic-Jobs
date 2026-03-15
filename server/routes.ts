@@ -19,6 +19,9 @@ import { JOB_CATEGORIES, US_STATES as SEO_STATES } from "@shared/seoConfig";
 import { validateKeywords } from "./taggingValidator";
 import { validateCategoryPair, normalizeCategory, normalizeSubcategory, getCategories } from "@shared/jobTaxonomy";
 import { isR2Configured, uploadToR2 } from "./r2";
+import { loadEmployerRegistry } from "./registry/employerRegistryLoader.ts";
+import { syncEmployers } from "./registry/syncEmployers.ts";
+import { requireAdminSession } from "./middleware/requireAdminSession.ts";
 
 const LANELOGIC_OWNED_DOMAINS: string[] = (process.env.LANELOGIC_OWNED_DOMAINS || "lanelogicjobs.com,lanelogic.com")
   .split(",").map(d => d.trim().toLowerCase()).filter(Boolean);
@@ -389,6 +392,26 @@ export async function registerRoutes(
 
   const { registerAdminImportRoutes } = await import("./adminImportRoutes");
   registerAdminImportRoutes(app);
+
+  app.get("/api/admin/registry/employers", async (req, res) => {
+    if (!requireAdminSession(req, res)) return;
+    try {
+      const environment = process.env.NODE_ENV === "production" ? "prod" : "staging";
+      res.json(await loadEmployerRegistry(environment));
+    } catch (err) {
+      res.status(500).json({ error: "internal_error", message: String(err) });
+    }
+  });
+
+  app.post("/api/admin/registry-sync/employers", async (req, res) => {
+    if (!requireAdminSession(req, res)) return;
+    try {
+      const environment = process.env.NODE_ENV === "production" ? "prod" : "staging";
+      res.json(await syncEmployers({ environment }));
+    } catch (err) {
+      res.status(500).json({ error: "internal_error", message: String(err) });
+    }
+  });
 
   // Users
   app.get(api.users.list.path, async (req, res) => {
