@@ -66,9 +66,14 @@ export default function Jobs() {
 
             <div className="flex-1 min-w-0">
               {isLoading ? (
-                <div className="space-y-4">
-                  {Array.from({ length: 5 }).map((_, i) => (
-                    <div key={i} className="bg-white dark:bg-slate-900 rounded-2xl p-6 border border-border h-36 animate-pulse" />
+                <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+                  {Array.from({ length: 10 }).map((_, i) => (
+                    <div key={i} className="bg-white dark:bg-slate-900 rounded-2xl p-5 border border-border shadow-sm animate-pulse h-full flex flex-col gap-3">
+                      <div className="w-12 h-12 rounded-xl bg-muted" />
+                      <div className="h-5 bg-muted rounded w-3/4" />
+                      <div className="h-4 bg-muted rounded w-1/2" />
+                      <div className="h-4 bg-muted rounded w-2/3 mt-auto" />
+                    </div>
                   ))}
                 </div>
               ) : filtered.length === 0 ? (
@@ -83,74 +88,71 @@ export default function Jobs() {
                   )}
                 </div>
               ) : (
-                <div className="space-y-4">
+                <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
                   {filtered.map((job, i) => (
                     <motion.div
                       key={job.id}
                       initial={{ opacity: 0, y: 12 }}
                       animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: i * 0.04 }}
+                      transition={{ delay: Math.min(i * 0.03, 0.5) }}
                     >
                       <Link href={`/jobs/${job.id}`}>
                         <div
                           data-testid={`card-job-${job.id}`}
-                          className="bg-white dark:bg-slate-900 rounded-2xl p-6 border border-border shadow-sm hover:shadow-lg hover:border-primary/40 transition-all duration-200 cursor-pointer group"
+                          className="bg-white dark:bg-slate-900 rounded-2xl p-5 border border-border shadow-sm hover:shadow-lg hover:border-primary/40 transition-all duration-200 cursor-pointer group h-full flex flex-col"
                         >
-                          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                            <div className="flex items-start gap-4">
-                              {(job as any).employerLogo ? (
-                                <img src={(job as any).employerLogo} alt={job.companyName || ""} className="w-12 h-12 rounded-xl object-contain bg-white dark:bg-slate-800 border border-border shrink-0" data-testid={`img-company-logo-${job.id}`} />
-                              ) : (
-                                <div className="w-12 h-12 rounded-xl bg-primary flex items-center justify-center text-white font-bold text-lg shrink-0" data-testid={`placeholder-company-logo-${job.id}`}>
-                                  {(job.title || job.companyName || "J").charAt(0).toUpperCase()}
-                                </div>
-                              )}
-                              <div>
-                                <h2 className="text-lg font-bold font-display group-hover:text-primary transition-colors">
-                                  {job.title}
-                                </h2>
-                                {job.companyName && (
-                                  <p className="text-sm font-medium text-foreground/70 flex items-center gap-1 mt-0.5">
-                                    <Building2 size={13} /> {job.companyName}
-                                  </p>
-                                )}
-                                <div className="flex flex-wrap items-center gap-3 mt-1.5 text-sm text-muted-foreground">
-                                  {fmtLoc(job) && (
-                                    <span className="flex items-center gap-1">
-                                      <MapPin size={14} /> {fmtLoc(job)}
-                                    </span>
-                                  )}
-                                  {job.jobType && (
-                                    <Badge variant="outline" className="text-xs font-normal">{job.jobType}</Badge>
-                                  )}
-                                  {job.salary && (
-                                    <span className="flex items-center gap-1">
-                                      <DollarSign size={14} /> {job.salary}
-                                    </span>
-                                  )}
-                                  <span className="flex items-center gap-1">
-                                    <Clock size={14} />
-                                    {job.createdAt ? formatDistanceToNow(new Date(job.createdAt), { addSuffix: true }) : "Recently"}
-                                  </span>
-                                  {job.expiresAt && (
-                                    <Badge className="bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800 text-[10px] font-semibold hover:bg-amber-100" data-testid={`badge-actively-interviewing-${job.id}`}>
-                                      Actively Interviewing: Apply Soon
-                                    </Badge>
-                                  )}
-                                </div>
-                                <p className="mt-2 text-sm text-muted-foreground line-clamp-2">{job.description}</p>
-                              </div>
+                          {(job as any).employerLogo ? (
+                            <img src={(job as any).employerLogo} alt={job.companyName || ""} className="w-12 h-12 rounded-xl object-contain bg-white dark:bg-slate-800 border border-border shrink-0 mb-3" data-testid={`img-company-logo-${job.id}`} />
+                          ) : (
+                            <div className="w-12 h-12 rounded-xl bg-primary flex items-center justify-center text-white font-bold text-lg shrink-0 mb-3" data-testid={`placeholder-company-logo-${job.id}`}>
+                              {(job.title || job.companyName || "J").charAt(0).toUpperCase()}
                             </div>
-                            <div className="flex items-center gap-2 shrink-0">
-                              {job.isExternalApply && (
-                                <Badge variant="outline" className="text-xs">
-                                  <ExternalLink size={12} className="mr-1" /> External
-                                </Badge>
-                              )}
-                              <Button size="sm" className="hover-elevate" data-testid={`button-apply-${job.id}`}>
-                                Apply Now
-                              </Button>
-                            </div>
+                          )}
+
+                          <h2 className="text-base font-bold font-display group-hover:text-primary transition-colors line-clamp-2">
+                            {job.title}
+                          </h2>
+                          {job.companyName && (
+                            <p className="text-sm font-medium text-foreground/70 flex items-center gap-1 mt-1">
+                              <Building2 size={13} className="shrink-0" /> <span className="line-clamp-1">{job.companyName}</span>
+                            </p>
+                          )}
+
+                          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-2 text-xs text-muted-foreground">
+                            {fmtLoc(job) && (
+                              <span className="flex items-center gap-1">
+                                <MapPin size={12} /> <span className="line-clamp-1">{fmtLoc(job)}</span>
+                              </span>
+                            )}
+                            {job.jobType && (
+                              <Badge variant="outline" className="text-[10px] font-normal">{job.jobType}</Badge>
+                            )}
+                            {job.salary && (
+                              <span className="flex items-center gap-1">
+                                <DollarSign size={12} /> {job.salary}
+                              </span>
+                            )}
+                            <span className="flex items-center gap-1">
+                              <Clock size={12} />
+                              {job.createdAt ? formatDistanceToNow(new Date(job.createdAt), { addSuffix: true }) : "Recently"}
+                            </span>
+                          </div>
+
+                          {job.expiresAt && (
+                            <Badge className="bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800 text-[10px] font-semibold hover:bg-amber-100 mt-2 w-fit" data-testid={`badge-actively-interviewing-${job.id}`}>
+                              Actively Interviewing
+                            </Badge>
+                          )}
+
+                          <div className="flex items-center gap-2 mt-auto pt-3">
+                            {job.isExternalApply && (
+                              <Badge variant="outline" className="text-[10px]">
+                                <ExternalLink size={10} className="mr-1" /> External
+                              </Badge>
+                            )}
+                            <Button size="sm" className="hover-elevate w-full" data-testid={`button-apply-${job.id}`}>
+                              Apply Now
+                            </Button>
                           </div>
                         </div>
                       </Link>
