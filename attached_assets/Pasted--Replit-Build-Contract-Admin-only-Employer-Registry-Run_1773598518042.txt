@@ -1,0 +1,100 @@
+### Replit Build Contract: **Admin-only Employer Registry Runtime Read (v1)**
+
+#### Objective
+
+Add an **admin-only** runtime endpoint that reads the **active registry snapshots** for Employers + Employer Evidence and returns a computed `isVerified` flag **fail-closed**.
+
+#### Scope (do only this)
+
+- Add one endpoint:
+    - `GET /admin/registry/employers`
+- Add a loader that reads **active snapshots** for:
+    - registryName: `"employers"`
+    - registryName: `"employer_evidence"`
+- Do **not** add Postgres upserts yet.
+- Do **not** touch client code or global TypeScript errors unless strictly required.
+
+#### Auth (required)
+
+- This endpoint must be protected by the existing admin middleware:
+    - header: `x-admin-sync-secret`
+    - env var: `ADMIN_SYNC_SECRET`
+- Missing header → `401`
+- Wrong secret → `403`
+
+#### Verification rules (fail-closed)
+
+For each employer row:
+
+- `isVerified = true` only if:
+    
+    1) `employer.status === "Verified"` AND
+    
+    2) there exist **≥ 2** linked evidence rows where:
+    
+    - `Decision === "Accepted"` AND
+    - `Source Type` values are **distinct**
+- Otherwise `isVerified = false` (including any missing/invalid snapshot data).
+
+#### Response contract (stable JSON)
+
+`GET /admin/registry/employers` returns:
+
+```json
+{
+  "ok": true,
+  "environment": "staging",
+  "counts": {
+    "employers": 1,
+    "evidence": 5,
+    "verifiedEligible": 1
+  },
+  "employers": [
+    {
+      "notionPageId": "...",
+      "employer": "Republic Services",
+      "domain": "republicservices.com",
+      "website": "https://www.republicservices.com",
+      "status": "Verified",
+      "isVerified": true,
+      "verificationBasis": {
+        "acceptedEvidenceCount": 4,
+        "acceptedSourceTypes": ["Government registry", "Official website"]
+      }
+    }
+  ]
+}
+```
+
+Notes:
+
+- `verifiedEligible` is the count of employers with `isVerified === true`.
+- If snapshots are missing/unreadable, return `ok:false` with a clear `error` and **do not** mark anyone verified.
+
+#### Definition of done
+
+1) Run:
+
+- `POST /admin/registry-sync/employers` (already exists)
+
+2) Then call the new endpoint with secret:
+
+```bash
+curl -sS "http://127.0.0.1:5000/admin/registry/employers" \
+  -H "x-admin-sync-secret: $ADMIN_SYNC_SECRET" | cat
+```
+
+3) Confirm fail-closed toggle:
+
+- Set Republic Services to Unverified in Notion → re-sync → `isVerified:false`
+- Set back to Verified → re-sync → `isVerified:true`
+
+#### Guardrail
+
+Must pass:
+
+```bash
+grep -R "\](http://" server
+```
+
+Expected: no matches.
