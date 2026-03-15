@@ -59,11 +59,11 @@ export default function Employers() {
 
         <div className="container mx-auto px-4 md:px-6 py-8">
           {isLoading ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {Array.from({ length: 6 }).map((_, i) => (
+            <div className="grid gap-6 grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+              {Array.from({ length: 10 }).map((_, i) => (
                 <div key={i} className="bg-white dark:bg-slate-900 rounded-2xl border border-border p-6 shadow-sm animate-pulse">
-                  <div className="flex items-center gap-4 mb-4">
-                    <div className="w-14 h-14 rounded-lg bg-muted" />
+                  <div className="flex flex-col items-start gap-3 mb-4">
+                    <div className="w-16 h-16 rounded-lg bg-muted" />
                     <div className="flex-1">
                       <div className="h-5 bg-muted rounded w-3/4 mb-2" />
                       <div className="h-4 bg-muted rounded w-1/2" />
@@ -87,7 +87,7 @@ export default function Employers() {
               <p className="text-sm text-muted-foreground mb-6" data-testid="text-employer-count">
                 {filtered.length} compan{filtered.length !== 1 ? "ies" : "y"} hiring
               </p>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              <div className="grid gap-6 grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
                 {filtered.map((emp, index) => (
                   <motion.div
                     key={emp.companyName}
@@ -100,21 +100,21 @@ export default function Employers() {
                         className="bg-white dark:bg-slate-900 rounded-2xl border border-border p-6 shadow-sm hover:shadow-lg hover:border-primary/40 transition-all duration-200 cursor-pointer h-full flex flex-col"
                         data-testid={`card-employer-${emp.companyName.replace(/\s+/g, '-').toLowerCase()}`}
                       >
-                        <div className="flex items-center gap-4 mb-4">
+                        <div className="flex flex-col items-start gap-3 mb-4">
                           {emp.companyLogo ? (
                             <img
                               src={emp.companyLogo}
                               alt={emp.companyName}
-                              className="w-14 h-14 rounded-lg object-contain border border-border bg-white"
+                              className="w-16 h-16 self-start rounded-lg object-contain border border-border bg-white"
                             />
                           ) : (
-                            <div className="w-14 h-14 rounded-xl bg-primary flex items-center justify-center text-white font-bold text-xl shrink-0">
+                            <div className="w-16 h-16 rounded-xl bg-primary flex items-center justify-center text-white font-bold text-xl shrink-0">
                               {emp.companyName.charAt(0).toUpperCase()}
                             </div>
                           )}
                           <div className="min-w-0 flex-1">
                             <div className="flex items-center gap-2">
-                              <h3 className="font-semibold text-lg truncate" data-testid={`text-employer-name-${emp.companyName.replace(/\s+/g, '-').toLowerCase()}`}>
+                              <h3 className="font-semibold text-lg line-clamp-2" data-testid={`text-employer-name-${emp.companyName.replace(/\s+/g, '-').toLowerCase()}`}>
                                 {emp.companyName}
                               </h3>
                               {emp.claimed && (
