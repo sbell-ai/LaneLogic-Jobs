@@ -1,0 +1,87 @@
+Proceed with **Task #25 - Fix: Registry markdown corruption at source + loader** exactly as specified below.
+
+### Objective
+
+Eliminate Notion-markdown link corruption from employer registry data **at the fetch layer** and **at the loader/read layer**, so snapshots are clean going forward and stale snapshots are safe to read.
+
+### Scope constraints
+
+- No client changes
+- No schema/migrations
+- No new packages
+- No changes to admin auth (`requireAdminSecret` / session auth) or scheduling
+- No changes to other registries
+- Do not change `.ts` import extensions (server tsconfig allows them)
+
+### Tasks
+
+#### 1) `server/registry/notionSync.ts` — strip markdown at source (fetch layer)
+
+Add these constants:
+
+- `FULL_MD_RE = /^\[(.+?)\]\((.+?)\)$/`
+- `EMBED_MD_RE = /\[(.+?)\]\((.+?)\)/`
+
+Add helpers:
+
+- `stripMdText(s)` and `stripMdUrl(s)`
+    - `trim()` input first
+    - try `FULL_MD_RE` first
+    - fall back to `EMBED_MD_RE`
+    - return trimmed original if no match
+    - `stripMdText` returns group 1
+    - `stripMdUrl` returns group 2
+
+Apply in `fetchEmployers()`:
+
+- `domain`:
+    - `stripMdText(raw)`
+    - then normalize to bare hostname (strip `https?://` and any trailing `/path`)
+- `website`, `primarySource`, `secondarySource`:
+    - `stripMdUrl(...)` (return plain URL)
+
+Apply in `fetchEmployerEvidence()`:
+
+- `sourceUrl`:
+    - `stripMdUrl(...)`
+- `sourceType`:
+    - already comes from select `.name`; add `.trim()`
+    - defensively remove any `](` substring if present (should never happen, but we saw corruption)
+
+#### 2) `server/registry/employerRegistryLoader.ts` — harden normalization (read layer)
+
+- Apply the same two-stage regex strategy to `plainText` / `plainUrl`:
+    - `trim()` first
+    - try `FULL_MD_RE`
+    - fall back to `EMBED_MD_RE`
+- `normalizeDomain()`:
+    - call hardened `plainText` first
+    - strip `https?://`
+    - strip trailing `/path`
+- Add final guard pass after building `results`:
+    - if any of `domain`, `website`, `primarySource`, `secondarySource` still contains `](` or starts with `[`, normalize again and `console.warn`
+    - do not throw
+
+#### 3) Re-sync and verify (must pass)
+
+Restart server, then:
+
+```bash
+curl -sS -X POST "http://127.0.0.1:5000/admin/registry-sync/employers" \
+  -H "x-admin-sync-secret: $ADMIN_SYNC_SECRET" | cat
+```
+
+Then run the grep guard (must produce **no output**):
+
+```bash
+curl -sS "http://127.0.0.1:5000/admin/registry/employers" \
+  -H "x-admin-sync-secret: $ADMIN_SYNC_SECRET" | grep -E "\]\(https?://|\[https?://"
+```
+
+Expected: no output (grep exit code 1).
+
+Also confirm:
+
+- `domain` is bare hostname (no brackets, no protocol)
+- `website`, `primarySource`, `secondarySource` are plain `https://...` strings or empty
+- `acceptedSourceTypes` contains only plain labels (no URLs, no brackets)

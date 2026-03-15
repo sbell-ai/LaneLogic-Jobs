@@ -1,0 +1,55 @@
+Implement **#25 - Fix: Registry markdown corruption at source + loader** exactly as written, with these additional requirements:
+
+### A) Strip markdown links using a two-stage regex (full-string first, then embedded)
+
+In **both** `server/registry/notionSync.ts` (fetch layer) and `server/registry/employerRegistryLoader.ts` (read layer), implement:
+
+- `FULL_MD_RE = /^\[(.+?)\]\((.+?)\)$/`
+- `EMBED_MD_RE = /\[(.+?)\]\((.+?)\)/`
+
+Strip helper behavior:
+
+- `stripMdText(s)` returns capture group 1
+- `stripMdUrl(s)` returns capture group 2
+- Always `.trim()` input first
+- Try `FULL_MD_RE` first, then fall back to `EMBED_MD_RE`, else return trimmed original
+
+Apply in **notionSync.ts**:
+
+- `domain` → `stripMdText(domain)` then normalize to hostname (remove `http(s)://` and trailing path)
+- `website`, `primarySource`, `secondarySource` → `stripMdUrl(...)`
+- evidence `sourceUrl` → `stripMdUrl(...)`
+- evidence `sourceType` is already from select `.name`; still apply `.trim()` and defensively remove any `](` substring if present
+
+### B) Harden loader normalization + add final guard warnings (no throw)
+
+In **employerRegistryLoader.ts**:
+
+- Apply the same two-stage strategy to `plainText/ plainUrl`
+- `normalizeDomain()` must strip protocol and trailing path
+- Add a final pass over results: if any of `domain`, `website`, `primarySource`, `secondarySource` still contain `](` or start with `[`, normalize again and `console.warn` (do not throw)
+
+### C) Strengthen grep guard acceptance test (must catch https too)
+
+After restarting server and re-syncing, these must produce **no output**:
+
+```bash
+curl -sS "http://127.0.0.1:5000/admin/registry/employers" \
+  -H "x-admin-sync-secret: $ADMIN_SYNC_SECRET" | grep -E "\]\(https?://|\[https?://"
+```
+
+Expected: no output (grep exit code 1).
+
+Also verify the returned JSON has:
+
+- `domain: "republicservices.com"` (no brackets, no protocol)
+- `website`, `primarySource`, `secondarySource`: plain `https://...` strings
+- `acceptedSourceTypes`: only plain labels like `"Government registry"` (no URLs, no brackets)
+
+### Scope constraints
+
+- No client changes
+- No schema/migrations
+- No new packages
+- Do not change admin auth or scheduling
+- Do not change `.ts` import extensions (allowed per server tsconfig)
