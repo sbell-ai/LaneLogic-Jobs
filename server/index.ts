@@ -1,3 +1,4 @@
+import crypto from "node:crypto";
 import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { serveStatic } from "./static";
@@ -5,7 +6,6 @@ import { createServer } from "http";
 import path from "path";
 import fs from "fs";
 import { fileURLToPath } from "url";
-import { syncDesignSystemSecurity } from "./registry/syncDesignSystemSecurity.ts";
 import { requireAdminSecret } from "./middleware/requireAdminSecret.ts";
 import { adminRouter } from "./routes/admin.ts";
 import { sendAlertEmail } from "./alerts/sendAlertEmail.ts";
@@ -29,27 +29,12 @@ if (CANONICAL_HOST) {
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use("/admin", requireAdminSecret);
-app.post(
-  "/admin/registry-sync/design-system-security",
-  requireAdminSecret,
-  async (req, res) => {
-    try {
-      const environment = process.env.NODE_ENV === "production" ? "prod" : "staging";
-      const result = await syncDesignSystemSecurity({ environment });
-      res.json(result);
-    } catch (err: any) {
-      console.error(err);
-      res.status(500).json({ ok: false, error: err?.message ?? String(err) });
-    }
-  },
-);
-
+app.use("/admin", adminRouter);
 
 // Admin 404 handler (Express 5 requires named wildcards)
 app.all("/admin/*path", (req, res) => {
   res.status(404).json({ ok: false, error: "Admin route not found" });
 });
-import crypto from "node:crypto";
 
 declare module "http" {
   interface IncomingMessage {
@@ -109,8 +94,6 @@ app.post(
     }
   }
 );
-
-app.use("/admin", adminRouter);
 
 app.use(
   express.json({

@@ -1,10 +1,14 @@
 import { Client } from "@notionhq/client";
 
-const NOTION_DB_IDS = {
-  productsPricing: "3154caed-dabf-803d-a6a8-cc7b8f17b80a",
-  featuresEntitlements: "23d7f753-a0d1-48bc-be8f-7cb3e9706956",
-  productEntitlementOverrides: "90052bfc-79c9-418d-98b2-41b295be9dad",
-  complianceRules: "37c447b4-7e93-4939-961e-2f82c158e41f",
+  const NOTION_DB_IDS = {
+	productsPricing: "3154caed-dabf-803d-a6a8-cc7b8f17b80a",
+	featuresEntitlements: "23d7f753-a0d1-48bc-be8f-7cb3e9706956",
+	productEntitlementOverrides: "90052bfc-79c9-418d-98b2-41b295be9dad",
+	complianceRules: "37c447b4-7e93-4939-961e-2f82c158e41f",
+
+	// env-driven:
+	employers: process.env.NOTION_EMPLOYERS_DB_ID!,
+	employerEvidence: process.env.NOTION_EVIDENCE_DB_ID!,
 } as const;
 
 export type ProductRow = {
@@ -84,6 +88,35 @@ export type ComplianceRulesSnapshot = {
   rows: ComplianceRuleRow[];
 };
 
+export type EmployerRow = {
+  notionPageId: string;
+  employer: string;
+  status: string;
+  website: string;
+  domain: string;
+  hqLocation: string;
+  operatingRegions: string[]; // multi_select
+  remotePolicy: string;
+  industryTags: string[]; // multi_select
+  verificationRisk: string;
+  primarySource: string;
+  secondarySource: string;
+  lastVerified: string; // date start
+  notesInternal: string;
+};
+
+export type EmployersSnapshot = {
+  registry: "employers";
+  generatedAt: string;
+  rows: EmployerRow[];
+};
+
+export type EmployerEvidenceSnapshot = {
+  registry: "employer_evidence";
+  generatedAt: string;
+  rows: EmployerEvidenceRow[];
+};
+
 function extractPageIdFromUrl(url: string): string {
   const cleaned = url.replace("https://www.notion.so/", "").replace(/-/g, "");
   const match = cleaned.match(/([a-f0-9]{32})$/);
@@ -108,6 +141,14 @@ function resolveRelationPageIds(value: unknown): string[] {
     });
   }
   return [];
+}
+
+function getPropMultiSelect(props: Record<string, any>, key: string): string[] {
+  const prop = props[key];
+  if (!prop || prop.type !== "multi_select") return [];
+  return (prop.multi_select ?? [])
+    .map((o: any) => o?.name ?? "")
+    .filter(Boolean);
 }
 
 function getPropText(props: Record<string, any>, key: string): string {
@@ -161,11 +202,11 @@ function getPropDate(props: Record<string, any>, key: string): string {
 }
 
 function getNotionClient(): Client {
-  const apiKey = process.env.NOTION_API_KEY;
-  if (!apiKey) {
-    throw new Error("NOTION_API_KEY environment variable is not set");
+  const token = process.env.NOTION_TOKEN;
+  if (!token) {
+    throw new Error("NOTION_TOKEN environment variable is not set");
   }
-  return new Client({ auth: apiKey });
+  return new Client({ auth: token });
 }
 
 async function queryAllPages(databaseId: string): Promise<any[]> {
@@ -294,3 +335,80 @@ export async function fetchComplianceRules(): Promise<ComplianceRulesSnapshot> {
     rows,
   };
 }
+
+export async function fetchEmployers(): Promise<EmployersSnapshot> {
+  const dbId = NOTION_DB_IDS.employers;
+  if (!dbId) throw new Error("NOTION_EMPLOYERS_DB_ID is not set");
+
+  const pages = await queryAllPages(dbId);
+
+  const rows: EmployerRow[] = pages.map((page: any) => {
+    const props = page.properties ?? {};
+    return {
+      notionPageId: page.id,
+      employer: getPropText(props, "Employer"),
+      status: getPropSelect(props, "Status"),
+      website: getPropUrl(props, "Website"),
+      domain: getPropText(props, "Domain"),
+      hqLocation: getPropText(props, "HQ Location"),
+      operatingRegions: getPropMultiSelect(props, "Operating Regions"),
+      remotePolicy: getPropSelect(props, "Remote Policy"),
+      industryTags: getPropMultiSelect(props, "Industry Tags"),
+      verificationRisk: getPropSelect(props, "Verification Risk"),
+      primarySource: getPropUrl(props, "Primary Source"),
+      secondarySource: getPropUrl(props, "Secondary Source"),
+      lastVerified: getPropDate(props, "Last Verified"),
+      notesInternal: getPropText(props, "Notes (Internal)"),
+    };
+  });
+
+  return {
+    registry: "employers",
+    generatedAt: new Date().toISOString(),
+    rows,
+  };
+}
+
+export async function fetchEmployerEvidence(): Promise<EmployerEvidenceSnapshot> {
+  const dbId = NOTION_DB_IDS.employerEvidence;
+  if (!dbId) throw new Error("NOTION_EVIDENCE_DB_ID is not set");
+
+  const pages = await queryAllPages(dbId);
+
+  const rows: EmployerEvidenceRow[] = pages.map((page: any) => {
+    const props = page.properties ?? {};
+    return {
+      notionPageId: page.id,
+      evidence: getPropText(props, "Evidence"),
+      employerPageIds: getPropRelation(props, "Employer"),
+      sourceUrl: getPropUrl(props, "Source URL"),
+      sourceType: getPropSelect(props, "Source Type"),
+      retrieved: getPropDate(props, "Retrieved"),
+      claim: getPropText(props, "Claim"),
+      excerpt: getPropText(props, "Excerpt"),
+      confidence: getPropSelect(props, "Confidence"),
+      decision: getPropSelect(props, "Decision"),
+      reviewerNotes: getPropText(props, "Reviewer Notes"),
+    };
+  });
+
+  return {
+    registry: "employer_evidence",
+    generatedAt: new Date().toISOString(),
+    rows,
+  };
+}
+
+export type EmployerEvidenceRow = {
+  notionPageId: string;
+  evidence: string;
+  employerPageIds: string[]; // relation to Employers (should be 1 most of the time)
+  sourceUrl: string;
+  sourceType: string;
+  retrieved: string;
+  claim: string;
+  excerpt: string;
+  confidence: string;
+  decision: string;
+  reviewerNotes: string;
+};
