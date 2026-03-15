@@ -1,0 +1,166 @@
+## **Implement #24 Admin UX — Employer Registry Page**
+
+Proceed with **#24 - Admin UX — Employer Registry Page** now that #25 is passing (clean strings, grep guard clean). Build the admin UX exactly as follows.
+
+### Objective
+
+Add an admin-facing UI page at **`/dashboard/admin/employer-registry`** that lets a **logged-in admin (session auth)**:
+
+- view the active employer registry snapshot output, and
+- trigger an employer sync,
+
+without exposing `ADMIN_SYNC_SECRET` to the browser.
+
+### Scope constraints
+
+- No Notion writes
+- No schema/migrations
+- No new packages
+- No global TS cleanup
+- Do not modify `server/routes/admin.ts` or `requireAdminSecret`
+- Existing `/admin/*` endpoints remain unchanged
+- Keep the #25 “no markdown links in registry output” guarantee intact
+
+---
+
+## Step 1 — Create shared admin-session guard helper
+
+Create: **`server/middleware/requireAdminSession.ts`**
+
+Requirements:
+
+- Export `requireAdminSession(req, res): boolean`
+- Must require both:
+    - `req.isAuthenticated()` is truthy
+    - `req.user.role === "admin"`
+- If not authenticated: return **401**
+- If authenticated but not admin: return **403**
+- Response body should be JSON with `{ ok:false, error: "...", message: "..." }`
+- Must not log secrets
+
+---
+
+## Step 2 — Add session-protected proxy routes (server-side)
+
+In **`server/routes.ts`**, add two routes that call registry functions directly (no HTTP forwarding, no secrets):
+
+1) **GET** `"/api/admin/registry/employers"`
+
+- Guard with `requireAdminSession`
+- `environment = NODE_ENV === "production" ? "prod" : "staging"`
+- `res.json(await loadEmployerRegistry(environment))`
+
+2) **POST** `"/api/admin/registry-sync/employers"`
+
+- Guard with `requireAdminSession`
+- same environment logic
+- `res.json(await syncEmployers({ environment }))`
+
+Both routes must be wrapped in `try/catch` returning:
+
+- `res.status(500).json({ ok:false, error:"internal_error", message: err?.message ?? String(err) })`
+
+---
+
+## Step 3 — Ensure loader output supports UI columns
+
+In **`server/registry/employerRegistryLoader.ts`** confirm these fields are present and clean plain strings:
+
+- `domain` (bare hostname)
+- `website` (plain URL)
+- `primarySource` (plain URL)
+- `secondarySource` (plain URL)
+- `status`, `isVerified`, `verificationBasis.acceptedEvidenceCount`, `verificationBasis.acceptedSourceTypes`
+
+If any of those are missing, extend the loader output. Do not reintroduce any `[` / `](` strings.
+
+---
+
+## Step 4 — Build the Admin UI page component
+
+Create: **`client/src/pages/dashboard/EmployerRegistry.tsx`**
+
+Data:
+
+- `useQuery` GET `/api/admin/registry/employers`
+- `useMutation` POST `/api/admin/registry-sync/employers`
+- On sync success: invalidate query key `["/api/admin/registry/employers"]`
+
+UI requirements:
+
+- Heading: “Employer Registry”
+- Buttons:
+    - **Sync now** (shows spinner while pending, then refreshes table)
+    - **Refresh** (refetch GET)
+- Counts bar: Employers / Evidence / Verified Eligible
+- Table sorted with `isVerified:false` rows first
+- Columns (7):
+    
+    1) Employer
+    
+    2) Domain
+    
+    3) Status (badge)
+    
+    4) isVerified (badge)
+    
+    5) Accepted evidence count
+    
+    6) Accepted source types (chips/badges)
+    
+    7) Primary Source + Secondary Source (clickable external links, omit if empty)
+    
+- Error state:
+    - If API returns `ok:false`, show the message cleanly
+
+---
+
+## Step 5 — Wire into admin dashboard routing + sidebar
+
+1) **`client/src/pages/dashboard/AdminDashboard.tsx`**
+
+- import `EmployerRegistry`
+- add `case "employer-registry": return <EmployerRegistry />;`
+
+2) **`client/src/pages/dashboard/DashboardLayout.tsx`**
+
+- add to `adminLinks`:
+
+```tsx
+{ title: "Employer Registry", path: "/dashboard/admin/employer-registry", icon: ShieldCheck }
+```
+
+- import `ShieldCheck` from `lucide-react`
+
+---
+
+## Step 6 — Verification (paste outputs)
+
+1) Unauthenticated API call returns 401/403:
+
+```bash
+curl -i http://127.0.0.1:5000/api/admin/registry/employers
+```
+
+2) As logged-in admin:
+
+- Visit `http://127.0.0.1:5000/dashboard/admin/employer-registry`
+- Page renders counts + table
+- Clicking **Sync now** triggers POST and refreshes GET
+
+3) Guardrails:
+
+```bash
+grep -R "ADMIN_SYNC_SECRET" client
+grep -R "\](http://" server
+```
+
+Both must return no matches.
+
+4) Confirm registry output still has no markdown link syntax:
+
+```bash
+curl -sS http://127.0.0.1:5000/api/admin/registry/employers | grep -E "\]\(https?://|\[https?://"
+```
+
+Expected: no output.
