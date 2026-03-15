@@ -133,7 +133,16 @@ export async function syncEmployers(opts: { environment: Environment }) {
 
     const msg = `Missing required env vars: ${missing}`;
     console.warn(`[employer-sync] ${msg} — skipping employer sync`);
-    return { ok: false, error: "missing_config", message: msg };
+    return {
+      ok: false,
+      elapsed: Date.now() - startedAt,
+      employers: 0,
+      evidence: 0,
+      verifiedEmployers: 0,
+      unverifiedEmployers: 0,
+      error: "missing_config",
+      message: msg,
+    };
   }
 
   let empSnapshot: EmployersSnapshot;
@@ -168,7 +177,16 @@ export async function syncEmployers(opts: { environment: Environment }) {
       bodyText: `Notion fetch failed: ${err?.message ?? String(err)}`,
     });
 
-    return { ok: false, error: "fetch_failed", message: err?.message ?? String(err) };
+    return {
+      ok: false,
+      elapsed: Date.now() - startedAt,
+      employers: 0,
+      evidence: 0,
+      verifiedEmployers: 0,
+      unverifiedEmployers: 0,
+      error: "fetch_failed",
+      message: err?.message ?? String(err),
+    };
   }
 
   const allErrors: ValidationError[] = [];
@@ -257,14 +275,21 @@ export async function syncEmployers(opts: { environment: Environment }) {
       bodyText: `Validation failed with ${allErrors.length} error(s):\n\n${errorSummary}`,
     });
 
+    const verifiedCount = empSnapshot.rows.filter((r) => r.status === "Verified").length;
+
     return {
       ok: false,
+      elapsed: Date.now() - startedAt,
+      employers: empSnapshot.rows.length,
+      evidence: evdSnapshot.rows.length,
+      verifiedEmployers: verifiedCount,
+      unverifiedEmployers: empSnapshot.rows.length - verifiedCount,
       error: "validation_failed",
       errorCount: allErrors.length,
       errors: allErrors.map((e) => ({
         ruleId: e.ruleId,
-        reason: e.reason,
         severity: e.severity,
+        reason: e.reason,
       })),
     };
   }
