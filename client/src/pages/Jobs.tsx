@@ -68,7 +68,7 @@ export default function Jobs() {
               {isLoading ? (
                 <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
                   {Array.from({ length: 10 }).map((_, i) => (
-                    <div key={i} className="bg-white dark:bg-slate-900 rounded-2xl p-5 border border-border shadow-sm animate-pulse h-full flex flex-col gap-3">
+                    <div key={i} className="bg-white dark:bg-slate-900 rounded-2xl p-5 border border-border shadow-sm animate-pulse flex flex-col gap-3 min-h-[14rem]">
                       <div className="w-12 h-12 rounded-xl bg-muted" />
                       <div className="h-5 bg-muted rounded w-3/4" />
                       <div className="h-4 bg-muted rounded w-1/2" />
@@ -136,13 +136,12 @@ export default function Jobs() {
                               <Clock size={12} />
                               {job.createdAt ? formatDistanceToNow(new Date(job.createdAt), { addSuffix: true }) : "Recently"}
                             </span>
+                            {job.expiresAt && (
+                              <Badge className="bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800 text-[10px] font-semibold hover:bg-amber-100" data-testid={`badge-actively-interviewing-${job.id}`}>
+                                Actively Interviewing
+                              </Badge>
+                            )}
                           </div>
-
-                          {job.expiresAt && (
-                            <Badge className="bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800 text-[10px] font-semibold hover:bg-amber-100 mt-2 w-fit" data-testid={`badge-actively-interviewing-${job.id}`}>
-                              Actively Interviewing
-                            </Badge>
-                          )}
 
                           <div className="flex items-center gap-2 mt-auto pt-3">
                             {job.isExternalApply && (
