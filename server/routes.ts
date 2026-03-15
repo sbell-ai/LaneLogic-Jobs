@@ -515,6 +515,44 @@ export async function registerRoutes(
     }
   });
 
+  app.get("/api/employers/:id", async (req, res) => {
+    try {
+      const id = Number(req.params.id);
+      if (isNaN(id)) return res.status(400).json({ message: "Invalid employer id" });
+      const employer = await storage.getUser(id);
+      if (!employer || employer.role !== "employer") return res.status(404).json({ message: "Employer not found" });
+      const allJobs = await storage.getJobs();
+      const jobs = allJobs.filter(j => j.employerId === id && j.isPublished);
+      const industries = [...new Set(jobs.map(j => j.industry).filter(Boolean))];
+      const locations = [...new Set(jobs.map(j => [j.locationCity, j.locationState].filter(Boolean).join(", ")).filter(Boolean))];
+      res.json({
+        id: employer.id,
+        companyName: employer.companyName,
+        companyLogo: employer.companyLogo,
+        companyAddress: employer.showProfile ? employer.companyAddress : null,
+        contactName: employer.showProfile ? employer.contactName : null,
+        contactEmail: employer.showProfile ? employer.contactEmail : null,
+        contactPhone: employer.showProfile ? employer.contactPhone : null,
+        aboutCompany: employer.aboutCompany,
+        claimed: !!employer.companyName,
+        industries,
+        locations,
+        jobs: jobs.map(j => ({
+          id: j.id,
+          title: j.title,
+          jobType: j.jobType,
+          locationCity: j.locationCity,
+          locationState: j.locationState,
+          salary: j.salary,
+          category: j.category,
+          expiresAt: j.expiresAt,
+        })),
+      });
+    } catch (err) {
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
   // Jobs
   app.get(api.jobs.list.path, async (req, res) => {
     const isAdmin = req.isAuthenticated() && (req.user as any).role === "admin";

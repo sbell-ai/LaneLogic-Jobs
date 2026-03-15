@@ -670,10 +670,17 @@ function CompanyProfileTab() {
           />
         </div>
         <div className="flex justify-end gap-3 pt-2">
+          {user?.id && (
+            <Button variant="outline" asChild data-testid="link-view-public-profile">
+              <Link href={`/employers/${user.id}`}>
+                <Eye size={16} className="mr-2" /> View Public Page
+              </Link>
+            </Button>
+          )}
           <Dialog>
             <DialogTrigger asChild>
               <Button variant="outline" data-testid="button-view-employer-profile">
-                <Eye size={16} className="mr-2" /> View Profile
+                <Eye size={16} className="mr-2" /> Preview
               </Button>
             </DialogTrigger>
             <DialogContent className="sm:max-w-md">

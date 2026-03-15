@@ -95,7 +95,7 @@ export default function Employers() {
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: Math.min(index * 0.03, 0.5) }}
                   >
-                    <Link href={`/jobs?q=${encodeURIComponent(emp.companyName)}`}>
+                    <Link href={emp.id ? `/employers/${emp.id}` : `/jobs?q=${encodeURIComponent(emp.companyName)}`}>
                       <div
                         className="bg-white dark:bg-slate-900 rounded-xl border border-border p-6 hover:shadow-lg hover:border-primary/30 transition-all cursor-pointer h-full flex flex-col"
                         data-testid={`card-employer-${emp.companyName.replace(/\s+/g, '-').toLowerCase()}`}

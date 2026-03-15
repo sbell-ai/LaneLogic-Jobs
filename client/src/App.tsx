@@ -18,6 +18,7 @@ import BlogPost from "@/pages/BlogPost";
 import Resources from "@/pages/Resources";
 import Pricing from "@/pages/Pricing";
 import Employers from "@/pages/Employers";
+import EmployerProfile from "@/pages/EmployerProfile";
 import Contact from "@/pages/Contact";
 import JobsByTypeAndState from "@/pages/JobsByTypeAndState";
 import ResourceDetail from "@/pages/ResourceDetail";
@@ -185,6 +186,7 @@ function Router() {
       <Route path="/jobs" component={Jobs} />
       <Route path="/jobs/:id" component={JobDetailOrSeoPage} />
       <Route path="/employers" component={Employers} />
+      <Route path="/employers/:id" component={EmployerProfile} />
       <Route path="/blog" component={Blog} />
       <Route path="/blog/:id" component={BlogPost} />
       <Route path="/resources/:id" component={ResourceDetail} />
