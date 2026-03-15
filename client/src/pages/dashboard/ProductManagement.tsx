@@ -904,70 +904,76 @@ function SeedSection() {
     const completedDate = seedStatus.completedAt ? new Date(seedStatus.completedAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" }) : "";
 
     return (
-      <div className="border rounded-lg p-4 bg-green-50 dark:bg-green-950/20 border-green-200 dark:border-green-800" data-testid="seed-complete-banner">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <Check className="text-green-600" size={20} />
-            <div>
-              <span className="font-semibold text-green-800 dark:text-green-200">Snapshot seed complete</span>
-              <span className="text-sm text-green-700 dark:text-green-300 ml-2">
-                {result && `${result.products} products, ${result.entitlements} entitlements, ${result.overrides} overrides`}
-                {completedDate && ` · ${completedDate}`}
-              </span>
+      <div className="space-y-4">
+        <div className="border rounded-lg p-4 bg-green-50 dark:bg-green-950/20 border-green-200 dark:border-green-800" data-testid="seed-complete-banner">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <Check className="text-green-600" size={20} />
+              <div>
+                <span className="font-semibold text-green-800 dark:text-green-200">Snapshot seed complete</span>
+                <span className="text-sm text-green-700 dark:text-green-300 ml-2">
+                  {result && `${result.products} products, ${result.entitlements} entitlements, ${result.overrides} overrides`}
+                  {completedDate && ` · ${completedDate}`}
+                </span>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button
+                onClick={() => {
+                  if (confirm("This will delete ALL products, entitlements, and overrides. Are you sure?")) {
+                    resetMutation.mutate();
+                  }
+                }}
+                disabled={resetMutation.isPending}
+                variant="ghost"
+                size="sm"
+                className="text-red-500 hover:text-red-700 hover:bg-red-50"
+                data-testid="button-seed-reset"
+              >
+                {resetMutation.isPending ? <Loader2 className="animate-spin" size={14} /> : <Trash2 size={14} />}
+              </Button>
+              <Button variant="ghost" size="sm" onClick={() => setHidden(true)} data-testid="button-hide-seed">
+                <X size={14} />
+              </Button>
             </div>
           </div>
-          <div className="flex items-center gap-2">
-            <Button
-              onClick={() => {
-                if (confirm("This will delete ALL products, entitlements, and overrides. Are you sure?")) {
-                  resetMutation.mutate();
-                }
-              }}
-              disabled={resetMutation.isPending}
-              variant="ghost"
-              size="sm"
-              className="text-red-500 hover:text-red-700 hover:bg-red-50"
-              data-testid="button-seed-reset"
-            >
-              {resetMutation.isPending ? <Loader2 className="animate-spin" size={14} /> : <Trash2 size={14} />}
-            </Button>
-            <Button variant="ghost" size="sm" onClick={() => setHidden(true)} data-testid="button-hide-seed">
-              <X size={14} />
-            </Button>
-          </div>
         </div>
+        <StripeSyncSection />
       </div>
     );
   }
 
   return (
-    <div className="border rounded-lg p-6 bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800">
-      <div className="flex items-start justify-between">
-        <div className="flex items-start gap-3 flex-1">
-          <AlertCircle className="text-amber-600 mt-0.5" size={20} />
-          <div className="flex-1">
-            <h3 className="font-semibold text-amber-800 dark:text-amber-200">Seed from Registry Snapshot</h3>
-            <p className="text-sm text-amber-700 dark:text-amber-300 mt-1">
-              Import products, entitlements, and overrides from the active Notion registry snapshot. This is a one-time migration.
-            </p>
-            <div className="flex gap-3 mt-4">
-              <Button
-                onClick={() => seedMutation.mutate()}
-                disabled={seedMutation.isPending}
-                variant="outline"
-                className="border-amber-300"
-                data-testid="button-seed-snapshot"
-              >
-                {seedMutation.isPending ? <Loader2 className="animate-spin mr-2" size={16} /> : <Download size={16} className="mr-2" />}
-                Seed from Snapshot
-              </Button>
+    <div className="space-y-4">
+      <div className="border rounded-lg p-6 bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800">
+        <div className="flex items-start justify-between">
+          <div className="flex items-start gap-3 flex-1">
+            <AlertCircle className="text-amber-600 mt-0.5" size={20} />
+            <div className="flex-1">
+              <h3 className="font-semibold text-amber-800 dark:text-amber-200">Seed from Registry Snapshot</h3>
+              <p className="text-sm text-amber-700 dark:text-amber-300 mt-1">
+                Import products, entitlements, and overrides from the active Notion registry snapshot. This is a one-time migration.
+              </p>
+              <div className="flex gap-3 mt-4">
+                <Button
+                  onClick={() => seedMutation.mutate()}
+                  disabled={seedMutation.isPending}
+                  variant="outline"
+                  className="border-amber-300"
+                  data-testid="button-seed-snapshot"
+                >
+                  {seedMutation.isPending ? <Loader2 className="animate-spin mr-2" size={16} /> : <Download size={16} className="mr-2" />}
+                  Seed from Snapshot
+                </Button>
+              </div>
             </div>
           </div>
+          <Button variant="ghost" size="sm" onClick={() => setHidden(true)} className="text-amber-600" data-testid="button-hide-seed">
+            <X size={14} />
+          </Button>
         </div>
-        <Button variant="ghost" size="sm" onClick={() => setHidden(true)} className="text-amber-600" data-testid="button-hide-seed">
-          <X size={14} />
-        </Button>
       </div>
+      <StripeSyncSection />
     </div>
   );
 }
@@ -982,7 +988,6 @@ export default function ProductManagement() {
         <p className="text-muted-foreground mt-1">Manage products, entitlements, and overrides. Changes auto-sync with Stripe.</p>
       </div>
 
-      <StripeSyncSection />
       <SeedSection />
 
       <Tabs defaultValue="products">

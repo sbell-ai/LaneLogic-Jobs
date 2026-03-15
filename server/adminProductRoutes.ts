@@ -517,18 +517,18 @@ export function registerAdminProductRoutes(app: Express) {
         const existing = existingByStripeId.get(sp.id);
 
         if (existing) {
-          await storage.updateAdminProduct(existing.id, {
-            stripePriceIdMonthly: monthlyPriceId ?? existing.stripePriceIdMonthly,
-            stripePriceIdYearly: yearlyPriceId ?? existing.stripePriceIdYearly,
-            stripePriceIdOneTime: oneTimePriceId ?? existing.stripePriceIdOneTime,
-            priceMonthly: monthlyAmount ?? existing.priceMonthly,
-            priceYearly: yearlyAmount ?? existing.priceYearly,
-            priceOneTime: oneTimeAmount ?? existing.priceOneTime,
-          });
+          const stripeUpdates: any = {};
+          if (monthlyPriceId) stripeUpdates.stripePriceIdMonthly = monthlyPriceId;
+          if (yearlyPriceId) stripeUpdates.stripePriceIdYearly = yearlyPriceId;
+          if (oneTimePriceId) stripeUpdates.stripePriceIdOneTime = oneTimePriceId;
+          if (Object.keys(stripeUpdates).length > 0) {
+            await storage.updateAdminProduct(existing.id, stripeUpdates);
+          }
           updated++;
         } else {
           const isOneTime = !monthlyPriceId && !yearlyPriceId && !!oneTimePriceId;
-          const audience = (sp.metadata?.audience as string) || "Job Seeker";
+          const rawAudience = (sp.metadata?.audience as string) || "";
+          const audience = rawAudience.toLowerCase().includes("employer") ? "employer" : "job_seeker";
           const kind = isOneTime ? "add_on" : "base_plan";
           const billingType = isOneTime ? "one_time" : "subscription";
           const planType = isOneTime ? "Top-up" : "Subscription";
