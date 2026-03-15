@@ -1,6 +1,18 @@
 import { getActiveRegistrySnapshot } from "./snapshotStore.ts";
 import type { EmployersSnapshot, EmployerEvidenceSnapshot, EmployerEvidenceRow } from "./notionSync.ts";
 
+function plainText(s: string): string {
+  if (!s) return s;
+  const m = s.match(/^\[(.+?)\]\(.+?\)$/);
+  return m ? m[1] : s;
+}
+
+function plainUrl(s: string): string {
+  if (!s) return s;
+  const m = s.match(/^\[.+?\]\((.+?)\)$/);
+  return m ? m[1] : s;
+}
+
 export type VerificationBasis = {
   acceptedEvidenceCount: number;
   acceptedSourceTypes: string[];
@@ -75,8 +87,8 @@ export async function loadEmployerRegistry(environment: string): Promise<LoadRes
     return {
       notionPageId: employer.notionPageId,
       employer: employer.employer,
-      domain: employer.domain,
-      website: employer.website,
+      domain: plainText(employer.domain),
+      website: plainUrl(employer.website),
       status: employer.status,
       isVerified,
       verificationBasis: {
