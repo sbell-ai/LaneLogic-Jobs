@@ -4,7 +4,7 @@ import { Navbar } from "@/components/layout/Navbar";
 import { Footer } from "@/components/layout/Footer";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Search, Building2, Briefcase, MapPin, CheckCircle2 } from "lucide-react";
+import { Search, Building2, MapPin, CheckCircle2 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { motion } from "framer-motion";
 
@@ -121,9 +121,8 @@ export default function Employers() {
                                 <CheckCircle2 className="h-4 w-4 text-primary shrink-0" title="Verified employer" />
                               )}
                             </div>
-                            <span className="inline-flex items-center gap-1 text-xs font-semibold bg-primary/10 text-primary px-2 py-0.5 rounded-full">
-                              <Briefcase className="h-3 w-3" />
-                              {emp.jobCount} {emp.jobCount === 1 ? "job" : "jobs"}
+                            <span className="inline-flex items-center text-xs font-semibold bg-primary/10 text-primary px-2 py-0.5 rounded-full" data-testid={`text-job-count-${emp.companyName.replace(/\s+/g, '-').toLowerCase()}`}>
+                              {emp.jobCount} jobs
                             </span>
                           </div>
                         </div>
