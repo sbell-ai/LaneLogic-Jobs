@@ -146,20 +146,59 @@ async function upsertEntitlement(
     return existingByNotion.id;
   }
 
-  const [created] = await tx
-    .insert(adminEntitlements)
-    .values({
-      notionPageId: ent.notionPageId,
-      name: ent.entitlementName,
-      key: ent.entitlementKey,
-      type: ent.type,
-      unit: ent.unit || null,
-      defaultValue: ent.defaultValue || null,
-      status: ent.status || "Active",
-    })
-    .returning();
-  result.entitlements.created++;
-  return created.id;
+  const [existingByKey] = await tx
+    .select()
+    .from(adminEntitlements)
+    .where(
+      and(
+        eq(adminEntitlements.key, ent.entitlementKey),
+        isNull(adminEntitlements.notionPageId),
+      ),
+    )
+    .limit(1);
+
+  if (existingByKey) {
+    await tx
+      .update(adminEntitlements)
+      .set({ ...updateFields, notionPageId: ent.notionPageId })
+      .where(eq(adminEntitlements.id, existingByKey.id));
+    result.entitlements.updated++;
+    return existingByKey.id;
+  }
+
+  try {
+    const [created] = await tx
+      .insert(adminEntitlements)
+      .values({
+        notionPageId: ent.notionPageId,
+        name: ent.entitlementName,
+        key: ent.entitlementKey,
+        type: ent.type,
+        unit: ent.unit || null,
+        defaultValue: ent.defaultValue || null,
+        status: ent.status || "Active",
+      })
+      .returning();
+    result.entitlements.created++;
+    return created.id;
+  } catch (err: any) {
+    if (err.message?.includes("duplicate key") && err.message?.includes("admin_entitlements_key")) {
+      const [conflicting] = await tx
+        .select()
+        .from(adminEntitlements)
+        .where(eq(adminEntitlements.key, ent.entitlementKey))
+        .limit(1);
+      if (conflicting) {
+        await tx
+          .update(adminEntitlements)
+          .set({ ...updateFields, notionPageId: ent.notionPageId })
+          .where(eq(adminEntitlements.id, conflicting.id));
+        result.entitlements.updated++;
+        return conflicting.id;
+      }
+    }
+    throw err;
+  }
 }
 
 async function upsertProduct(
@@ -213,12 +252,38 @@ async function upsertProduct(
     result.products.updated++;
     dbId = existingByNotion.id;
   } else {
-    const [created] = await tx
-      .insert(adminProducts)
-      .values({ ...values, notionPageId: prod.notionPageId })
-      .returning();
-    result.products.created++;
-    dbId = created.id;
+    const [legacyByStripe] = prod.stripeProductId
+      ? await tx
+          .select()
+          .from(adminProducts)
+          .where(
+            and(
+              eq(adminProducts.stripeProductId, prod.stripeProductId),
+              isNull(adminProducts.notionPageId),
+            ),
+          )
+          .limit(1)
+      : [undefined];
+
+    if (legacyByStripe) {
+      await tx
+        .update(adminProducts)
+        .set({
+          ...values,
+          notionPageId: prod.notionPageId,
+          updatedAt: new Date(),
+        })
+        .where(eq(adminProducts.id, legacyByStripe.id));
+      result.products.updated++;
+      dbId = legacyByStripe.id;
+    } else {
+      const [created] = await tx
+        .insert(adminProducts)
+        .values({ ...values, notionPageId: prod.notionPageId })
+        .returning();
+      result.products.created++;
+      dbId = created.id;
+    }
   }
 
   const entitlementIds = prod.entitlementPageIds
@@ -270,6 +335,31 @@ async function upsertOverride(
     return;
   }
 
+  const [legacyByPair] = await tx
+    .select()
+    .from(adminProductOverrides)
+    .where(
+      and(
+        eq(adminProductOverrides.productId, productDbId),
+        eq(adminProductOverrides.entitlementId, entitlementDbId),
+        isNull(adminProductOverrides.notionPageId),
+      ),
+    )
+    .limit(1);
+
+  if (legacyByPair) {
+    await tx
+      .update(adminProductOverrides)
+      .set({
+        ...values,
+        notionPageId: ovr.notionPageId,
+        updatedAt: new Date(),
+      })
+      .where(eq(adminProductOverrides.id, legacyByPair.id));
+    result.overrides.updated++;
+    return;
+  }
+
   try {
     await tx
       .insert(adminProductOverrides)
@@ -307,7 +397,7 @@ export async function cleanupDuplicateAdminProducts(): Promise<number> {
   const toDelete: number[] = [];
 
   for (const p of allProducts) {
-    const key = `${p.name}::${p.audience}`;
+    const key = p.name;
     if (seen.has(key)) {
       const keepId = Math.min(p.id, seen.get(key)!);
       const removeId = Math.max(p.id, seen.get(key)!);
