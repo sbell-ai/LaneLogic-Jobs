@@ -44,7 +44,8 @@ employerVerificationRouter.get("/api/employer/verification/request", async (req,
   }
 });
 
-employerVerificationRouter.get("/api/employer/verification/requirements", async (_req, res) => {
+employerVerificationRouter.get("/api/employer/verification/requirements", async (req, res) => {
+  if (!requireEmployerSession(req, res)) return;
   res.json({ requirements: [] });
 });
 
@@ -150,6 +151,8 @@ employerVerificationRouter.post("/api/admin/employer-verification/request/decisi
       await storage.updateEmployerVerificationStatus(updated.employerId, "verified");
     } else if (parsed.decision === "rejected") {
       await storage.updateEmployerVerificationStatus(updated.employerId, "rejected");
+    } else if (parsed.decision === "needs_more") {
+      await storage.updateEmployerVerificationStatus(updated.employerId, "needs_more");
     }
     res.json({ request: updated });
   } catch (err) {

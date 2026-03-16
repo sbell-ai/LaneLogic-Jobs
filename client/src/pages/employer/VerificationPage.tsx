@@ -11,6 +11,7 @@ import { Card } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { ShieldCheck, Plus, Send, FileText, Link as LinkIcon, AlertCircle, CheckCircle2, Clock, XCircle } from "lucide-react";
+import { Redirect } from "wouter";
 import type { EmployerVerificationRequest, EmployerEvidenceItem } from "@shared/schema";
 
 const SOURCE_TYPES = [
@@ -49,9 +50,11 @@ export default function VerificationPage() {
   const [excerpt, setExcerpt] = useState("");
   const [claim, setClaim] = useState("");
 
+  const isEmployer = !!user && user.role === "employer";
+
   const { data, isLoading } = useQuery<{ request: EmployerVerificationRequest | null; evidence: EmployerEvidenceItem[] }>({
     queryKey: ["/api/employer/verification/request"],
-    enabled: !!user,
+    enabled: isEmployer,
   });
 
   const getOrCreateMutation = useMutation({
@@ -86,7 +89,9 @@ export default function VerificationPage() {
     onError: (err: any) => toast({ title: "Error", description: err.message || "Could not submit.", variant: "destructive" }),
   });
 
-  if (!user) return null;
+  if (!user || user.role !== "employer") {
+    return <Redirect to="/" />;
+  }
 
   const request = data?.request;
   const evidence = data?.evidence || [];
