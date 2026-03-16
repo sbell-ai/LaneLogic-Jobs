@@ -758,13 +758,16 @@ export async function registerRoutes(
 
         try {
           const job = await storage.getJob(input.jobId);
-          if (job && job.tags && job.tags.length > 0) {
-            const { computeRequirementsForSeeker } = await import("./routes/seekerVerification");
-            const jobTags = job.tags.filter((t): t is string => !!t);
-            const computed = await computeRequirementsForSeeker(user.seekerTrack, jobTags);
-            if (computed.length > 0) {
-              const activeReq = await storage.getActiveSeekerVerificationRequest(user.id);
-              if (activeReq) {
+          if (job) {
+            const jobTags = (job.tags || []).filter((t): t is string => !!t);
+            let employerCategory: string | null = null;
+            const employer = await storage.getUser(job.employerId);
+            if (employer) employerCategory = employer.employerCategory || null;
+            if (jobTags.length > 0 || employerCategory) {
+              const { computeRequirementsForSeeker } = await import("./routes/seekerVerification");
+              const computed = await computeRequirementsForSeeker(user.seekerTrack, jobTags, employerCategory);
+              if (computed.length > 0) {
+                const activeReq = await storage.getOrCreateSeekerVerificationRequest(user.id);
                 await storage.appendRequirementsSnapshot(activeReq.id, computed.map(r => r.key));
               }
             }
