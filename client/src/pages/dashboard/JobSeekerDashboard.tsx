@@ -130,13 +130,13 @@ function ResumeTab({ userId }: { userId: number }) {
       <div className="flex justify-between items-center mb-6">
         <div>
           <h2 className="text-2xl font-bold font-display">My Resumes</h2>
-          {resumeEnt && (
-            <p className="text-sm text-muted-foreground mt-1" data-testid="text-resume-usage">
-              {resumeEnt.isUnlimited
+          <p className="text-sm text-muted-foreground mt-1" data-testid="text-resume-usage">
+            {!resumeEnt
+              ? "Not included in your plan"
+              : resumeEnt.isUnlimited
                 ? `${resumeCount} resume${resumeCount !== 1 ? "s" : ""} (unlimited)`
                 : `${resumeCount} of ${resumeLimit} resume${resumeLimit !== 1 ? "s" : ""} used`}
-            </p>
-          )}
+          </p>
         </div>
         <div className="flex items-center gap-2">
           {atLimit && (
@@ -213,8 +213,16 @@ function ResumeTab({ userId }: { userId: number }) {
           <div className="text-center py-16 bg-white dark:bg-slate-900 rounded-2xl border border-dashed border-border">
             <FileText className="mx-auto mb-4 text-muted-foreground" size={40} />
             <h3 className="font-bold font-display text-lg mb-2">No resumes yet</h3>
-            <p className="text-muted-foreground mb-4">Add your resume so employers can find you.</p>
-            <Button onClick={() => setShowForm(true)}>Create Resume</Button>
+            <p className="text-muted-foreground mb-4">
+              {atLimit || !resumeEnt ? "Upgrade your plan to add resumes." : "Add your resume so employers can find you."}
+            </p>
+            {atLimit || !resumeEnt ? (
+              <Button asChild variant="outline">
+                <Link href="/pricing?tab=job-seeker">Upgrade Plan</Link>
+              </Button>
+            ) : (
+              <Button onClick={() => setShowForm(true)} data-testid="button-create-resume-empty">Create Resume</Button>
+            )}
           </div>
         )
       )}
