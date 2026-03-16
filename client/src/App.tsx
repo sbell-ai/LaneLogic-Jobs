@@ -33,6 +33,7 @@ import EmployerDashboard from "@/pages/dashboard/EmployerDashboard";
 import AdminDashboard from "@/pages/dashboard/AdminDashboard";
 import DesignSettings from "@/pages/dashboard/DesignSettings";
 import VerificationPage from "@/pages/employer/VerificationPage";
+import SeekerVerificationPage from "@/pages/seeker/SeekerVerificationPage";
 
 function ThemeInjector() {
   useSettings();
@@ -199,6 +200,7 @@ function Router() {
       <Route path="/pages/:slug" component={DynamicPage} />
 
       <Route path="/employer/settings/verification" component={VerificationPage} />
+      <Route path="/seeker/settings/verification" component={SeekerVerificationPage} />
 
       <Route path="/dashboard" component={DashboardRouter} />
       <Route path="/dashboard/:section" component={DashboardSectionRouter} />

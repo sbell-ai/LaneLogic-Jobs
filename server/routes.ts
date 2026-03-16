@@ -393,6 +393,9 @@ export async function registerRoutes(
   const { employerVerificationRouter } = await import("./routes/employerVerification");
   app.use(employerVerificationRouter);
 
+  const { seekerVerificationRouter } = await import("./routes/seekerVerification");
+  app.use(seekerVerificationRouter);
+
   const { registerAdminImportRoutes } = await import("./adminImportRoutes");
   registerAdminImportRoutes(app);
 

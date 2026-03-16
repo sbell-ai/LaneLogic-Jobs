@@ -159,6 +159,7 @@ async function startServer() {
   }
 
   await seedDatabaseIfEmpty();
+  await seedSeekerCredentials();
   await runParagraphizeMigration();
   await runResourceContentBackfill();
   httpServer.listen(
@@ -171,6 +172,15 @@ async function startServer() {
   initStripeBackground();
   initRegistrySync();
   initImportScheduler();
+}
+
+async function seedSeekerCredentials() {
+  try {
+    const { seedSeekerCredentialData } = await import("./routes/seekerVerification");
+    await seedSeekerCredentialData();
+  } catch (err) {
+    console.error("Error seeding seeker credentials:", err);
+  }
 }
 
 async function seedDatabaseIfEmpty() {

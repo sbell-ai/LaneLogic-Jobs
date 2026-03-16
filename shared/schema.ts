@@ -29,6 +29,8 @@ export const users = pgTable("users", {
   notionEmployerUrl: text("notion_employer_url"),
   employerCategory: text("employer_category"),
   verificationStatus: text("verification_status").notNull().default("unverified"),
+  seekerTrack: text("seeker_track").default("Unknown"),
+  seekerVerificationStatus: text("seeker_verification_status").notNull().default("unverified"),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
@@ -65,6 +67,7 @@ export const jobs = pgTable("jobs", {
   externalValidThrough: timestamp("external_valid_through"),
   employmentType: text("employment_type"),
   isRemote: boolean("is_remote"),
+  tags: text("tags").array(),
   status: text("status").notNull().default("active"),
   importedAt: timestamp("imported_at"),
   lastImportedAt: timestamp("last_imported_at"),
@@ -440,10 +443,71 @@ export const employerEvidenceItems = pgTable("employer_evidence_items", {
 export const insertEmployerVerificationRequestSchema = createInsertSchema(employerVerificationRequests).omit({ id: true, createdAt: true, updatedAt: true });
 export const insertEmployerEvidenceItemSchema = createInsertSchema(employerEvidenceItems).omit({ id: true, createdAt: true });
 
+export const seekerCredentialRequirements = pgTable("seeker_credential_requirements", {
+  id: serial("id").primaryKey(),
+  key: text("key").notNull().unique(),
+  label: text("label").notNull(),
+  description: text("description"),
+  category: text("category").notNull().default("license"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const seekerRequirementRules = pgTable("seeker_requirement_rules", {
+  id: serial("id").primaryKey(),
+  requirementKey: text("requirement_key").notNull(),
+  conditionType: text("condition_type").notNull(),
+  conditionValue: text("condition_value").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const seekerVerificationRequests = pgTable("seeker_verification_requests", {
+  id: serial("id").primaryKey(),
+  seekerId: integer("seeker_id").notNull(),
+  status: text("status").notNull().default("draft"),
+  adminNotes: text("admin_notes"),
+  decidedBy: integer("decided_by"),
+  decidedAt: timestamp("decided_at"),
+  submittedAt: timestamp("submitted_at"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => [
+  uniqueIndex("svr_seeker_active_idx")
+    .on(table.seekerId)
+    .where(sql`${table.status} IN ('draft', 'submitted', 'needs_more')`),
+  index("svr_status_idx").on(table.status),
+]);
+
+export const seekerCredentialEvidenceItems = pgTable("seeker_credential_evidence_items", {
+  id: serial("id").primaryKey(),
+  requestId: integer("request_id").notNull(),
+  requirementKey: text("requirement_key").notNull(),
+  sourceType: text("source_type").notNull(),
+  sourceUrl: text("source_url"),
+  excerpt: text("excerpt"),
+  claim: text("claim"),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => [
+  index("scei_request_idx").on(table.requestId),
+]);
+
+export const insertSeekerCredentialRequirementSchema = createInsertSchema(seekerCredentialRequirements).omit({ id: true, createdAt: true });
+export const insertSeekerRequirementRuleSchema = createInsertSchema(seekerRequirementRules).omit({ id: true, createdAt: true });
+export const insertSeekerVerificationRequestSchema = createInsertSchema(seekerVerificationRequests).omit({ id: true, createdAt: true, updatedAt: true });
+export const insertSeekerCredentialEvidenceItemSchema = createInsertSchema(seekerCredentialEvidenceItems).omit({ id: true, createdAt: true });
+
 export type EmployerVerificationRequest = typeof employerVerificationRequests.$inferSelect;
 export type InsertEmployerVerificationRequest = z.infer<typeof insertEmployerVerificationRequestSchema>;
 export type EmployerEvidenceItem = typeof employerEvidenceItems.$inferSelect;
 export type InsertEmployerEvidenceItem = z.infer<typeof insertEmployerEvidenceItemSchema>;
+
+export type SeekerCredentialRequirement = typeof seekerCredentialRequirements.$inferSelect;
+export type InsertSeekerCredentialRequirement = z.infer<typeof insertSeekerCredentialRequirementSchema>;
+export type SeekerRequirementRule = typeof seekerRequirementRules.$inferSelect;
+export type InsertSeekerRequirementRule = z.infer<typeof insertSeekerRequirementRuleSchema>;
+export type SeekerVerificationRequest = typeof seekerVerificationRequests.$inferSelect;
+export type InsertSeekerVerificationRequest = z.infer<typeof insertSeekerVerificationRequestSchema>;
+export type SeekerCredentialEvidenceItem = typeof seekerCredentialEvidenceItems.$inferSelect;
+export type InsertSeekerCredentialEvidenceItem = z.infer<typeof insertSeekerCredentialEvidenceItemSchema>;
 
 export const insertEntitlementUsageWindowSchema = createInsertSchema(entitlementUsageWindows).omit({ id: true });
 export const insertEntitlementCreditGrantSchema = createInsertSchema(entitlementCreditGrants).omit({ id: true });

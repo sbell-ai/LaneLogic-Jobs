@@ -33,6 +33,7 @@ import ProductManagement from "./ProductManagement";
 import ImportManagement from "./ImportManagement";
 import EmployerRegistry from "./EmployerRegistry";
 import VerificationInbox from "./VerificationInbox";
+import SeekerVerificationInbox from "./SeekerVerificationInbox";
 import { insertResourceSchema, insertBlogPostSchema, insertJobSchema } from "@shared/schema";
 import { INTRO_TRUNCATE_LENGTH } from "@shared/constants";
 import { tokenize } from "@/lib/linkify";
@@ -3092,6 +3093,7 @@ export default function AdminDashboard({ section, subsection }: { section?: stri
       case "imports": return <ImportManagement />;
       case "employer-registry": return <EmployerRegistry />;
       case "verification": return <VerificationInbox />;
+      case "seeker-verification": return <SeekerVerificationInbox />;
       default: return <UsersLandingTab />;
     }
   };

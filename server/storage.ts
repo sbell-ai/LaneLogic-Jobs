@@ -6,6 +6,8 @@ import {
   entitlementUsageWindows, entitlementCreditGrants, entitlementCreditConsumptions,
   jobSources, importTargets, jobImportRuns,
   employerVerificationRequests, employerEvidenceItems,
+  seekerCredentialRequirements, seekerRequirementRules,
+  seekerVerificationRequests, seekerCredentialEvidenceItems,
   type User, type InsertUser, type Job, type InsertJob,
   type Application, type InsertApplication,
   type Resource, type InsertResource,
@@ -31,6 +33,10 @@ import {
   type JobImportRun, type InsertJobImportRun,
   type EmployerVerificationRequest, type InsertEmployerVerificationRequest,
   type EmployerEvidenceItem, type InsertEmployerEvidenceItem,
+  type SeekerCredentialRequirement, type InsertSeekerCredentialRequirement,
+  type SeekerRequirementRule, type InsertSeekerRequirementRule,
+  type SeekerVerificationRequest, type InsertSeekerVerificationRequest,
+  type SeekerCredentialEvidenceItem, type InsertSeekerCredentialEvidenceItem,
 } from "@shared/schema";
 import { eq, and, sql, desc, asc, isNotNull, gte, lte, gt, ne, notInArray, inArray, count } from "drizzle-orm";
 
@@ -194,6 +200,20 @@ export interface IStorage {
   createEvidenceItem(item: InsertEmployerEvidenceItem): Promise<EmployerEvidenceItem>;
   getEvidenceItemsByRequest(requestId: number): Promise<EmployerEvidenceItem[]>;
   updateEmployerVerificationStatus(employerId: number, status: string): Promise<User>;
+
+  // Seeker Credential Verification
+  getSeekerCredentialRequirements(): Promise<SeekerCredentialRequirement[]>;
+  upsertSeekerCredentialRequirement(req: InsertSeekerCredentialRequirement): Promise<SeekerCredentialRequirement>;
+  getSeekerRequirementRules(): Promise<SeekerRequirementRule[]>;
+  upsertSeekerRequirementRule(rule: InsertSeekerRequirementRule): Promise<SeekerRequirementRule>;
+  getActiveSeekerVerificationRequest(seekerId: number): Promise<SeekerVerificationRequest | undefined>;
+  getLatestSeekerVerificationRequest(seekerId: number): Promise<SeekerVerificationRequest | undefined>;
+  getOrCreateSeekerVerificationRequest(seekerId: number): Promise<SeekerVerificationRequest>;
+  getSeekerVerificationRequestsByStatus(statuses: string[]): Promise<(SeekerVerificationRequest & { seekerName: string | null; seekerEmail: string })[]>;
+  updateSeekerVerificationRequestStatus(requestId: number, status: string, adminNotes?: string, decidedBy?: number): Promise<SeekerVerificationRequest>;
+  createSeekerEvidenceItem(item: InsertSeekerCredentialEvidenceItem): Promise<SeekerCredentialEvidenceItem>;
+  getSeekerEvidenceItemsByRequest(requestId: number): Promise<SeekerCredentialEvidenceItem[]>;
+  updateSeekerVerificationStatus(seekerId: number, status: string): Promise<User>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -960,6 +980,125 @@ export class DatabaseStorage implements IStorage {
     const [user] = await db.update(users)
       .set({ verificationStatus: status })
       .where(eq(users.id, employerId))
+      .returning();
+    return user;
+  }
+
+  // Seeker Credential Verification
+  async getSeekerCredentialRequirements(): Promise<SeekerCredentialRequirement[]> {
+    return await db.select().from(seekerCredentialRequirements).orderBy(asc(seekerCredentialRequirements.key));
+  }
+
+  async upsertSeekerCredentialRequirement(req: InsertSeekerCredentialRequirement): Promise<SeekerCredentialRequirement> {
+    const [result] = await db.insert(seekerCredentialRequirements)
+      .values(req)
+      .onConflictDoUpdate({ target: seekerCredentialRequirements.key, set: { label: req.label, description: req.description ?? null, category: req.category ?? "license" } })
+      .returning();
+    return result;
+  }
+
+  async getSeekerRequirementRules(): Promise<SeekerRequirementRule[]> {
+    return await db.select().from(seekerRequirementRules);
+  }
+
+  async upsertSeekerRequirementRule(rule: InsertSeekerRequirementRule): Promise<SeekerRequirementRule> {
+    const existing = await db.select().from(seekerRequirementRules)
+      .where(and(
+        eq(seekerRequirementRules.requirementKey, rule.requirementKey),
+        eq(seekerRequirementRules.conditionType, rule.conditionType),
+        eq(seekerRequirementRules.conditionValue, rule.conditionValue)
+      ))
+      .limit(1);
+    if (existing.length > 0) return existing[0];
+    const [result] = await db.insert(seekerRequirementRules).values(rule).returning();
+    return result;
+  }
+
+  async getActiveSeekerVerificationRequest(seekerId: number): Promise<SeekerVerificationRequest | undefined> {
+    const [req] = await db.select().from(seekerVerificationRequests)
+      .where(and(
+        eq(seekerVerificationRequests.seekerId, seekerId),
+        inArray(seekerVerificationRequests.status, ["draft", "submitted", "needs_more"])
+      ))
+      .limit(1);
+    return req;
+  }
+
+  async getLatestSeekerVerificationRequest(seekerId: number): Promise<SeekerVerificationRequest | undefined> {
+    const [req] = await db.select().from(seekerVerificationRequests)
+      .where(eq(seekerVerificationRequests.seekerId, seekerId))
+      .orderBy(desc(seekerVerificationRequests.createdAt))
+      .limit(1);
+    return req;
+  }
+
+  async getOrCreateSeekerVerificationRequest(seekerId: number): Promise<SeekerVerificationRequest> {
+    const existing = await this.getActiveSeekerVerificationRequest(seekerId);
+    if (existing) return existing;
+    try {
+      const [req] = await db.insert(seekerVerificationRequests)
+        .values({ seekerId, status: "draft" })
+        .returning();
+      return req;
+    } catch (err: any) {
+      if (err?.code === "23505") {
+        const fallback = await this.getActiveSeekerVerificationRequest(seekerId);
+        if (fallback) return fallback;
+      }
+      throw err;
+    }
+  }
+
+  async getSeekerVerificationRequestsByStatus(statuses: string[]): Promise<(SeekerVerificationRequest & { seekerName: string | null; seekerEmail: string })[]> {
+    const rows = await db
+      .select({
+        id: seekerVerificationRequests.id,
+        seekerId: seekerVerificationRequests.seekerId,
+        status: seekerVerificationRequests.status,
+        adminNotes: seekerVerificationRequests.adminNotes,
+        decidedBy: seekerVerificationRequests.decidedBy,
+        decidedAt: seekerVerificationRequests.decidedAt,
+        submittedAt: seekerVerificationRequests.submittedAt,
+        createdAt: seekerVerificationRequests.createdAt,
+        updatedAt: seekerVerificationRequests.updatedAt,
+        seekerName: sql<string | null>`COALESCE(${users.firstName} || ' ' || ${users.lastName}, ${users.email})`.as("seeker_name"),
+        seekerEmail: users.email,
+      })
+      .from(seekerVerificationRequests)
+      .innerJoin(users, eq(seekerVerificationRequests.seekerId, users.id))
+      .where(inArray(seekerVerificationRequests.status, statuses))
+      .orderBy(desc(seekerVerificationRequests.submittedAt));
+    return rows;
+  }
+
+  async updateSeekerVerificationRequestStatus(requestId: number, status: string, adminNotes?: string, decidedBy?: number): Promise<SeekerVerificationRequest> {
+    const updates: Record<string, any> = { status, updatedAt: new Date() };
+    if (adminNotes !== undefined) updates.adminNotes = adminNotes;
+    if (decidedBy !== undefined) updates.decidedBy = decidedBy;
+    if (status === "submitted") updates.submittedAt = new Date();
+    if (["verified", "rejected"].includes(status)) updates.decidedAt = new Date();
+    const [req] = await db.update(seekerVerificationRequests)
+      .set(updates)
+      .where(eq(seekerVerificationRequests.id, requestId))
+      .returning();
+    return req;
+  }
+
+  async createSeekerEvidenceItem(item: InsertSeekerCredentialEvidenceItem): Promise<SeekerCredentialEvidenceItem> {
+    const [evidence] = await db.insert(seekerCredentialEvidenceItems).values(item).returning();
+    return evidence;
+  }
+
+  async getSeekerEvidenceItemsByRequest(requestId: number): Promise<SeekerCredentialEvidenceItem[]> {
+    return await db.select().from(seekerCredentialEvidenceItems)
+      .where(eq(seekerCredentialEvidenceItems.requestId, requestId))
+      .orderBy(desc(seekerCredentialEvidenceItems.createdAt));
+  }
+
+  async updateSeekerVerificationStatus(seekerId: number, status: string): Promise<User> {
+    const [user] = await db.update(users)
+      .set({ seekerVerificationStatus: status })
+      .where(eq(users.id, seekerId))
       .returning();
     return user;
   }

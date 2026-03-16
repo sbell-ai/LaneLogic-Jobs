@@ -18,6 +18,7 @@ function AppSidebar({ role }: { role: string }) {
     { title: "Applied Jobs", path: "/dashboard/applications", icon: Briefcase },
     { title: "My Resume", path: "/dashboard/resume", icon: FileText },
     { title: "My Profile", path: "/dashboard/profile", icon: UserCircle },
+    { title: "Credentials", path: "/seeker/settings/verification", icon: ShieldCheck },
     { title: "Usage & Quota", path: "/dashboard/quota", icon: Gauge },
     { title: "Membership", path: "/dashboard/membership", icon: CreditCard },
   ];
@@ -45,6 +46,7 @@ function AppSidebar({ role }: { role: string }) {
     { title: "Imports", path: "/dashboard/admin/imports", icon: ArrowDownToLine },
     { title: "Employer Registry", path: "/dashboard/admin/employer-registry", icon: ShieldCheck },
     { title: "Verification", path: "/dashboard/admin/verification", icon: ShieldCheck },
+    { title: "Seeker Verification", path: "/dashboard/admin/seeker-verification", icon: ShieldCheck },
   ];
 
   const pagesResourcesPaths = ["/dashboard/admin/pages-resources", "/dashboard/admin/site-pages", "/dashboard/admin/custom-pages", "/dashboard/admin/resources"];
