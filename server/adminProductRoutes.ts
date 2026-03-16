@@ -574,13 +574,11 @@ export function registerAdminProductRoutes(app: Express) {
         const existing = existingByStripeId.get(sp.id);
 
         if (existing) {
-          const stripeUpdates: any = {};
-          if (monthlyPriceId !== null) stripeUpdates.stripePriceIdMonthly = monthlyPriceId;
-          else stripeUpdates.stripePriceIdMonthly = null;
-          if (yearlyPriceId !== null) stripeUpdates.stripePriceIdYearly = yearlyPriceId;
-          else stripeUpdates.stripePriceIdYearly = null;
-          if (oneTimePriceId !== null) stripeUpdates.stripePriceIdOneTime = oneTimePriceId;
-          else stripeUpdates.stripePriceIdOneTime = null;
+          await storage.updateAdminProduct(existing.id, {
+            stripePriceIdMonthly: monthlyPriceId,
+            stripePriceIdYearly: yearlyPriceId,
+            stripePriceIdOneTime: oneTimePriceId,
+          });
 
           if (monthlyAmount !== null && existing.priceMonthly !== null && Math.abs(monthlyAmount - existing.priceMonthly) > 0.01) {
             discrepancies.push({ productName: sp.name, field: "priceMonthly", adminValue: existing.priceMonthly, stripeValue: monthlyAmount });
@@ -592,7 +590,6 @@ export function registerAdminProductRoutes(app: Express) {
             discrepancies.push({ productName: sp.name, field: "priceOneTime", adminValue: existing.priceOneTime, stripeValue: oneTimeAmount });
           }
 
-          await storage.updateAdminProduct(existing.id, stripeUpdates);
           updated++;
         } else {
           const isOneTime = !monthlyPriceId && !yearlyPriceId && !!oneTimePriceId;

@@ -910,7 +910,7 @@ function StripeSyncSection() {
               </p>
               {lastResult.discrepancies && lastResult.discrepancies.length > 0 && (
                 <div className="mt-2 rounded border border-amber-300 bg-amber-50 dark:bg-amber-950/20 p-3" data-testid="stripe-discrepancy-list">
-                  <p className="text-xs font-semibold text-amber-800 dark:text-amber-200 mb-1">Price discrepancies corrected from Stripe:</p>
+                  <p className="text-xs font-semibold text-amber-800 dark:text-amber-200 mb-1">Price discrepancies detected (admin values kept — update manually if needed):</p>
                   {lastResult.discrepancies.map((d, i) => (
                     <p key={i} className="text-xs text-amber-700 dark:text-amber-300">
                       {d.productName} · {d.field}: admin had ${d.adminValue} → Stripe has ${d.stripeValue}
