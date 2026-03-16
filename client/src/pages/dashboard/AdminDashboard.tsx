@@ -1275,14 +1275,14 @@ function BlogTab() {
   const { data: categories } = useQuery<Category[]>({ queryKey: ["/api/categories"] });
   const [showForm, setShowForm] = useState(false);
   const [editPost, setEditPost] = useState<BlogPost | null>(null);
-  const [editForm, setEditForm] = useState({ title: "", content: "", category: "", isPublished: false as boolean });
+  const [editForm, setEditForm] = useState({ title: "", content: "", category: "", isPublished: false as boolean, imageUrl: "" });
   const [shareBlog, setShareBlog] = useState<BlogPost | null>(null);
 
   const blogCats = (categories || []).filter(c => c.type === "blog");
 
   const form = useForm<z.infer<typeof blogFormSchema>>({
     resolver: zodResolver(blogFormSchema),
-    defaultValues: { title: "", content: "", category: "" },
+    defaultValues: { title: "", content: "", category: "", imageUrl: "" },
   });
 
   const createMutation = useMutation({
@@ -1316,7 +1316,7 @@ function BlogTab() {
   });
 
   const openEdit = (p: BlogPost) => {
-    setEditForm({ title: p.title, content: p.content, category: p.category || "", isPublished: p.isPublished ?? false });
+    setEditForm({ title: p.title, content: p.content, category: p.category || "", isPublished: p.isPublished ?? false, imageUrl: p.imageUrl || "" });
     setEditPost(p);
   };
 
@@ -1360,6 +1360,15 @@ function BlogTab() {
                   </FormItem>
                 )} />
               )}
+              <FormField control={form.control} name="imageUrl" render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Cover Image</FormLabel>
+                  <FormControl>
+                    <ImageUpload value={field.value || ""} onChange={field.onChange} data-testid="image-blog-cover" />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )} />
               <FormField control={form.control} name="content" render={({ field }) => (
                 <FormItem>
                   <FormLabel>Content *</FormLabel>
@@ -1433,6 +1442,10 @@ function BlogTab() {
                 </Select>
               </div>
             )}
+            <div>
+              <Label>Cover Image</Label>
+              <ImageUpload value={editForm.imageUrl || ""} onChange={v => setEditForm(f => ({ ...f, imageUrl: v }))} data-testid="image-edit-blog-cover" />
+            </div>
             <div><Label>Content</Label><Textarea value={editForm.content} onChange={e => setEditForm(f => ({ ...f, content: e.target.value }))} className="min-h-[200px]" data-testid="textarea-edit-blog-content" /></div>
             <div className="flex items-center justify-between py-2 px-1 border rounded-lg">
               <Label className="font-medium">Published</Label>
