@@ -18,7 +18,7 @@ function AppSidebar({ role }: { role: string }) {
     { title: "Applied Jobs", path: "/dashboard/applications", icon: Briefcase },
     { title: "My Resume", path: "/dashboard/resume", icon: FileText },
     { title: "My Profile", path: "/dashboard/profile", icon: UserCircle },
-    { title: "Credentials", path: "/seeker/settings/verification", icon: ShieldCheck },
+    { title: "Verification", path: "/seeker/settings/verification", icon: ShieldCheck },
     { title: "Usage & Quota", path: "/dashboard/quota", icon: Gauge },
     { title: "Membership", path: "/dashboard/membership", icon: CreditCard },
   ];

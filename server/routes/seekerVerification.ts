@@ -95,19 +95,26 @@ let _seedCompleted = false;
 export async function seedSeekerCredentialData() {
   if (_seedCompleted) return;
   try {
-    const existing = await storage.getSeekerCredentialRequirements();
-    if (existing.length >= SEED_REQUIREMENTS.length) {
+    const existingReqs = await storage.getSeekerCredentialRequirements();
+    const existingRules = await storage.getSeekerRequirementRules();
+    const needsReqs = existingReqs.length < SEED_REQUIREMENTS.length;
+    const needsRules = existingRules.length < SEED_RULES.length;
+    if (!needsReqs && !needsRules) {
       _seedCompleted = true;
       return;
     }
-    for (const req of SEED_REQUIREMENTS) {
-      await storage.upsertSeekerCredentialRequirement(req);
+    if (needsReqs) {
+      for (const req of SEED_REQUIREMENTS) {
+        await storage.upsertSeekerCredentialRequirement(req);
+      }
     }
-    for (const rule of SEED_RULES) {
-      await storage.upsertSeekerRequirementRule(rule);
+    if (needsRules) {
+      for (const rule of SEED_RULES) {
+        await storage.upsertSeekerRequirementRule(rule);
+      }
     }
     _seedCompleted = true;
-    console.log("[seeker-verification] Seeded credential requirements and rules");
+    console.log("[seeker-verification] Seeded credential data", { reqs: needsReqs, rules: needsRules });
   } catch (err) {
     console.error("[seeker-verification] Seed error:", err);
   }
