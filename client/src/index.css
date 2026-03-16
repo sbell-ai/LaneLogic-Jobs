@@ -24,8 +24,8 @@
     --secondary: 210 40% 96.1%;
     --secondary-foreground: 222.2 47.4% 11.2%;
 
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
+    --muted: 215 25% 90.1%; /* A slightly darker, richer slate background */
+    --muted-foreground: 215 25% 32%; /* Darker slate blue for readable, professional text */
 
     --accent: 24 100% 50%; /* Safety Orange */
     --accent-foreground: 210 40% 98%;
