@@ -1,0 +1,114 @@
+**Context:** Node + Express v5 + Postgres + Drizzle ORM. `server/db.ts` uses `drizzle(pool, { schema: * as schema from "@shared/schema" })`. We have a `schema.ts` file. We also have Notion registries for Employers, Evidence Requirements, Employer Evidence, and Employer Verification Requests. We need one active verification request per employer.
+
+**Task:** implement database tables, migrations, and API endpoints to support employer verification requests and evidence submissions.
+
+### 1) Add tables to `schema.ts` (Drizzle)
+
+Create these tables (or add fields if you already have equivalents):
+
+1. `employers`
+- `id` (uuid primary key)
+- `name` (text)
+- `notionEmployerUrl` (text, unique, nullable at first)
+- `employerCategory` (text, default "Unknown")
+- `verificationStatus` (text, default "Unverified")
+- `createdAt`, `updatedAt`
+1. `employerVerificationRequests`
+- `id` (uuid primary key)
+- `employerId` (fk → [employers.id](http://employers.id))
+- `notionRequestUrl` (text, unique)
+- `employerCategory` (text)
+- `status` (text) // Draft | Submitted | Needs more | Verified | Rejected
+- `submittedAt` (timestamp, nullable)
+- `reviewedAt` (timestamp, nullable)
+- `employerNotes` (text, nullable)
+- `reviewerNotes` (text, nullable)
+- `createdAt`, `updatedAt`
+1. `employerEvidenceItems`
+- `id` (uuid primary key)
+- `employerId` (fk → [employers.id](http://employers.id))
+- `requestId` (fk → [employerVerificationRequests.id](http://employerVerificationRequests.id), nullable until attached)
+- `notionEvidenceUrl` (text, unique)
+- `notionRequirementUrl` (text) // points to Notion Evidence Requirements row
+- `sourceType` (text)
+- `sourceUrl` (text, nullable)
+- `excerpt` (text, nullable)
+- `claim` (text, nullable)
+- `retrievedAt` (date or timestamp, nullable)
+- `decision` (text, default "To review")
+- `confidence` (text, nullable)
+- `createdAt`, `updatedAt`
+
+Also add an index to enforce the “one active request per employer” rule at DB level if possible:
+
+- Partial unique index on `(employerId)` where status in ('Draft','Submitted','Needs more').
+
+If Drizzle migrations cannot express partial unique easily, enforce in code but still add a normal index on `(employerId, status)`.
+
+### 2) Create and run migrations
+
+- Generate migration(s) for the above schema.
+- Ensure migrations run on startup or provide `npm run db:migrate` instructions (whatever this repo uses).
+- Verify tables exist in Postgres.
+
+### 3) Add Express routes (server)
+
+Create a new router file such as `server/routes/employerVerification.ts` and mount it under `/api/employer/verification`.
+
+Implement:
+
+#### POST `/request/get-or-create`
+
+- Find employerId from session.
+- Query DB for active request where status in Draft/Submitted/Needs more.
+- If found: return it.
+- If not found: create Draft request row and return it.
+- This must be idempotent (safe on double-click).
+
+#### GET `/requirements`
+
+- Return requirements list by employer category.
+
+For now, fetch requirements from Notion live is OK, but if Notion fetch is not implemented yet, stub with empty array and TODO.
+
+(We will wire Notion later.)
+
+#### POST `/evidence`
+
+- Validate request belongs to employer and request status is Draft or Needs more.
+- Create `employerEvidenceItems` row.
+- If Notion sync exists, also create the Notion Employer Evidence page and store its URL in `notionEvidenceUrl`.
+
+#### POST `/request/submit`
+
+- Validate request belongs to employer and is Draft or Needs more.
+- Update status=Submitted, set submittedAt=now, set employerNotes.
+
+Also create admin routes under `/api/admin/employer-verification`:
+
+- GET `/inbox` list Submitted/Needs more
+- POST `/request/decision` set Verified/Rejected/Needs more and reviewedAt, reviewerNotes. If Verified, also set employers.verificationStatus=Verified.
+
+### 4) Add minimal frontend page
+
+Create route `/employer/settings/verification` with:
+
+- Button “Request verification” → calls get-or-create and shows status.
+- Simple evidence form (requirement URL, sourceType, sourceUrl, excerpt) that calls `/evidence`.
+- Submit button calls `/request/submit`.
+
+### 5) Output
+
+After changes, show me:
+
+- The updated `schema.ts` (full file)
+- New route file(s) (full file)
+- Any migration file(s)
+- Where you mounted the router in the server entrypoint
+
+---
+
+## Two important notes (tell Replit this too)
+
+1. If there is no `employers` table today, create it. If employers are currently “users,” then instead add `notionEmployerUrl` and `employerCategory` to the existing users table and treat `userId` as `employerId`. Replit should pick whichever is already consistent with this codebase.
+2. Do not break existing auth. Use existing session middleware to identify the logged-in employer.
