@@ -120,6 +120,9 @@ export const JOB_TAXONOMY = {
     "Claims Specialist",
     "Revenue Assurance Analyst",
   ],
+  "Other": [
+    "Other",
+  ],
 } as const;
 
 export type JobCategory = keyof typeof JOB_TAXONOMY;
