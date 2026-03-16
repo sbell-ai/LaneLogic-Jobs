@@ -14,6 +14,7 @@ import {
   type Environment,
 } from "./registry/snapshotStore";
 import { syncAllRegistries } from "./registry/syncAll";
+import { upsertAdminFromNotionSnapshots, cleanupDuplicateAdminProducts } from "./registry/upsertAdminProducts";
 
 function requireAdmin(req: Request, res: Response): boolean {
   const user = (req as any).user;
@@ -519,8 +520,30 @@ export function registerAdminProductRoutes(app: Express) {
     if (!requireAdmin(req, res)) return;
     try {
       const environment: Environment = process.env.NODE_ENV === "production" ? "prod" : "staging";
-      const result = await syncAllRegistries({ environment });
-      res.json(result);
+      const syncResult = await syncAllRegistries({ environment });
+
+      await cleanupDuplicateAdminProducts();
+
+      const env: Environment = process.env.REPLIT_DOMAINS ? "prod" : "staging";
+      const [ppSnap, feSnap, ovrSnap] = await Promise.all([
+        getActiveRegistrySnapshot(env, "products_pricing"),
+        getActiveRegistrySnapshot(env, "features_entitlements"),
+        getActiveRegistrySnapshot(env, "product_entitlement_overrides"),
+      ]);
+
+      let upsertResult = null;
+      if (ppSnap && feSnap && ovrSnap) {
+        upsertResult = await upsertAdminFromNotionSnapshots(
+          ppSnap.payload as ProductsPricingSnapshot,
+          feSnap.payload as FeaturesEntitlementsSnapshot,
+          ovrSnap.payload as ProductEntitlementOverridesSnapshot,
+        );
+      }
+
+      res.json({
+        ...syncResult,
+        upsert: upsertResult,
+      });
     } catch (err: any) {
       console.error("[registry-sync/products] Error:", err.message);
       res.status(500).json({ error: err.message });

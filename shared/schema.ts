@@ -295,6 +295,7 @@ export const socialPosts = pgTable("social_posts", {
 // ---- Admin Product Management (replaces Notion SOT) ----
 export const adminProducts = pgTable("admin_products", {
   id: serial("id").primaryKey(),
+  notionPageId: text("notion_page_id"),
   name: text("name").notNull(),
   audience: text("audience").notNull(), // employer | job_seeker
   kind: text("kind").notNull(), // base_plan | add_on
@@ -317,10 +318,13 @@ export const adminProducts = pgTable("admin_products", {
   creditExpiryMonths: integer("credit_expiry_months").default(12),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
-});
+}, (table) => [
+  uniqueIndex("admin_products_notion_page_id_idx").on(table.notionPageId).where(sql`${table.notionPageId} IS NOT NULL`),
+]);
 
 export const adminEntitlements = pgTable("admin_entitlements", {
   id: serial("id").primaryKey(),
+  notionPageId: text("notion_page_id"),
   name: text("name").notNull(),
   key: text("key").notNull().unique(),
   type: text("type").notNull(), // Limit | Flag
@@ -329,10 +333,13 @@ export const adminEntitlements = pgTable("admin_entitlements", {
   status: text("status").notNull().default("Active"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
-});
+}, (table) => [
+  uniqueIndex("admin_entitlements_notion_page_id_idx").on(table.notionPageId).where(sql`${table.notionPageId} IS NOT NULL`),
+]);
 
 export const adminProductOverrides = pgTable("admin_product_overrides", {
   id: serial("id").primaryKey(),
+  notionPageId: text("notion_page_id"),
   productId: integer("product_id").notNull(),
   entitlementId: integer("entitlement_id").notNull(),
   value: real("value"),
@@ -344,6 +351,7 @@ export const adminProductOverrides = pgTable("admin_product_overrides", {
   updatedAt: timestamp("updated_at").defaultNow(),
 }, (table) => [
   uniqueIndex("admin_product_overrides_product_entitlement_idx").on(table.productId, table.entitlementId),
+  uniqueIndex("admin_product_overrides_notion_page_id_idx").on(table.notionPageId).where(sql`${table.notionPageId} IS NOT NULL`),
 ]);
 
 export const adminProductEntitlements = pgTable("admin_product_entitlements", {

@@ -806,7 +806,21 @@ function OverridesTab() {
 function NotionSyncSection() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
-  const [lastResult, setLastResult] = useState<{ ok: boolean; products?: number; entitlements?: number; overrides?: number; elapsed?: number; error?: string; errorCount?: number } | null>(null);
+  const [lastResult, setLastResult] = useState<{
+    ok: boolean;
+    products?: number;
+    entitlements?: number;
+    overrides?: number;
+    elapsed?: number;
+    error?: string;
+    errorCount?: number;
+    upsert?: {
+      products: { created: number; updated: number };
+      entitlements: { created: number; updated: number };
+      overrides: { created: number; updated: number };
+      archived: { products: number; entitlements: number; overrides: number };
+    };
+  } | null>(null);
 
   const syncMutation = useMutation({
     mutationFn: () => apiRequest("POST", "/api/admin/registry-sync/products"),
@@ -814,10 +828,19 @@ function NotionSyncSection() {
       const data = await res.json();
       setLastResult(data);
       queryClient.invalidateQueries({ queryKey: ["/api/admin/products/seed-status"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/products"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/entitlements"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/product-overrides"] });
+      const u = data.upsert;
       if (data.ok) {
+        const desc = u
+          ? `${data.products} products synced (${u.products.created} new, ${u.products.updated} updated).`
+          : `${data.products} products, ${data.entitlements} entitlements refreshed.`;
+        toast({ title: "Notion sync complete", description: desc });
+      } else if (u) {
         toast({
-          title: "Notion sync complete",
-          description: `${data.products} products, ${data.entitlements} entitlements refreshed from Notion.`,
+          title: "Notion sync: products applied with warnings",
+          description: `${u.products.created + u.products.updated} products applied. ${data.errorCount || 0} validation warning(s) in Notion data.`,
         });
       } else {
         toast({
@@ -839,16 +862,17 @@ function NotionSyncSection() {
         <div className="flex-1">
           <h3 className="font-semibold text-violet-800 dark:text-violet-200">Refresh from Notion</h3>
           <p className="text-sm text-violet-700 dark:text-violet-300 mt-1">
-            Pull the latest products, entitlements, and overrides from the Notion registry. Updates the active snapshot used for seeding. After syncing, use "Seed from Snapshot" to apply changes.
+            Pull the latest products, entitlements, and overrides from the Notion registry and apply them to the admin database.
           </p>
-          {lastResult && lastResult.ok && (
-            <p className="text-sm text-violet-800 dark:text-violet-200 mt-2 font-medium" data-testid="text-notion-sync-result">
-              Synced: {lastResult.products} products · {lastResult.entitlements} entitlements · {lastResult.overrides} overrides ({lastResult.elapsed}ms)
-            </p>
+          {lastResult && lastResult.upsert && (
+            <div className="text-sm text-violet-800 dark:text-violet-200 mt-2 font-medium" data-testid="text-notion-sync-result">
+              <p>Applied: {lastResult.upsert.products.created} new / {lastResult.upsert.products.updated} updated products · {lastResult.upsert.entitlements.created} new / {lastResult.upsert.entitlements.updated} updated entitlements · {lastResult.upsert.overrides.created} new / {lastResult.upsert.overrides.updated} updated overrides</p>
+              {lastResult.elapsed && <p className="mt-1 text-xs">Synced in {lastResult.elapsed}ms</p>}
+            </div>
           )}
           {lastResult && !lastResult.ok && (
-            <p className="text-sm text-red-700 dark:text-red-300 mt-2 font-medium" data-testid="text-notion-sync-error">
-              Sync failed: {lastResult.error} {lastResult.errorCount ? `(${lastResult.errorCount} errors)` : ""}
+            <p className="text-sm text-amber-700 dark:text-amber-300 mt-2 font-medium" data-testid="text-notion-sync-error">
+              Notion data has {lastResult.errorCount} validation issue(s) — products were still applied from the last known good snapshot.
             </p>
           )}
           <div className="mt-4">

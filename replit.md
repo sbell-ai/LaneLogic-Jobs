@@ -18,7 +18,7 @@ The front end utilizes React, TypeScript, Wouter for routing, and Tailwind CSS w
 - **Backend**: Express.js server in TypeScript manages APIs and integrations.
 - **Database**: PostgreSQL with Drizzle ORM for type-safe data interactions.
 - **Authentication**: Passport.js with session-based authentication, using a modal-based flow.
-- **Admin Product Management**: Products, entitlements, and overrides are managed directly via an admin dashboard, serving as the authoritative source. This includes auto-creation of Stripe products/prices.
+- **Admin Product Management**: Products, entitlements, and overrides are managed directly via an admin dashboard, serving as the authoritative source. This includes auto-creation of Stripe products/prices. The "Refresh from Notion" button syncs Notion registry data into both `registry_snapshots` (runtime entitlement resolution) AND `admin_products`/`admin_entitlements`/`admin_product_overrides` tables (admin UI), using `notion_page_id` as the stable upsert key to prevent duplicates.
 - **Entitlement Enforcement**: A runtime resolver, keyed by Stripe Price ID, enforces access based on defined entitlements.
 - **AI Crawlability / GEO**: Canonical host enforcement (`https://lanelogicjobs.com`, non-www, 301 redirect from www), `robots.txt` allowing AI bots (GPTBot, ChatGPT-User, ClaudeBot) while blocking private routes, dynamic `sitemap.xml` with published-only entities and `lastmod`, `<link rel="canonical">` on all pages via `useCanonical` hook, `llms.txt` for AI systems. Spec from Notion SOT.
 - **Programmatic SEO**: Dynamic generation of job listing pages for specific categories and locations, with tiered keyword matching and dynamic metadata.
