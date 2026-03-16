@@ -883,7 +883,7 @@ function StripeSyncSection() {
       const data = await res.json();
       setLastResult(data);
       queryClient.invalidateQueries({ queryKey: ["/api/admin/products"] });
-      const discMsg = data.discrepancies?.length ? ` ${data.discrepancies.length} price discrepancy(ies) corrected.` : "";
+      const discMsg = data.discrepancies?.length ? ` ${data.discrepancies.length} price discrepancy(ies) detected — review and update manually.` : "";
       toast({
         title: "Stripe sync complete",
         description: `${data.created} created, ${data.updated} updated (${data.total} Stripe products found).${discMsg}`,
@@ -901,7 +901,7 @@ function StripeSyncSection() {
         <div className="flex-1">
           <h3 className="font-semibold text-blue-800 dark:text-blue-200">Sync from Stripe</h3>
           <p className="text-sm text-blue-700 dark:text-blue-300 mt-1">
-            Import active Stripe products and prices into this dashboard. Existing products are updated with current Stripe price IDs and amounts. New Stripe products are created as Active entries.
+            Import active Stripe products and prices into this dashboard. Existing products are updated with current Stripe price IDs. Price discrepancies are reported but not auto-corrected — update prices manually if needed. New Stripe products are created as Active entries.
           </p>
           {lastResult && (
             <div className="mt-2 space-y-1">
