@@ -7,7 +7,7 @@ export function getBaseUrl(): string {
   return "https://localhost:5000";
 }
 
-export function getPublicEntityUrl(entityType: string, entity: { id: number }): string {
+export function getPublicEntityUrl(entityType: string, entity: { id: number; slug?: string }): string {
   const base = getBaseUrl();
   switch (entityType) {
     case "job":
@@ -15,7 +15,7 @@ export function getPublicEntityUrl(entityType: string, entity: { id: number }): 
     case "blog":
       return `${base}/blog/${entity.id}`;
     case "resource":
-      return `${base}/resources/${entity.id}`;
+      return `${base}/resources/${entity.slug || entity.id}`;
     default:
       throw new Error(`Unknown entity type: ${entityType}`);
   }

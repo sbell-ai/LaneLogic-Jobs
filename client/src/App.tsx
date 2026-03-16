@@ -190,7 +190,7 @@ function Router() {
       <Route path="/employers/:id" component={EmployerProfile} />
       <Route path="/blog" component={Blog} />
       <Route path="/blog/:id" component={BlogPost} />
-      <Route path="/resources/:id" component={ResourceDetail} />
+      <Route path="/resources/:slug" component={ResourceDetail} />
       <Route path="/resources" component={Resources} />
       <Route path="/pricing" component={Pricing} />
       <Route path="/contact" component={Contact} />

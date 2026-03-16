@@ -1,4 +1,5 @@
 import { useParams, useLocation } from "wouter";
+import { useEffect } from "react";
 import { Navbar } from "@/components/layout/Navbar";
 import { Footer } from "@/components/layout/Footer";
 import { Button } from "@/components/ui/button";
@@ -46,19 +47,52 @@ function LinkifiedText({ text }: { text: string }) {
 }
 
 export default function ResourceDetail() {
-  const { id } = useParams<{ id: string }>();
+  const { slug } = useParams<{ slug: string }>();
   const [, setLocation] = useLocation();
+  const isNumeric = /^\d+$/.test(slug || "");
 
-  const { data: resource, isLoading, error } = useQuery<Resource>({
-    queryKey: ["/api/resources", id],
+  const { data: numericResource, isLoading: numericLoading, error: numericError } = useQuery<Resource>({
+    queryKey: ["/api/resources", slug],
     queryFn: async () => {
-      const res = await fetch(`/api/resources/${id}`);
+      const res = await fetch(`/api/resources/${slug}`);
       if (!res.ok) throw new Error("Resource not found");
       return res.json();
     },
+    enabled: isNumeric,
   });
 
+  useEffect(() => {
+    if (isNumeric && numericResource?.slug) {
+      setLocation(`/resources/${numericResource.slug}`, { replace: true });
+    }
+  }, [isNumeric, numericResource, setLocation]);
+
+  const { data: resource, isLoading: slugLoading, error: slugError } = useQuery<Resource>({
+    queryKey: ["/api/resources/slug", slug],
+    queryFn: async () => {
+      const res = await fetch(`/api/resources/slug/${slug}`);
+      if (!res.ok) throw new Error("Resource not found");
+      return res.json();
+    },
+    enabled: !isNumeric,
+  });
+
+  const isLoading = isNumeric ? numericLoading : slugLoading;
+  const error = isNumeric ? numericError : slugError;
+
   if (isLoading) {
+    return (
+      <div className="min-h-screen flex flex-col">
+        <Navbar />
+        <div className="flex-grow flex items-center justify-center">
+          <div className="w-16 h-16 rounded-full border-4 border-primary border-t-transparent animate-spin" />
+        </div>
+        <Footer />
+      </div>
+    );
+  }
+
+  if (isNumeric && !numericLoading && !numericError) {
     return (
       <div className="min-h-screen flex flex-col">
         <Navbar />

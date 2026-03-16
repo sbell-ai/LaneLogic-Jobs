@@ -56,6 +56,7 @@ export interface IStorage {
   // Resources
   getResources(context?: "admin" | "public"): Promise<Resource[]>;
   getResource(id: number): Promise<Resource | undefined>;
+  getResourceBySlug(slug: string): Promise<Resource | undefined>;
   createResource(resource: InsertResource): Promise<Resource>;
   updateResource(id: number, updates: Partial<InsertResource>): Promise<Resource>;
   deleteResource(id: number): Promise<void>;
@@ -276,8 +277,27 @@ export class DatabaseStorage implements IStorage {
     const [res] = await db.select().from(resources).where(eq(resources.id, id));
     return res;
   }
+  async getResourceBySlug(slug: string): Promise<Resource | undefined> {
+    const [res] = await db.select().from(resources).where(eq(resources.slug, slug));
+    return res;
+  }
+  private async generateUniqueResourceSlug(title: string): Promise<string> {
+    let base = title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 80);
+    if (!base || /^\d+$/.test(base)) {
+      base = base ? `resource-${base}` : "resource";
+    }
+    let slug = base;
+    let suffix = 2;
+    while (true) {
+      const existing = await this.getResourceBySlug(slug);
+      if (!existing) return slug;
+      slug = `${base}-${suffix}`;
+      suffix++;
+    }
+  }
   async createResource(resource: InsertResource): Promise<Resource> {
-    const [res] = await db.insert(resources).values(resource).returning();
+    const slug = await this.generateUniqueResourceSlug(resource.title);
+    const [res] = await db.insert(resources).values({ ...resource, slug }).returning();
     return res;
   }
   async updateResource(id: number, updates: Partial<InsertResource>): Promise<Resource> {

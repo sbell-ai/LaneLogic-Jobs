@@ -66,7 +66,7 @@ function ResourceGrid({ resources, userTier, userRole }: { resources: Resource[]
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: i * 0.05 }}
               >
-                <Link href={`/resources/${resource.id}`} className="block h-full">
+                <Link href={`/resources/${resource.slug}`} className="block h-full">
                   <div
                     data-testid={`card-resource-${resource.id}`}
                     className="bg-white dark:bg-slate-900 rounded-2xl border border-border shadow-sm hover:shadow-lg transition-all duration-200 p-6 flex flex-col h-full cursor-pointer"

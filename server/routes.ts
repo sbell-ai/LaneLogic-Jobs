@@ -779,6 +779,14 @@ export async function registerRoutes(
     res.json(allResources);
   });
 
+  app.get("/api/resources/slug/:slug", async (req, res) => {
+    const resource = await storage.getResourceBySlug(req.params.slug);
+    if (!resource) return res.status(404).json({ message: "Not found" });
+    const isAdmin = req.isAuthenticated() && (req.user as any).role === "admin";
+    if (!isAdmin && !resource.isPublished) return res.status(404).json({ message: "Not found" });
+    res.json(resource);
+  });
+
   app.get("/api/resources/:id", async (req, res) => {
     const resource = await storage.getResource(Number(req.params.id));
     if (!resource) return res.status(404).json({ message: "Not found" });
@@ -1917,7 +1925,7 @@ export async function registerRoutes(
       const publishedResources = allResources.filter((r) => r.isPublished);
       for (const resource of publishedResources) {
         const lastmod = resource.updatedAt ? new Date(resource.updatedAt).toISOString().split("T")[0] : now;
-        urls.push(`  <url><loc>${canonicalHost}/resources/${resource.id}</loc><lastmod>${lastmod}</lastmod><changefreq>monthly</changefreq><priority>0.6</priority></url>`);
+        urls.push(`  <url><loc>${canonicalHost}/resources/${resource.slug}</loc><lastmod>${lastmod}</lastmod><changefreq>monthly</changefreq><priority>0.6</priority></url>`);
       }
 
       const allPages = await storage.getPages();

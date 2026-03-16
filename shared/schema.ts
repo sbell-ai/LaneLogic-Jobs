@@ -88,6 +88,7 @@ export const applications = pgTable("applications", {
 export const resources = pgTable("resources", {
   id: serial("id").primaryKey(),
   title: text("title").notNull(),
+  slug: text("slug").notNull().unique(),
   content: text("content").notNull().default(""),
   introText: text("intro_text").notNull().default(""),
   bodyText: text("body_text").notNull().default(""),
@@ -446,7 +447,7 @@ export type InsertMigrationState = z.infer<typeof insertMigrationStateSchema>;
 export const insertUserSchema = createInsertSchema(users).omit({ id: true, createdAt: true });
 export const insertJobSchema = createInsertSchema(jobs).omit({ id: true, createdAt: true });
 export const insertApplicationSchema = createInsertSchema(applications).omit({ id: true, createdAt: true });
-export const insertResourceSchema = createInsertSchema(resources).omit({ id: true, createdAt: true, updatedAt: true });
+export const insertResourceSchema = createInsertSchema(resources).omit({ id: true, slug: true, createdAt: true, updatedAt: true });
 export const insertBlogPostSchema = createInsertSchema(blogPosts).omit({ id: true });
 export const insertResumeSchema = createInsertSchema(resumes).omit({ id: true, createdAt: true });
 export const insertCategorySchema = createInsertSchema(categories).omit({ id: true, createdAt: true });
