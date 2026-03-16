@@ -47,6 +47,8 @@ export default function BlogPostPage() {
     );
   }
 
+  const isHtml = post.content.trimStart().startsWith("<");
+
   return (
     <div className="min-h-screen flex flex-col font-sans">
       <Navbar />
@@ -55,9 +57,20 @@ export default function BlogPostPage() {
           <BackButton fallback="/blog" />
 
           <article className="bg-white dark:bg-slate-900 rounded-2xl border border-border shadow-sm overflow-hidden">
-            <div className="h-56 bg-gradient-to-br from-primary/15 via-primary/5 to-accent/10 flex items-center justify-center">
-              <Newspaper className="text-primary/25" size={72} />
-            </div>
+            {post.imageUrl ? (
+              <div className="h-64 md:h-80 w-full overflow-hidden">
+                <img
+                  src={post.imageUrl}
+                  alt={post.title}
+                  className="w-full h-full object-cover"
+                  data-testid="img-blog-cover"
+                />
+              </div>
+            ) : (
+              <div className="h-56 bg-gradient-to-br from-primary/15 via-primary/5 to-accent/10 flex items-center justify-center">
+                <Newspaper className="text-primary/25" size={72} />
+              </div>
+            )}
 
             <div className="p-8 md:p-12">
               <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground mb-6">
@@ -81,13 +94,30 @@ export default function BlogPostPage() {
                 {post.title}
               </h1>
 
-              <div className="space-y-4">
-                {post.content.split("\n\n").map((para, i) => (
-                  <p key={i} className="text-muted-foreground leading-relaxed">
-                    {para}
-                  </p>
-                ))}
-              </div>
+              {isHtml ? (
+                <div
+                  className="prose prose-slate dark:prose-invert max-w-none
+                    prose-headings:font-display prose-headings:font-bold
+                    prose-h2:text-2xl prose-h2:mt-6 prose-h2:mb-3
+                    prose-h3:text-xl prose-h3:mt-4 prose-h3:mb-2
+                    prose-p:text-base prose-p:leading-relaxed prose-p:mb-3
+                    prose-a:text-primary prose-a:underline
+                    prose-ul:list-disc prose-ul:pl-6 prose-ul:mb-3
+                    prose-ol:list-decimal prose-ol:pl-6 prose-ol:mb-3
+                    prose-li:mb-1
+                    prose-strong:font-bold"
+                  dangerouslySetInnerHTML={{ __html: post.content }}
+                  data-testid="content-blog-post"
+                />
+              ) : (
+                <div className="space-y-4" data-testid="content-blog-post">
+                  {post.content.split("\n\n").map((para, i) => (
+                    <p key={i} className="text-muted-foreground leading-relaxed">
+                      {para}
+                    </p>
+                  ))}
+                </div>
+              )}
 
               <div className="mt-10 pt-8 border-t border-border">
                 <Button variant="outline" onClick={() => setLocation("/blog")} data-testid="button-back-blog-bottom">

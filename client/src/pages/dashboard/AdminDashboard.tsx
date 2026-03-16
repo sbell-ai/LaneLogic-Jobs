@@ -1403,13 +1403,16 @@ function BlogTab() {
           {posts.map((post) => (
             <div key={post.id} data-testid={`card-blog-admin-${post.id}`} className="bg-white dark:bg-slate-900 rounded-xl border border-border p-6">
               <div className="flex items-start justify-between gap-4">
+                {post.imageUrl && (
+                  <img src={post.imageUrl} alt={post.title} className="w-16 h-16 rounded-lg object-cover shrink-0" />
+                )}
                 <div className="flex-1">
                   <div className="flex items-center gap-2 mb-1">
                     <h3 className="font-bold font-display text-lg">{post.title}</h3>
                     {post.category && <Badge variant="outline" className="text-xs">{post.category}</Badge>}
                     {!post.isPublished && <Badge variant="secondary" className="text-xs" data-testid={`badge-draft-blog-${post.id}`}>Draft</Badge>}
                   </div>
-                  <p className="text-sm text-muted-foreground line-clamp-2">{post.content}</p>
+                  <p className="text-sm text-muted-foreground line-clamp-2">{post.content.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim()}</p>
                   <p className="text-xs text-muted-foreground mt-2">
                     {post.publishedAt ? formatDistanceToNow(new Date(post.publishedAt), { addSuffix: true }) : ""}
                   </p>

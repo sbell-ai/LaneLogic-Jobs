@@ -55,15 +55,21 @@ export default function Blog() {
                       data-testid={`card-blog-${post.id}`}
                       className="bg-white dark:bg-slate-900 rounded-2xl border border-border shadow-sm hover:shadow-xl hover:border-primary/40 transition-all duration-200 cursor-pointer group overflow-hidden h-full flex flex-col"
                     >
-                      <div className="h-40 bg-gradient-to-br from-primary/10 via-primary/5 to-accent/10 flex items-center justify-center">
-                        <Newspaper className="text-primary/30" size={56} />
-                      </div>
+                      {post.imageUrl ? (
+                        <div className="h-40 overflow-hidden">
+                          <img src={post.imageUrl} alt={post.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+                        </div>
+                      ) : (
+                        <div className="h-40 bg-gradient-to-br from-primary/10 via-primary/5 to-accent/10 flex items-center justify-center">
+                          <Newspaper className="text-primary/30" size={56} />
+                        </div>
+                      )}
                       <div className="p-6 flex flex-col flex-grow">
                         <h2 className="text-lg font-bold font-display mb-3 group-hover:text-primary transition-colors line-clamp-2">
                           {post.title}
                         </h2>
                         <p className="text-muted-foreground text-sm line-clamp-3 flex-grow">
-                          {post.content}
+                          {post.content.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim()}
                         </p>
                         <div className="flex items-center gap-1.5 text-xs text-muted-foreground mt-4 pt-4 border-t border-border">
                           <Clock size={13} />
