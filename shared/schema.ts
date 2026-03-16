@@ -464,6 +464,7 @@ export const seekerVerificationRequests = pgTable("seeker_verification_requests"
   id: serial("id").primaryKey(),
   seekerId: integer("seeker_id").notNull(),
   status: text("status").notNull().default("draft"),
+  requirementsSnapshot: text("requirements_snapshot").array(),
   adminNotes: text("admin_notes"),
   decidedBy: integer("decided_by"),
   decidedAt: timestamp("decided_at"),

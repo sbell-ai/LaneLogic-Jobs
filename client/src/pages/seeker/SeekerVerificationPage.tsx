@@ -105,7 +105,10 @@ export default function SeekerVerificationPage() {
   const allRequirements = reqData?.allRequirements || [];
   const computedRequirements = reqData?.requirements || [];
   const canEdit = !request || request.status === "draft" || request.status === "needs_more";
-  const canSubmit = request && (request.status === "draft" || request.status === "needs_more") && evidence.length > 0;
+  const snapshot = (request as any)?.requirementsSnapshot as string[] | null | undefined;
+  const evidenceKeys = new Set(evidence.map(e => e.requirementKey));
+  const missingKeys = (snapshot || []).filter(k => !evidenceKeys.has(k));
+  const canSubmit = request && (request.status === "draft" || request.status === "needs_more") && evidence.length > 0 && missingKeys.length === 0;
 
   const requirementOptions = allRequirements.length > 0 ? allRequirements : [];
 
@@ -296,6 +299,23 @@ export default function SeekerVerificationPage() {
               </Card>
             )}
 
+            {canEdit && missingKeys.length > 0 && (
+              <Card className="p-5 border-amber-200 bg-amber-50 dark:bg-amber-950 dark:border-amber-800" data-testid="card-missing-credentials">
+                <h3 className="font-semibold text-sm mb-2 text-amber-800 dark:text-amber-200">Missing Required Evidence</h3>
+                <p className="text-sm text-amber-700 dark:text-amber-300 mb-2">Add evidence for the following credentials before submitting:</p>
+                <div className="flex flex-wrap gap-2">
+                  {missingKeys.map(k => {
+                    const label = allRequirements.find(r => r.key === k)?.label || k;
+                    return (
+                      <Badge key={k} variant="outline" className="text-xs border-amber-300 bg-white dark:bg-slate-900">
+                        {label}
+                      </Badge>
+                    );
+                  })}
+                </div>
+              </Card>
+            )}
+
             {canSubmit && (
               <div className="flex justify-end">
                 <Button
@@ -308,6 +328,12 @@ export default function SeekerVerificationPage() {
                   {submitMutation.isPending ? "Submitting..." : "Submit for Review"}
                 </Button>
               </div>
+            )}
+
+            {request && canEdit && evidence.length > 0 && missingKeys.length > 0 && (
+              <p className="text-sm text-muted-foreground text-right">
+                Submit button will appear once all required credentials have evidence.
+              </p>
             )}
           </div>
         )}

@@ -6,13 +6,15 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
-import { ShieldCheck, CheckCircle2, XCircle, AlertCircle, ChevronDown, ChevronRight, Link as LinkIcon, Clock } from "lucide-react";
+import { ShieldCheck, CheckCircle2, XCircle, AlertCircle, ChevronDown, ChevronRight, Link as LinkIcon, Clock, User } from "lucide-react";
 import type { SeekerVerificationRequest, SeekerCredentialEvidenceItem } from "@shared/schema";
 
 type InboxItem = SeekerVerificationRequest & {
   seekerName: string | null;
   seekerEmail: string;
+  seekerTrack: string | null;
   evidence: SeekerCredentialEvidenceItem[];
+  requirementLabels: string[];
 };
 
 const SOURCE_LABELS: Record<string, string> = {
@@ -133,6 +135,11 @@ export default function SeekerVerificationInbox() {
                   </div>
                 </div>
                 <div className="flex items-center gap-3">
+                  {item.seekerTrack && item.seekerTrack !== "Unknown" && (
+                    <Badge variant="outline" className="text-xs" data-testid={`badge-seeker-track-${item.id}`}>
+                      <User size={12} className="mr-1" /> {item.seekerTrack}
+                    </Badge>
+                  )}
                   <Badge className={item.status === "submitted" ? "bg-blue-100 text-blue-800" : "bg-amber-100 text-amber-800"}>
                     {item.status === "submitted" ? <><Clock size={14} className="mr-1" /> Submitted</> : <><AlertCircle size={14} className="mr-1" /> Needs More</>}
                   </Badge>
@@ -142,6 +149,27 @@ export default function SeekerVerificationInbox() {
 
               {expanded === item.id && (
                 <div className="mt-4 space-y-3">
+                  {item.requirementsSnapshot && item.requirementsSnapshot.length > 0 && (
+                    <div className="bg-slate-50 dark:bg-slate-900 rounded-lg p-3" data-testid={`section-required-credentials-${item.id}`}>
+                      <p className="text-sm font-medium mb-2">Required Credentials</p>
+                      <div className="flex flex-wrap gap-2">
+                        {item.requirementLabels.map((label, i) => {
+                          const key = item.requirementsSnapshot![i];
+                          const hasEvidence = item.evidence.some(e => e.requirementKey === key);
+                          return (
+                            <Badge
+                              key={key}
+                              variant="outline"
+                              className={`text-xs ${hasEvidence ? "border-green-300 bg-green-50 text-green-800 dark:bg-green-950 dark:text-green-200" : "border-red-300 bg-red-50 text-red-800 dark:bg-red-950 dark:text-red-200"}`}
+                            >
+                              {hasEvidence ? <CheckCircle2 size={12} className="mr-1" /> : <XCircle size={12} className="mr-1" />}
+                              {label}
+                            </Badge>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
                   <div>
                     <p className="text-sm font-medium mb-2">Evidence Items</p>
                     {item.evidence.map((ev) => (

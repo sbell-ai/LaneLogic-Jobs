@@ -756,6 +756,23 @@ export async function registerRoutes(
           });
         }
 
+        try {
+          const job = await storage.getJob(input.jobId);
+          if (job && job.tags && job.tags.length > 0) {
+            const { computeRequirementsForSeeker } = await import("./routes/seekerVerification");
+            const jobTags = job.tags.filter((t): t is string => !!t);
+            const computed = await computeRequirementsForSeeker(user.seekerTrack, jobTags);
+            if (computed.length > 0) {
+              const activeReq = await storage.getActiveSeekerVerificationRequest(user.id);
+              if (activeReq) {
+                await storage.appendRequirementsSnapshot(activeReq.id, computed.map(r => r.key));
+              }
+            }
+          }
+        } catch (appendErr) {
+          console.error("[applications] seeker verification append error (non-fatal):", appendErr);
+        }
+
         return res.status(201).json(txResult.appData);
       }
 

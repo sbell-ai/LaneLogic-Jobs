@@ -47,6 +47,15 @@ export function computeRequirements(
   return allRequirements.filter(r => matched.has(r.key));
 }
 
+export async function computeRequirementsForSeeker(
+  userTrack: string | null | undefined,
+  jobTags?: string[]
+): Promise<SeekerCredentialRequirement[]> {
+  const allReqs = await storage.getSeekerCredentialRequirements();
+  const allRules = await storage.getSeekerRequirementRules();
+  return computeRequirements(allReqs, allRules, userTrack, jobTags || []);
+}
+
 const SEED_REQUIREMENTS = [
   { key: "cdl_a", label: "CDL-A (Class A Commercial Driver's License)", description: "Required for operating tractor-trailers and large combination vehicles", category: "license" },
   { key: "cdl_b", label: "CDL-B (Class B Commercial Driver's License)", description: "Required for operating straight trucks, large buses, and segmented buses", category: "license" },
@@ -90,7 +99,15 @@ seekerVerificationRouter.get("/api/seeker/verification/requirements", async (req
     const allReqs = await storage.getSeekerCredentialRequirements();
     const allRules = await storage.getSeekerRequirementRules();
     const user = req.user as any;
-    const computed = computeRequirements(allReqs, allRules, user.seekerTrack, []);
+    const jobIdParam = req.query.jobId ? Number(req.query.jobId) : null;
+    let jobTags: string[] = [];
+    if (jobIdParam) {
+      const job = await storage.getJob(jobIdParam);
+      if (job && job.tags) {
+        jobTags = job.tags.filter((t): t is string => !!t);
+      }
+    }
+    const computed = computeRequirements(allReqs, allRules, user.seekerTrack, jobTags);
     res.json({ requirements: computed, allRequirements: allReqs });
   } catch (err) {
     console.error("[SeekerVerification] requirements error:", err);
@@ -117,10 +134,45 @@ seekerVerificationRouter.post("/api/seeker/verification/request/get-or-create", 
   if (!requireSeekerSession(req, res)) return;
   try {
     const request = await storage.getOrCreateSeekerVerificationRequest(req.user.id);
+    const user = req.user as any;
+    const computed = await computeRequirementsForSeeker(user.seekerTrack);
+    const keys = computed.map(r => r.key);
+    if (keys.length > 0) {
+      await storage.appendRequirementsSnapshot(request.id, keys);
+    }
+    const updated = await storage.getActiveSeekerVerificationRequest(req.user.id);
     const evidence = await storage.getSeekerEvidenceItemsByRequest(request.id);
-    res.json({ request, evidence });
+    res.json({ request: updated || request, evidence });
   } catch (err) {
     console.error("[SeekerVerification] get-or-create error:", err);
+    res.status(500).json({ ok: false, error: "internal_error" });
+  }
+});
+
+seekerVerificationRouter.post("/api/seeker/verification/request/append-requirements", async (req, res) => {
+  if (!requireSeekerSession(req, res)) return;
+  try {
+    const { jobId } = z.object({ jobId: z.number() }).parse(req.body);
+    const user = req.user as any;
+    const job = await storage.getJob(jobId);
+    if (!job) {
+      return res.status(404).json({ ok: false, error: "job_not_found" });
+    }
+    const jobTags = (job.tags || []).filter((t): t is string => !!t);
+    const computed = await computeRequirementsForSeeker(user.seekerTrack, jobTags);
+    const keys = computed.map(r => r.key);
+    if (keys.length === 0) {
+      const request = await storage.getActiveSeekerVerificationRequest(user.id);
+      return res.json({ request, appended: [] });
+    }
+    let request = await storage.getOrCreateSeekerVerificationRequest(user.id);
+    const updated = await storage.appendRequirementsSnapshot(request.id, keys);
+    res.json({ request: updated, appended: keys });
+  } catch (err) {
+    if (err instanceof z.ZodError) {
+      return res.status(400).json({ ok: false, error: "validation_error", message: err.errors[0].message });
+    }
+    console.error("[SeekerVerification] append-requirements error:", err);
     res.status(500).json({ ok: false, error: "internal_error" });
   }
 });
@@ -173,6 +225,19 @@ seekerVerificationRouter.post("/api/seeker/verification/request/submit", async (
     if (evidence.length === 0) {
       return res.status(400).json({ ok: false, error: "no_evidence", message: "Please add at least one evidence item before submitting" });
     }
+    const snapshot = request.requirementsSnapshot || [];
+    if (snapshot.length > 0) {
+      const evidenceKeys = new Set(evidence.map(e => e.requirementKey));
+      const missing = snapshot.filter(k => !evidenceKeys.has(k));
+      if (missing.length > 0) {
+        return res.status(400).json({
+          ok: false,
+          error: "incomplete_evidence",
+          message: `Missing evidence for required credentials: ${missing.join(", ")}`,
+          missingKeys: missing,
+        });
+      }
+    }
     const updated = await storage.updateSeekerVerificationRequestStatus(request.id, "submitted");
     res.json({ request: updated });
   } catch (err) {
@@ -181,15 +246,17 @@ seekerVerificationRouter.post("/api/seeker/verification/request/submit", async (
   }
 });
 
-// Admin routes
 seekerVerificationRouter.get("/api/admin/seeker-verification/inbox", async (req, res) => {
   if (!requireAdminSession(req, res)) return;
   try {
     const requests = await storage.getSeekerVerificationRequestsByStatus(["submitted", "needs_more"]);
+    const allReqs = await storage.getSeekerCredentialRequirements();
+    const reqMap = Object.fromEntries(allReqs.map(r => [r.key, r.label]));
     const withEvidence = await Promise.all(
       requests.map(async (r) => ({
         ...r,
         evidence: await storage.getSeekerEvidenceItemsByRequest(r.id),
+        requirementLabels: (r.requirementsSnapshot || []).map(k => reqMap[k] || k),
       }))
     );
     res.json(withEvidence);

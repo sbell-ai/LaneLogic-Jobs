@@ -209,7 +209,8 @@ export interface IStorage {
   getActiveSeekerVerificationRequest(seekerId: number): Promise<SeekerVerificationRequest | undefined>;
   getLatestSeekerVerificationRequest(seekerId: number): Promise<SeekerVerificationRequest | undefined>;
   getOrCreateSeekerVerificationRequest(seekerId: number): Promise<SeekerVerificationRequest>;
-  getSeekerVerificationRequestsByStatus(statuses: string[]): Promise<(SeekerVerificationRequest & { seekerName: string | null; seekerEmail: string })[]>;
+  appendRequirementsSnapshot(requestId: number, keys: string[]): Promise<SeekerVerificationRequest>;
+  getSeekerVerificationRequestsByStatus(statuses: string[]): Promise<(SeekerVerificationRequest & { seekerName: string | null; seekerEmail: string; seekerTrack: string | null })[]>;
   updateSeekerVerificationRequestStatus(requestId: number, status: string, adminNotes?: string, decidedBy?: number): Promise<SeekerVerificationRequest>;
   createSeekerEvidenceItem(item: InsertSeekerCredentialEvidenceItem): Promise<SeekerCredentialEvidenceItem>;
   getSeekerEvidenceItemsByRequest(requestId: number): Promise<SeekerCredentialEvidenceItem[]>;
@@ -1049,12 +1050,25 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
-  async getSeekerVerificationRequestsByStatus(statuses: string[]): Promise<(SeekerVerificationRequest & { seekerName: string | null; seekerEmail: string })[]> {
+  async appendRequirementsSnapshot(requestId: number, keys: string[]): Promise<SeekerVerificationRequest> {
+    const [req] = await db.select().from(seekerVerificationRequests).where(eq(seekerVerificationRequests.id, requestId)).limit(1);
+    if (!req) throw new Error("Request not found");
+    const existing = req.requirementsSnapshot || [];
+    const merged = Array.from(new Set([...existing, ...keys]));
+    const [updated] = await db.update(seekerVerificationRequests)
+      .set({ requirementsSnapshot: merged, updatedAt: new Date() })
+      .where(eq(seekerVerificationRequests.id, requestId))
+      .returning();
+    return updated;
+  }
+
+  async getSeekerVerificationRequestsByStatus(statuses: string[]): Promise<(SeekerVerificationRequest & { seekerName: string | null; seekerEmail: string; seekerTrack: string | null })[]> {
     const rows = await db
       .select({
         id: seekerVerificationRequests.id,
         seekerId: seekerVerificationRequests.seekerId,
         status: seekerVerificationRequests.status,
+        requirementsSnapshot: seekerVerificationRequests.requirementsSnapshot,
         adminNotes: seekerVerificationRequests.adminNotes,
         decidedBy: seekerVerificationRequests.decidedBy,
         decidedAt: seekerVerificationRequests.decidedAt,
@@ -1063,6 +1077,7 @@ export class DatabaseStorage implements IStorage {
         updatedAt: seekerVerificationRequests.updatedAt,
         seekerName: sql<string | null>`COALESCE(${users.firstName} || ' ' || ${users.lastName}, ${users.email})`.as("seeker_name"),
         seekerEmail: users.email,
+        seekerTrack: users.seekerTrack,
       })
       .from(seekerVerificationRequests)
       .innerJoin(users, eq(seekerVerificationRequests.seekerId, users.id))
