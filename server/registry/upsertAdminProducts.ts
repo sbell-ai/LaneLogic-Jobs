@@ -34,74 +34,76 @@ export async function upsertAdminFromNotionSnapshots(
     archived: { products: 0, entitlements: 0, overrides: 0 },
   };
 
-  const entitlementNotionToDbId = new Map<string, number>();
-  for (const ent of feSnapshot.rows) {
-    const dbId = await upsertEntitlement(ent, result);
-    entitlementNotionToDbId.set(ent.notionPageId, dbId);
-  }
+  await db.transaction(async (tx) => {
+    const entitlementNotionToDbId = new Map<string, number>();
+    for (const ent of feSnapshot.rows) {
+      const dbId = await upsertEntitlement(tx, ent, result);
+      entitlementNotionToDbId.set(ent.notionPageId, dbId);
+    }
 
-  const activeEntNotionIds = feSnapshot.rows.map((e) => e.notionPageId);
-  if (activeEntNotionIds.length > 0) {
-    const archiveResult = await db
-      .update(adminEntitlements)
-      .set({ status: "Archived", updatedAt: new Date() })
-      .where(
-        and(
-          isNotNull(adminEntitlements.notionPageId),
-          notInArray(adminEntitlements.notionPageId, activeEntNotionIds),
-          sql`${adminEntitlements.status} != 'Archived'`,
-        ),
-      )
-      .returning();
-    result.archived.entitlements = archiveResult.length;
-  }
+    const activeEntNotionIds = feSnapshot.rows.map((e) => e.notionPageId);
+    if (activeEntNotionIds.length > 0) {
+      const archiveResult = await tx
+        .update(adminEntitlements)
+        .set({ status: "Archived", updatedAt: new Date() })
+        .where(
+          and(
+            isNotNull(adminEntitlements.notionPageId),
+            notInArray(adminEntitlements.notionPageId, activeEntNotionIds),
+            sql`${adminEntitlements.status} != 'Archived'`,
+          ),
+        )
+        .returning();
+      result.archived.entitlements = archiveResult.length;
+    }
 
-  const productNotionToDbId = new Map<string, number>();
-  for (const prod of ppSnapshot.rows) {
-    const dbId = await upsertProduct(prod, entitlementNotionToDbId, result);
-    productNotionToDbId.set(prod.notionPageId, dbId);
-  }
+    const productNotionToDbId = new Map<string, number>();
+    for (const prod of ppSnapshot.rows) {
+      const dbId = await upsertProduct(tx, prod, entitlementNotionToDbId, result);
+      productNotionToDbId.set(prod.notionPageId, dbId);
+    }
 
-  const activeProdNotionIds = ppSnapshot.rows.map((p) => p.notionPageId);
-  if (activeProdNotionIds.length > 0) {
-    const archiveResult = await db
-      .update(adminProducts)
-      .set({ status: "Archived", updatedAt: new Date() })
-      .where(
-        and(
-          isNotNull(adminProducts.notionPageId),
-          notInArray(adminProducts.notionPageId, activeProdNotionIds),
-          sql`${adminProducts.status} != 'Archived'`,
-        ),
-      )
-      .returning();
-    result.archived.products = archiveResult.length;
-  }
+    const activeProdNotionIds = ppSnapshot.rows.map((p) => p.notionPageId);
+    if (activeProdNotionIds.length > 0) {
+      const archiveResult = await tx
+        .update(adminProducts)
+        .set({ status: "Archived", updatedAt: new Date() })
+        .where(
+          and(
+            isNotNull(adminProducts.notionPageId),
+            notInArray(adminProducts.notionPageId, activeProdNotionIds),
+            sql`${adminProducts.status} != 'Archived'`,
+          ),
+        )
+        .returning();
+      result.archived.products = archiveResult.length;
+    }
 
-  const activeOvrNotionIds: string[] = [];
-  for (const ovr of ovrSnapshot.rows) {
-    const productDbId = productNotionToDbId.get(ovr.productPageId);
-    const entitlementDbId = entitlementNotionToDbId.get(ovr.entitlementPageId);
-    if (!productDbId || !entitlementDbId) continue;
+    const activeOvrNotionIds: string[] = [];
+    for (const ovr of ovrSnapshot.rows) {
+      const productDbId = productNotionToDbId.get(ovr.productPageId);
+      const entitlementDbId = entitlementNotionToDbId.get(ovr.entitlementPageId);
+      if (!productDbId || !entitlementDbId) continue;
 
-    await upsertOverride(ovr, productDbId, entitlementDbId, result);
-    activeOvrNotionIds.push(ovr.notionPageId);
-  }
+      await upsertOverride(tx, ovr, productDbId, entitlementDbId, result);
+      activeOvrNotionIds.push(ovr.notionPageId);
+    }
 
-  if (activeOvrNotionIds.length > 0) {
-    const archiveResult = await db
-      .update(adminProductOverrides)
-      .set({ status: "Archived", updatedAt: new Date() })
-      .where(
-        and(
-          isNotNull(adminProductOverrides.notionPageId),
-          notInArray(adminProductOverrides.notionPageId, activeOvrNotionIds),
-          sql`${adminProductOverrides.status} != 'Archived'`,
-        ),
-      )
-      .returning();
-    result.archived.overrides = archiveResult.length;
-  }
+    if (activeOvrNotionIds.length > 0) {
+      const archiveResult = await tx
+        .update(adminProductOverrides)
+        .set({ status: "Archived", updatedAt: new Date() })
+        .where(
+          and(
+            isNotNull(adminProductOverrides.notionPageId),
+            notInArray(adminProductOverrides.notionPageId, activeOvrNotionIds),
+            sql`${adminProductOverrides.status} != 'Archived'`,
+          ),
+        )
+        .returning();
+      result.archived.overrides = archiveResult.length;
+    }
+  });
 
   console.log(
     `[upsert-admin] Done: products=${result.products.created}c/${result.products.updated}u, ` +
@@ -113,17 +115,18 @@ export async function upsertAdminFromNotionSnapshots(
 }
 
 async function upsertEntitlement(
+  tx: Parameters<Parameters<typeof db.transaction>[0]>[0],
   ent: EntitlementRow,
   result: UpsertResult,
 ): Promise<number> {
-  const [existing] = await db
+  const [existing] = await tx
     .select()
     .from(adminEntitlements)
     .where(eq(adminEntitlements.notionPageId, ent.notionPageId))
     .limit(1);
 
   if (existing) {
-    await db
+    await tx
       .update(adminEntitlements)
       .set({
         name: ent.entitlementName,
@@ -139,35 +142,7 @@ async function upsertEntitlement(
     return existing.id;
   }
 
-  const [existingByKey] = await db
-    .select()
-    .from(adminEntitlements)
-    .where(
-      and(
-        eq(adminEntitlements.key, ent.entitlementKey),
-        isNull(adminEntitlements.notionPageId),
-      ),
-    )
-    .limit(1);
-
-  if (existingByKey) {
-    await db
-      .update(adminEntitlements)
-      .set({
-        notionPageId: ent.notionPageId,
-        name: ent.entitlementName,
-        type: ent.type,
-        unit: ent.unit || null,
-        defaultValue: ent.defaultValue || null,
-        status: ent.status || "Active",
-        updatedAt: new Date(),
-      })
-      .where(eq(adminEntitlements.id, existingByKey.id));
-    result.entitlements.updated++;
-    return existingByKey.id;
-  }
-
-  const [created] = await db
+  const [created] = await tx
     .insert(adminEntitlements)
     .values({
       notionPageId: ent.notionPageId,
@@ -178,12 +153,25 @@ async function upsertEntitlement(
       defaultValue: ent.defaultValue || null,
       status: ent.status || "Active",
     })
+    .onConflictDoUpdate({
+      target: adminEntitlements.key,
+      set: {
+        notionPageId: ent.notionPageId,
+        name: ent.entitlementName,
+        type: ent.type,
+        unit: ent.unit || null,
+        defaultValue: ent.defaultValue || null,
+        status: ent.status || "Active",
+        updatedAt: new Date(),
+      },
+    })
     .returning();
   result.entitlements.created++;
   return created.id;
 }
 
 async function upsertProduct(
+  tx: Parameters<Parameters<typeof db.transaction>[0]>[0],
   prod: ProductRow,
   entitlementNotionToDbId: Map<string, number>,
   result: UpsertResult,
@@ -217,7 +205,7 @@ async function upsertProduct(
     activeInstruction: prod.activeInstruction || null,
   };
 
-  const [existing] = await db
+  const [existing] = await tx
     .select()
     .from(adminProducts)
     .where(eq(adminProducts.notionPageId, prod.notionPageId))
@@ -226,57 +214,31 @@ async function upsertProduct(
   let dbId: number;
 
   if (existing) {
-    await db
+    await tx
       .update(adminProducts)
       .set({ ...values, updatedAt: new Date() })
       .where(eq(adminProducts.id, existing.id));
     result.products.updated++;
     dbId = existing.id;
   } else {
-    const [existingByStripe] = prod.stripeProductId
-      ? await db
-          .select()
-          .from(adminProducts)
-          .where(
-            and(
-              eq(adminProducts.stripeProductId, prod.stripeProductId),
-              isNull(adminProducts.notionPageId),
-            ),
-          )
-          .limit(1)
-      : [undefined];
-
-    if (existingByStripe) {
-      await db
-        .update(adminProducts)
-        .set({
-          ...values,
-          notionPageId: prod.notionPageId,
-          updatedAt: new Date(),
-        })
-        .where(eq(adminProducts.id, existingByStripe.id));
-      result.products.updated++;
-      dbId = existingByStripe.id;
-    } else {
-      const [created] = await db
-        .insert(adminProducts)
-        .values({ ...values, notionPageId: prod.notionPageId })
-        .returning();
-      result.products.created++;
-      dbId = created.id;
-    }
+    const [created] = await tx
+      .insert(adminProducts)
+      .values({ ...values, notionPageId: prod.notionPageId })
+      .returning();
+    result.products.created++;
+    dbId = created.id;
   }
 
   const entitlementIds = prod.entitlementPageIds
     .map((epid) => entitlementNotionToDbId.get(epid))
     .filter((id): id is number => id !== undefined);
 
-  await db
+  await tx
     .delete(adminProductEntitlements)
     .where(eq(adminProductEntitlements.productId, dbId));
 
   if (entitlementIds.length > 0) {
-    await db.insert(adminProductEntitlements).values(
+    await tx.insert(adminProductEntitlements).values(
       entitlementIds.map((eid) => ({ productId: dbId, entitlementId: eid })),
     );
   }
@@ -285,6 +247,7 @@ async function upsertProduct(
 }
 
 async function upsertOverride(
+  tx: Parameters<Parameters<typeof db.transaction>[0]>[0],
   ovr: OverrideRow,
   productDbId: number,
   entitlementDbId: number,
@@ -300,105 +263,65 @@ async function upsertOverride(
     notes: ovr.notes || null,
   };
 
-  const [existing] = await db
+  const [existing] = await tx
     .select()
     .from(adminProductOverrides)
     .where(eq(adminProductOverrides.notionPageId, ovr.notionPageId))
     .limit(1);
 
   if (existing) {
-    await db
+    await tx
       .update(adminProductOverrides)
       .set({ ...values, updatedAt: new Date() })
       .where(eq(adminProductOverrides.id, existing.id));
     result.overrides.updated++;
   } else {
-    const [existingByPair] = await db
-      .select()
-      .from(adminProductOverrides)
-      .where(
-        and(
-          eq(adminProductOverrides.productId, productDbId),
-          eq(adminProductOverrides.entitlementId, entitlementDbId),
-          isNull(adminProductOverrides.notionPageId),
-        ),
-      )
-      .limit(1);
-
-    if (existingByPair) {
-      await db
-        .update(adminProductOverrides)
-        .set({
-          ...values,
-          notionPageId: ovr.notionPageId,
-          updatedAt: new Date(),
-        })
-        .where(eq(adminProductOverrides.id, existingByPair.id));
-      result.overrides.updated++;
-    } else {
-      try {
-        await db
-          .insert(adminProductOverrides)
-          .values({ ...values, notionPageId: ovr.notionPageId });
-        result.overrides.created++;
-      } catch (err: any) {
-        if (err.message?.includes("duplicate key")) {
-          await db
-            .update(adminProductOverrides)
-            .set({
-              ...values,
-              notionPageId: ovr.notionPageId,
-              updatedAt: new Date(),
-            })
-            .where(
-              and(
-                eq(adminProductOverrides.productId, productDbId),
-                eq(adminProductOverrides.entitlementId, entitlementDbId),
-              ),
-            );
-          result.overrides.updated++;
-        } else {
-          throw err;
-        }
+    try {
+      await tx
+        .insert(adminProductOverrides)
+        .values({ ...values, notionPageId: ovr.notionPageId });
+      result.overrides.created++;
+    } catch (err: any) {
+      if (err.message?.includes("duplicate key") && err.message?.includes("product_entitlement")) {
+        await tx
+          .update(adminProductOverrides)
+          .set({
+            ...values,
+            notionPageId: ovr.notionPageId,
+            updatedAt: new Date(),
+          })
+          .where(
+            and(
+              eq(adminProductOverrides.productId, productDbId),
+              eq(adminProductOverrides.entitlementId, entitlementDbId),
+            ),
+          );
+        result.overrides.updated++;
+      } else {
+        throw err;
       }
     }
   }
 }
 
 export async function cleanupDuplicateAdminProducts(): Promise<number> {
-  const allProducts = await db.select().from(adminProducts);
+  const allProducts = await db
+    .select()
+    .from(adminProducts)
+    .where(isNull(adminProducts.notionPageId));
 
-  const notionNames = new Set<string>();
-  for (const p of allProducts) {
-    if (p.notionPageId) {
-      notionNames.add(`${p.name}::${p.audience}`);
-    }
-  }
-
-  const orphansWithNotionMatch: number[] = [];
-  const orphansWithoutMatch: { id: number; key: string }[] = [];
+  const seen = new Map<string, number>();
+  const toDelete: number[] = [];
 
   for (const p of allProducts) {
-    if (p.notionPageId) continue;
     const key = `${p.name}::${p.audience}`;
-    if (notionNames.has(key)) {
-      orphansWithNotionMatch.push(p.id);
+    if (seen.has(key)) {
+      toDelete.push(Math.max(p.id, seen.get(key)!));
+      seen.set(key, Math.min(p.id, seen.get(key)!));
     } else {
-      orphansWithoutMatch.push({ id: p.id, key });
+      seen.set(key, p.id);
     }
   }
-
-  const seenOrphanKeys = new Set<string>();
-  const orphanDuplicates: number[] = [];
-  for (const o of orphansWithoutMatch) {
-    if (seenOrphanKeys.has(o.key)) {
-      orphanDuplicates.push(o.id);
-    } else {
-      seenOrphanKeys.add(o.key);
-    }
-  }
-
-  const toDelete = [...orphansWithNotionMatch, ...orphanDuplicates];
 
   for (const id of toDelete) {
     await db
@@ -412,7 +335,7 @@ export async function cleanupDuplicateAdminProducts(): Promise<number> {
 
   if (toDelete.length > 0) {
     console.log(
-      `[upsert-admin] Cleaned up ${toDelete.length} orphaned admin_products (${orphansWithNotionMatch.length} superseded by Notion, ${orphanDuplicates.length} duplicate orphans)`,
+      `[upsert-admin] Cleaned up ${toDelete.length} duplicate admin_products (no notion_page_id, kept lowest ID)`,
     );
   }
 

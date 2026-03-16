@@ -524,20 +524,22 @@ export function registerAdminProductRoutes(app: Express) {
 
       await cleanupDuplicateAdminProducts();
 
-      const env: Environment = process.env.REPLIT_DOMAINS ? "prod" : "staging";
-      const [ppSnap, feSnap, ovrSnap] = await Promise.all([
-        getActiveRegistrySnapshot(env, "products_pricing"),
-        getActiveRegistrySnapshot(env, "features_entitlements"),
-        getActiveRegistrySnapshot(env, "product_entitlement_overrides"),
-      ]);
-
       let upsertResult = null;
-      if (ppSnap && feSnap && ovrSnap) {
-        upsertResult = await upsertAdminFromNotionSnapshots(
-          ppSnap.payload as ProductsPricingSnapshot,
-          feSnap.payload as FeaturesEntitlementsSnapshot,
-          ovrSnap.payload as ProductEntitlementOverridesSnapshot,
-        );
+      if (syncResult.ok) {
+        const env: Environment = process.env.REPLIT_DOMAINS ? "prod" : "staging";
+        const [ppSnap, feSnap, ovrSnap] = await Promise.all([
+          getActiveRegistrySnapshot(env, "products_pricing"),
+          getActiveRegistrySnapshot(env, "features_entitlements"),
+          getActiveRegistrySnapshot(env, "product_entitlement_overrides"),
+        ]);
+
+        if (ppSnap && feSnap && ovrSnap) {
+          upsertResult = await upsertAdminFromNotionSnapshots(
+            ppSnap.payload as ProductsPricingSnapshot,
+            feSnap.payload as FeaturesEntitlementsSnapshot,
+            ovrSnap.payload as ProductEntitlementOverridesSnapshot,
+          );
+        }
       }
 
       res.json({

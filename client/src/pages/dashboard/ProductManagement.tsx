@@ -864,15 +864,15 @@ function NotionSyncSection() {
           <p className="text-sm text-violet-700 dark:text-violet-300 mt-1">
             Pull the latest products, entitlements, and overrides from the Notion registry and apply them to the admin database.
           </p>
-          {lastResult && lastResult.upsert && (
+          {lastResult && lastResult.ok && lastResult.upsert && (
             <div className="text-sm text-violet-800 dark:text-violet-200 mt-2 font-medium" data-testid="text-notion-sync-result">
               <p>Applied: {lastResult.upsert.products.created} new / {lastResult.upsert.products.updated} updated products · {lastResult.upsert.entitlements.created} new / {lastResult.upsert.entitlements.updated} updated entitlements · {lastResult.upsert.overrides.created} new / {lastResult.upsert.overrides.updated} updated overrides</p>
               {lastResult.elapsed && <p className="mt-1 text-xs">Synced in {lastResult.elapsed}ms</p>}
             </div>
           )}
           {lastResult && !lastResult.ok && (
-            <p className="text-sm text-amber-700 dark:text-amber-300 mt-2 font-medium" data-testid="text-notion-sync-error">
-              Notion data has {lastResult.errorCount} validation issue(s) — products were still applied from the last known good snapshot.
+            <p className="text-sm text-red-700 dark:text-red-300 mt-2 font-medium" data-testid="text-notion-sync-error">
+              Sync failed: {lastResult.error} {lastResult.errorCount ? `(${lastResult.errorCount} errors)` : ""} — Fix Notion data issues and retry to apply products.
             </p>
           )}
           <div className="mt-4">
