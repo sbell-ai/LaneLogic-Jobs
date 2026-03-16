@@ -146,26 +146,6 @@ async function upsertEntitlement(
     return existingByNotion.id;
   }
 
-  const [existingByKey] = await tx
-    .select()
-    .from(adminEntitlements)
-    .where(
-      and(
-        eq(adminEntitlements.key, ent.entitlementKey),
-        isNull(adminEntitlements.notionPageId),
-      ),
-    )
-    .limit(1);
-
-  if (existingByKey) {
-    await tx
-      .update(adminEntitlements)
-      .set({ ...updateFields, notionPageId: ent.notionPageId })
-      .where(eq(adminEntitlements.id, existingByKey.id));
-    result.entitlements.updated++;
-    return existingByKey.id;
-  }
-
   const [created] = await tx
     .insert(adminEntitlements)
     .values({
@@ -233,38 +213,12 @@ async function upsertProduct(
     result.products.updated++;
     dbId = existingByNotion.id;
   } else {
-    const [existingByStripe] = prod.stripeProductId
-      ? await tx
-          .select()
-          .from(adminProducts)
-          .where(
-            and(
-              eq(adminProducts.stripeProductId, prod.stripeProductId),
-              isNull(adminProducts.notionPageId),
-            ),
-          )
-          .limit(1)
-      : [undefined];
-
-    if (existingByStripe) {
-      await tx
-        .update(adminProducts)
-        .set({
-          ...values,
-          notionPageId: prod.notionPageId,
-          updatedAt: new Date(),
-        })
-        .where(eq(adminProducts.id, existingByStripe.id));
-      result.products.updated++;
-      dbId = existingByStripe.id;
-    } else {
-      const [created] = await tx
-        .insert(adminProducts)
-        .values({ ...values, notionPageId: prod.notionPageId })
-        .returning();
-      result.products.created++;
-      dbId = created.id;
-    }
+    const [created] = await tx
+      .insert(adminProducts)
+      .values({ ...values, notionPageId: prod.notionPageId })
+      .returning();
+    result.products.created++;
+    dbId = created.id;
   }
 
   const entitlementIds = prod.entitlementPageIds
@@ -312,31 +266,6 @@ async function upsertOverride(
       .update(adminProductOverrides)
       .set({ ...values, updatedAt: new Date() })
       .where(eq(adminProductOverrides.id, existingByNotion.id));
-    result.overrides.updated++;
-    return;
-  }
-
-  const [existingByPair] = await tx
-    .select()
-    .from(adminProductOverrides)
-    .where(
-      and(
-        eq(adminProductOverrides.productId, productDbId),
-        eq(adminProductOverrides.entitlementId, entitlementDbId),
-        isNull(adminProductOverrides.notionPageId),
-      ),
-    )
-    .limit(1);
-
-  if (existingByPair) {
-    await tx
-      .update(adminProductOverrides)
-      .set({
-        ...values,
-        notionPageId: ovr.notionPageId,
-        updatedAt: new Date(),
-      })
-      .where(eq(adminProductOverrides.id, existingByPair.id));
     result.overrides.updated++;
     return;
   }
