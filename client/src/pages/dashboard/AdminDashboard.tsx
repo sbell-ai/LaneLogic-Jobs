@@ -989,7 +989,7 @@ DISP-001,Fleet Dispatcher,Metro Logistics,Contract,"Ground Transportation Ops (D
       <div className="bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 rounded-xl p-4 text-sm text-blue-800 dark:text-blue-300 mb-6">
         <p className="font-semibold mb-1">Required columns:</p>
         <code className="text-xs">externalJobKey, title, description, requirements</code>
-        <p className="mt-1">Optional: <code className="text-xs">companyName, jobType, category, subcategory, industry, locationCity, locationState, locationCountry, coreResponsibilities, benefits, salaryMin, salaryMax, salaryUnit, experienceLevelYears (0-2 | 2-5 | 5-10 | 10+), skills, keywords, applyUrl</code></p>
+        <p className="mt-1">Optional: <code className="text-xs">companyName, jobType, category, subcategory, industry, locationCity, locationState, locationCountry, workLocationType (remote | hybrid | on_site | otr | field_based), coreResponsibilities, benefits, salaryMin, salaryMax, salaryUnit, experienceLevelYears (0-2 | 2-5 | 5-10 | 10+), skills, keywords, applyUrl</code></p>
       </div>
 
       <div className="bg-white dark:bg-slate-900 rounded-2xl border border-border p-8 mb-6">

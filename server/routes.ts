@@ -188,6 +188,12 @@ function validateAndMapCsvRow(
   if (experienceLevelYears && !ALLOWED_EXPERIENCE_BANDS.has(experienceLevelYears)) {
     errors.push({ rowNumber, field: "experienceLevelYears", errorCode: "INVALID_EXPERIENCE_LEVEL", errorMessage: `experienceLevelYears "${experienceLevelYears}" is not valid. Allowed values: 0-2, 2-5, 5-10, 10+` });
   }
+  const ALLOWED_WORK_LOCATION_TYPES = new Set(["remote", "hybrid", "on_site", "otr", "field_based"]);
+  const rawWorkLocationType = get("workLocationType") || null;
+  if (rawWorkLocationType && !ALLOWED_WORK_LOCATION_TYPES.has(rawWorkLocationType)) {
+    errors.push({ rowNumber, field: "workLocationType", errorCode: "INVALID_WORK_LOCATION_TYPE", errorMessage: `workLocationType "${rawWorkLocationType}" is not valid. Allowed values: remote, hybrid, on_site, otr, field_based` });
+  }
+
   const skillsRaw = get("skills");
   const keywordsRaw = get("keywords");
   const rawSkills = skillsRaw ? skillsRaw.split(",").map(s => s.trim()).filter(Boolean) : [];
@@ -232,7 +238,7 @@ function validateAndMapCsvRow(
     locationCity: get("locationCity") || null,
     locationState: get("locationState") || null,
     locationCountry: get("locationCountry") || null,
-    workLocationType: get("workLocationType") || null,
+    workLocationType: rawWorkLocationType && ALLOWED_WORK_LOCATION_TYPES.has(rawWorkLocationType) ? rawWorkLocationType : null,
     salary,
     applyUrl,
     isExternalApply,
