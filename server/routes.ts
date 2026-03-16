@@ -397,6 +397,25 @@ export async function registerRoutes(
   const { registerAdminProductRoutes } = await import("./adminProductRoutes");
   registerAdminProductRoutes(app);
 
+  // One-time: normalize any admin_products rows that have non-standard audience values
+  // (e.g. "Job Seeker" Title Case → "job_seeker") caused by old form submissions
+  storage.getAdminProducts().then(async (products) => {
+    const fix = (aud: string) => {
+      const l = aud.toLowerCase();
+      if (aud === "employer" || aud === "job_seeker") return null; // already correct
+      if (l.includes("employer")) return "employer";
+      if (l.includes("job") || l.includes("seeker")) return "job_seeker";
+      return null;
+    };
+    for (const p of products) {
+      const normalized = fix(p.audience);
+      if (normalized) {
+        await storage.updateAdminProduct(p.id, { audience: normalized }).catch(() => {});
+        console.log(`[startup] Normalized audience for product "${p.name}" (id=${p.id}): "${p.audience}" → "${normalized}"`);
+      }
+    }
+  }).catch(() => {});
+
   const { employerVerificationRouter } = await import("./routes/employerVerification");
   app.use(employerVerificationRouter);
 

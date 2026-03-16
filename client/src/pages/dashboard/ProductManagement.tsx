@@ -167,8 +167,10 @@ function ProductsTab() {
       </div>
 
       {(() => {
-        const jobSeekerProducts = products?.filter((p) => p.audience === "job_seeker" && p.planType !== "Top-up") || [];
-        const employerProducts = products?.filter((p) => p.audience === "employer" && p.planType !== "Top-up") || [];
+        const isJobSeeker = (aud: string) => aud === "job_seeker" || aud.toLowerCase().includes("job") || aud.toLowerCase().includes("seeker");
+        const isEmployer = (aud: string) => aud === "employer" || aud.toLowerCase().includes("employer");
+        const jobSeekerProducts = products?.filter((p) => isJobSeeker(p.audience) && p.planType !== "Top-up") || [];
+        const employerProducts = products?.filter((p) => isEmployer(p.audience) && !isJobSeeker(p.audience) && p.planType !== "Top-up") || [];
         const addOnProducts = products?.filter((p) => p.planType === "Top-up") || [];
 
         const renderProductCard = (p: ProductWithEntitlements) => (

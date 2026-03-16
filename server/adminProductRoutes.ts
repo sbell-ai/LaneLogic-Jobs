@@ -68,6 +68,13 @@ const overrideSchema = z.object({
   notes: z.string().nullable().optional(),
 });
 
+function normalizeAudienceForStorage(audience: string): string {
+  const lower = audience.toLowerCase();
+  if (lower.includes("employer")) return "employer";
+  if (lower.includes("job") || lower.includes("seeker")) return "job_seeker";
+  return audience;
+}
+
 export function registerAdminProductRoutes(app: Express) {
   // ---- Products CRUD ----
   app.get("/api/admin/products", async (req, res) => {
@@ -99,11 +106,30 @@ export function registerAdminProductRoutes(app: Express) {
     }
   });
 
+  app.post("/api/admin/products/normalize-audiences", async (req, res) => {
+    if (!requireAdmin(req, res)) return;
+    try {
+      const products = await storage.getAdminProducts();
+      let fixed = 0;
+      for (const p of products) {
+        const normalized = normalizeAudienceForStorage(p.audience);
+        if (normalized !== p.audience) {
+          await storage.updateAdminProduct(p.id, { audience: normalized });
+          fixed++;
+        }
+      }
+      res.json({ fixed, total: products.length });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   app.post("/api/admin/products", async (req, res) => {
     if (!requireAdmin(req, res)) return;
     try {
       const parsed = productSchema.parse(req.body);
       const { entitlementIds, ...productData } = parsed;
+      productData.audience = normalizeAudienceForStorage(productData.audience);
 
       const activeProducts = await storage.getAdminProducts();
       const duplicate = activeProducts.find(
@@ -200,6 +226,7 @@ export function registerAdminProductRoutes(app: Express) {
 
       const parsed = productSchema.partial().parse(req.body);
       const { entitlementIds, ...updates } = parsed;
+      if (updates.audience) updates.audience = normalizeAudienceForStorage(updates.audience);
 
       if (updates.name && updates.name !== existing.name) {
         const activeProducts = await storage.getAdminProducts();
