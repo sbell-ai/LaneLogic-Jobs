@@ -91,14 +91,22 @@ const SEED_RULES = [
   { requirementKey: "msha_part48", conditionType: "track", conditionValue: "Mining" },
 ];
 
+let _seedCompleted = false;
 export async function seedSeekerCredentialData() {
+  if (_seedCompleted) return;
   try {
+    const existing = await storage.getSeekerCredentialRequirements();
+    if (existing.length >= SEED_REQUIREMENTS.length) {
+      _seedCompleted = true;
+      return;
+    }
     for (const req of SEED_REQUIREMENTS) {
       await storage.upsertSeekerCredentialRequirement(req);
     }
     for (const rule of SEED_RULES) {
       await storage.upsertSeekerRequirementRule(rule);
     }
+    _seedCompleted = true;
     console.log("[seeker-verification] Seeded credential requirements and rules");
   } catch (err) {
     console.error("[seeker-verification] Seed error:", err);
@@ -233,6 +241,11 @@ seekerVerificationRouter.post("/api/seeker/verification/evidence", async (req, r
     }
     if (request.status === "submitted") {
       return res.status(400).json({ ok: false, error: "already_submitted", message: "Request already submitted" });
+    }
+    const allReqs = await storage.getSeekerCredentialRequirements();
+    const validKeys = new Set(allReqs.map(r => r.key));
+    if (!validKeys.has(parsed.requirementKey)) {
+      return res.status(400).json({ ok: false, error: "invalid_requirement_key", message: `Unknown credential key: ${parsed.requirementKey}` });
     }
     const item = await storage.createSeekerEvidenceItem(parsed);
     res.status(201).json(item);
