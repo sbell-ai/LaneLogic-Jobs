@@ -1373,7 +1373,7 @@ function BlogTab() {
                 <FormItem>
                   <FormLabel>Content *</FormLabel>
                   <FormControl>
-                    <Textarea placeholder="Write your article content here..." className="min-h-[280px] font-sans text-sm leading-relaxed" data-testid="textarea-blog-content" {...field} />
+                    <RichTextEditor value={field.value || ""} onChange={field.onChange} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -1426,7 +1426,7 @@ function BlogTab() {
       )}
 
       <Dialog open={!!editPost} onOpenChange={() => setEditPost(null)}>
-        <DialogContent className="max-w-lg max-h-[80vh] overflow-y-auto">
+        <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
           <DialogHeader><DialogTitle>Edit Blog Post</DialogTitle></DialogHeader>
           <div className="space-y-4">
             <div><Label>Title</Label><Input value={editForm.title} onChange={e => setEditForm(f => ({ ...f, title: e.target.value }))} data-testid="input-edit-blog-title" /></div>
@@ -1446,7 +1446,10 @@ function BlogTab() {
               <Label>Cover Image</Label>
               <ImageUpload value={editForm.imageUrl || ""} onChange={v => setEditForm(f => ({ ...f, imageUrl: v }))} data-testid="image-edit-blog-cover" />
             </div>
-            <div><Label>Content</Label><Textarea value={editForm.content} onChange={e => setEditForm(f => ({ ...f, content: e.target.value }))} className="min-h-[200px]" data-testid="textarea-edit-blog-content" /></div>
+            <div>
+              <Label className="mb-2 block">Content</Label>
+              <RichTextEditor value={editForm.content} onChange={v => setEditForm(f => ({ ...f, content: v }))} />
+            </div>
             <div className="flex items-center justify-between py-2 px-1 border rounded-lg">
               <Label className="font-medium">Published</Label>
               <Switch
