@@ -525,11 +525,10 @@ export function registerAdminProductRoutes(app: Express) {
       let upsertResult = null;
       let usedFallback = false;
 
-      const env: Environment = process.env.REPLIT_DOMAINS ? "prod" : "staging";
       const [ppSnap, feSnap, ovrSnap] = await Promise.all([
-        getActiveRegistrySnapshot(env, "products_pricing"),
-        getActiveRegistrySnapshot(env, "features_entitlements"),
-        getActiveRegistrySnapshot(env, "product_entitlement_overrides"),
+        getActiveRegistrySnapshot(environment, "products_pricing"),
+        getActiveRegistrySnapshot(environment, "features_entitlements"),
+        getActiveRegistrySnapshot(environment, "product_entitlement_overrides"),
       ]);
 
       if (ppSnap && feSnap && ovrSnap) {
