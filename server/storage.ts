@@ -1055,8 +1055,15 @@ export class DatabaseStorage implements IStorage {
     if (!req) throw new Error("Request not found");
     const existing = req.requirementsSnapshot || [];
     const merged = Array.from(new Set([...existing, ...keys]));
+    const hasNewKeys = merged.length > existing.length;
+    const updates: Record<string, any> = { requirementsSnapshot: merged, updatedAt: new Date() };
+    if (hasNewKeys && req.status === "submitted") {
+      updates.status = "needs_more";
+      updates.adminNotes = (req.adminNotes ? req.adminNotes + "\n" : "") +
+        "[System] New credential requirements added from job application. Status reverted to needs_more.";
+    }
     const [updated] = await db.update(seekerVerificationRequests)
-      .set({ requirementsSnapshot: merged, updatedAt: new Date() })
+      .set(updates)
       .where(eq(seekerVerificationRequests.id, requestId))
       .returning();
     return updated;
