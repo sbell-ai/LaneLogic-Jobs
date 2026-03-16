@@ -26,6 +26,12 @@ function getEnvironment(): Environment {
   return process.env.REPLIT_DOMAINS ? "prod" : "staging";
 }
 
+function normalizeAudience(audience: string): string {
+  if (audience === "employer") return "Employer";
+  if (audience === "job_seeker") return "Job Seeker";
+  return audience;
+}
+
 async function loadFromAdminTables(): Promise<{
   products: ProductRow[];
   entitlements: EntitlementRow[];
@@ -59,13 +65,13 @@ async function loadFromAdminTables(): Promise<{
       const price = p.priceMonthly ?? p.priceYearly ?? p.priceOneTime ?? 0;
       let billingCycle = "Monthly";
       if (p.stripePriceIdYearly || (p.priceYearly && !p.priceMonthly)) {
-        billingCycle = "Annual";
+        billingCycle = "Yearly";
       }
 
       return {
         notionPageId: `admin-product-${p.id}`,
         productName: p.name,
-        audience: p.audience,
+        audience: normalizeAudience(p.audience),
         billingCycle,
         planType: p.planType,
         price,
@@ -93,7 +99,7 @@ async function loadFromAdminTables(): Promise<{
         monthlyDuplicates.push({
           notionPageId: `admin-product-${p.id}-monthly`,
           productName: p.name,
-          audience: p.audience,
+          audience: normalizeAudience(p.audience),
           billingCycle: "Monthly",
           planType: p.planType,
           price: p.priceMonthly ?? 0,
@@ -111,7 +117,7 @@ async function loadFromAdminTables(): Promise<{
           (ep) => ep.notionPageId === `admin-product-${p.id}`
         );
         if (existingIdx >= 0) {
-          products[existingIdx].billingCycle = "Annual";
+          products[existingIdx].billingCycle = "Yearly";
           products[existingIdx].price = p.priceYearly ?? 0;
           products[existingIdx].stripePriceId = p.stripePriceIdYearly!;
         }
