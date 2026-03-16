@@ -32,7 +32,8 @@ export function computeRequirements(
   allRules: SeekerRequirementRule[],
   userTrack: string | null | undefined,
   appliedJobTags: string[],
-  employerCategory?: string | null
+  employerCategory?: string | null,
+  jobState?: string | null
 ): SeekerCredentialRequirement[] {
   const matched = new Set<string>();
   for (const rule of allRules) {
@@ -47,6 +48,9 @@ export function computeRequirements(
     if (rule.conditionType === "employer_category" && employerCategory && employerCategory.toLowerCase() === rule.conditionValue.toLowerCase()) {
       matched.add(rule.requirementKey);
     }
+    if (rule.conditionType === "job_state" && jobState && jobState.toLowerCase() === rule.conditionValue.toLowerCase()) {
+      matched.add(rule.requirementKey);
+    }
   }
   return allRequirements.filter(r => matched.has(r.key));
 }
@@ -54,11 +58,12 @@ export function computeRequirements(
 export async function computeRequirementsForSeeker(
   userTrack: string | null | undefined,
   jobTags?: string[],
-  employerCategory?: string | null
+  employerCategory?: string | null,
+  jobState?: string | null
 ): Promise<SeekerCredentialRequirement[]> {
   const allReqs = await storage.getSeekerCredentialRequirements();
   const allRules = await storage.getSeekerRequirementRules();
-  return computeRequirements(allReqs, allRules, userTrack, jobTags || [], employerCategory);
+  return computeRequirements(allReqs, allRules, userTrack, jobTags || [], employerCategory, jobState);
 }
 
 const SEED_REQUIREMENTS = [
@@ -109,15 +114,17 @@ seekerVerificationRouter.get("/api/seeker/verification/requirements", async (req
     const jobIdParam = req.query.jobId ? Number(req.query.jobId) : null;
     let jobTags: string[] = [];
     let employerCategory: string | null = null;
+    let jobState: string | null = null;
     if (jobIdParam) {
       const job = await storage.getJob(jobIdParam);
       if (job) {
         if (job.tags) jobTags = job.tags.filter((t): t is string => !!t);
+        jobState = job.locationState || null;
         const employer = await storage.getUser(job.employerId);
         if (employer) employerCategory = employer.employerCategory || null;
       }
     }
-    const computed = computeRequirements(allReqs, allRules, user.seekerTrack, jobTags, employerCategory);
+    const computed = computeRequirements(allReqs, allRules, user.seekerTrack, jobTags, employerCategory, jobState);
     res.json({ requirements: computed, allRequirements: allReqs });
   } catch (err) {
     console.error("[SeekerVerification] requirements error:", err);
@@ -148,15 +155,17 @@ seekerVerificationRouter.post("/api/seeker/verification/request/get-or-create", 
     const jobId = req.body?.jobId ? Number(req.body.jobId) : null;
     let jobTags: string[] = [];
     let employerCategory: string | null = null;
+    let jobState: string | null = null;
     if (jobId) {
       const job = await storage.getJob(jobId);
       if (job) {
         if (job.tags) jobTags = job.tags.filter((t): t is string => !!t);
+        jobState = job.locationState || null;
         const employer = await storage.getUser(job.employerId);
         if (employer) employerCategory = employer.employerCategory || null;
       }
     }
-    const computed = await computeRequirementsForSeeker(user.seekerTrack, jobTags, employerCategory);
+    const computed = await computeRequirementsForSeeker(user.seekerTrack, jobTags, employerCategory, jobState);
     const keys = computed.map(r => r.key);
     if (keys.length > 0) {
       await storage.appendRequirementsSnapshot(request.id, keys);
@@ -183,7 +192,8 @@ seekerVerificationRouter.post("/api/seeker/verification/request/append-requireme
     let employerCategory: string | null = null;
     const employer = await storage.getUser(job.employerId);
     if (employer) employerCategory = employer.employerCategory || null;
-    const computed = await computeRequirementsForSeeker(user.seekerTrack, jobTags, employerCategory);
+    const jobState = job.locationState || null;
+    const computed = await computeRequirementsForSeeker(user.seekerTrack, jobTags, employerCategory, jobState);
     const keys = computed.map(r => r.key);
     if (keys.length === 0) {
       const request = await storage.getActiveSeekerVerificationRequest(user.id);

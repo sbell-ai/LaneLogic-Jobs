@@ -763,13 +763,12 @@ export async function registerRoutes(
             let employerCategory: string | null = null;
             const employer = await storage.getUser(job.employerId);
             if (employer) employerCategory = employer.employerCategory || null;
-            if (jobTags.length > 0 || employerCategory) {
-              const { computeRequirementsForSeeker } = await import("./routes/seekerVerification");
-              const computed = await computeRequirementsForSeeker(user.seekerTrack, jobTags, employerCategory);
-              if (computed.length > 0) {
-                const activeReq = await storage.getOrCreateSeekerVerificationRequest(user.id);
-                await storage.appendRequirementsSnapshot(activeReq.id, computed.map(r => r.key));
-              }
+            const jobState = job.locationState || null;
+            const { computeRequirementsForSeeker } = await import("./routes/seekerVerification");
+            const computed = await computeRequirementsForSeeker(user.seekerTrack, jobTags, employerCategory, jobState);
+            if (computed.length > 0) {
+              const activeReq = await storage.getOrCreateSeekerVerificationRequest(user.id);
+              await storage.appendRequirementsSnapshot(activeReq.id, computed.map(r => r.key));
             }
           }
         } catch (appendErr) {
