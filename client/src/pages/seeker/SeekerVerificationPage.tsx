@@ -176,10 +176,31 @@ export default function SeekerVerificationPage() {
                 <p className="text-sm text-muted-foreground">Your credentials are being reviewed. We'll update you soon.</p>
               )}
               {request.status === "verified" && (
-                <p className="text-sm text-green-600 dark:text-green-400">Your credentials have been verified!</p>
+                <div>
+                  <p className="text-sm text-green-600 dark:text-green-400 mb-3">Your credentials have been verified!</p>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => getOrCreateMutation.mutate()}
+                    disabled={getOrCreateMutation.isPending}
+                    data-testid="button-start-new-request-verified"
+                  >
+                    {getOrCreateMutation.isPending ? "Creating..." : "Update Credentials"}
+                  </Button>
+                </div>
               )}
               {request.status === "rejected" && (
-                <p className="text-sm text-red-600 dark:text-red-400">Your verification request was not approved. You may submit a new request.</p>
+                <div>
+                  <p className="text-sm text-red-600 dark:text-red-400 mb-3">Your verification request was not approved. You may submit a new request.</p>
+                  <Button
+                    size="sm"
+                    onClick={() => getOrCreateMutation.mutate()}
+                    disabled={getOrCreateMutation.isPending}
+                    data-testid="button-start-new-request"
+                  >
+                    {getOrCreateMutation.isPending ? "Creating..." : "Start New Request"}
+                  </Button>
+                </div>
               )}
             </Card>
 

@@ -84,6 +84,7 @@ const SEED_RULES = [
   { requirementKey: "twic", conditionType: "job_tag", conditionValue: "marine" },
   { requirementKey: "twic", conditionType: "job_tag", conditionValue: "port" },
   { requirementKey: "twic", conditionType: "employer_category", conditionValue: "maritime" },
+  { requirementKey: "twic", conditionType: "employer_category", conditionValue: "marine" },
   { requirementKey: "forklift_cert", conditionType: "track", conditionValue: "Warehouse" },
   { requirementKey: "forklift_cert", conditionType: "job_tag", conditionValue: "forklift" },
   { requirementKey: "icao_iata_training", conditionType: "job_tag", conditionValue: "air_freight" },
