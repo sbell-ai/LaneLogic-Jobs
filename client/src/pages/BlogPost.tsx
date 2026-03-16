@@ -100,12 +100,22 @@ export default function BlogPostPage() {
                     prose-headings:font-display prose-headings:font-bold
                     prose-h2:text-2xl prose-h2:mt-6 prose-h2:mb-3
                     prose-h3:text-xl prose-h3:mt-4 prose-h3:mb-2
+                    prose-h4:text-lg prose-h4:mt-3 prose-h4:mb-2
                     prose-p:text-base prose-p:leading-relaxed prose-p:mb-3
                     prose-a:text-primary prose-a:underline
                     prose-ul:list-disc prose-ul:pl-6 prose-ul:mb-3
                     prose-ol:list-decimal prose-ol:pl-6 prose-ol:mb-3
                     prose-li:mb-1
-                    prose-strong:font-bold"
+                    prose-strong:font-bold
+                    prose-blockquote:border-l-4 prose-blockquote:border-primary/40 prose-blockquote:pl-4 prose-blockquote:italic prose-blockquote:text-muted-foreground
+                    prose-table:w-full prose-table:border-collapse
+                    prose-th:border prose-th:border-border prose-th:p-2 prose-th:bg-slate-50 prose-th:dark:bg-slate-800 prose-th:font-semibold prose-th:text-left
+                    prose-td:border prose-td:border-border prose-td:p-2
+                    prose-img:rounded-lg prose-img:max-w-full
+                    [&_mark]:rounded [&_mark]:px-0.5
+                    [&_ul[data-type=taskList]]:list-none [&_ul[data-type=taskList]]:pl-0
+                    [&_ul[data-type=taskList]_li]:flex [&_ul[data-type=taskList]_li]:items-start [&_ul[data-type=taskList]_li]:gap-2 [&_ul[data-type=taskList]_li]:mb-1
+                    [&_ul[data-type=taskList]_li_input]:mt-1 [&_ul[data-type=taskList]_li_input]:shrink-0"
                   dangerouslySetInnerHTML={{ __html: post.content }}
                   data-testid="content-blog-post"
                 />
