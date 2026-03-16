@@ -319,7 +319,7 @@ export default function Pricing() {
                       : "text-muted-foreground hover:text-foreground"
                   }`}
                 >
-                  {aud === "Job Seeker" ? "Job Seekers" : `${aud}s`}
+                  {aud.toLowerCase().includes("job") ? "Job Seekers" : "Employers"}
                 </button>
               ))}
             </div>
