@@ -873,7 +873,7 @@ function StripeSyncSection() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const [lastResult, setLastResult] = useState<{
-    created: number; updated: number; skipped: number; total: number;
+    created: number; updated: number; total: number;
     discrepancies?: Array<{ productName: string; field: string; adminValue: number | null; stripeValue: number | null }>;
   } | null>(null);
 
@@ -884,10 +884,9 @@ function StripeSyncSection() {
       setLastResult(data);
       queryClient.invalidateQueries({ queryKey: ["/api/admin/products"] });
       const discMsg = data.discrepancies?.length ? ` ${data.discrepancies.length} price discrepancy(ies) corrected.` : "";
-      const skipMsg = data.skipped > 0 ? ` ${data.skipped} non-Notion product(s) skipped.` : "";
       toast({
         title: "Stripe sync complete",
-        description: `${data.created} created, ${data.updated} updated (${data.total} Stripe products).${skipMsg}${discMsg}`,
+        description: `${data.created} created, ${data.updated} updated (${data.total} Stripe products found).${discMsg}`,
       });
     },
     onError: (err: any) => {
@@ -907,9 +906,7 @@ function StripeSyncSection() {
           {lastResult && (
             <div className="mt-2 space-y-1">
               <p className="text-sm text-blue-800 dark:text-blue-200 font-medium" data-testid="text-stripe-sync-result">
-                Last sync: {lastResult.created} created, {lastResult.updated} updated
-                {lastResult.skipped > 0 && `, ${lastResult.skipped} non-Notion skipped`}
-                {" "}({lastResult.total} Stripe products)
+                Last sync: {lastResult.created} created, {lastResult.updated} updated ({lastResult.total} Stripe products)
               </p>
               {lastResult.discrepancies && lastResult.discrepancies.length > 0 && (
                 <div className="mt-2 rounded border border-amber-300 bg-amber-50 dark:bg-amber-950/20 p-3" data-testid="stripe-discrepancy-list">

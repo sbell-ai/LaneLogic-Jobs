@@ -541,19 +541,8 @@ export function registerAdminProductRoutes(app: Express) {
           .map((p) => [p.stripeProductId!, p])
       );
 
-      const notionEnv: Environment = process.env.NODE_ENV === "production" ? "prod" : "staging";
-      const notionSnap = await getActiveRegistrySnapshot(notionEnv, "products_pricing");
-      const notionProductIds = new Set<string>();
-      if (notionSnap?.payload) {
-        const pp = notionSnap.payload as ProductsPricingSnapshot;
-        for (const row of pp.rows) {
-          if (row.stripeProductId) notionProductIds.add(row.stripeProductId);
-        }
-      }
-
       let created = 0;
       let updated = 0;
-      let skipped = 0;
       const discrepancies: Array<{ productName: string; field: string; adminValue: number | null; stripeValue: number | null }> = [];
 
       for (const sp of stripeProducts.data) {
@@ -608,11 +597,6 @@ export function registerAdminProductRoutes(app: Express) {
           }
           updated++;
         } else {
-          if (notionProductIds.size > 0 && !notionProductIds.has(sp.id)) {
-            skipped++;
-            continue;
-          }
-
           const isOneTime = !monthlyPriceId && !yearlyPriceId && !!oneTimePriceId;
           const rawAudience = (sp.metadata?.audience as string) || "";
           const audience = rawAudience.toLowerCase().includes("employer") ? "employer" : "job_seeker";
@@ -641,7 +625,7 @@ export function registerAdminProductRoutes(app: Express) {
         }
       }
 
-      res.json({ success: true, created, updated, skipped, total: stripeProducts.data.length, discrepancies });
+      res.json({ success: true, created, updated, total: stripeProducts.data.length, discrepancies });
     } catch (err: any) {
       console.error("[stripe-sync] Error:", err.message);
       res.status(500).json({ error: err.message });
