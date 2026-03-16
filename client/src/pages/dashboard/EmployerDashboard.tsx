@@ -25,7 +25,7 @@ import { z } from "zod";
 import { Link } from "wouter";
 import { getCategories, getSubcategories, validateCategoryPair } from "@shared/jobTaxonomy";
 
-const JOB_TYPES = ["Full-time", "Part-time", "Contract", "Seasonal", "Owner-Operator", "Lease Purchase", "Temporary"];
+const JOB_TYPES = ["Full-time", "Part-time", "Contract", "Seasonal", "Owner-Operator", "Lease Purchase", "OTR", "Temporary", "Other"];
 
 function fmtLoc(job: Job) {
   return [job.locationCity, job.locationState, job.locationCountry].filter(Boolean).join(", ");

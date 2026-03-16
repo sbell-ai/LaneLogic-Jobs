@@ -1,7 +1,7 @@
 # LaneLogic Jobs - Transportation & Logistics Job Board
 
 ## Overview
-LaneLogic Jobs is a search-first job board tailored for the transportation and logistics industry, inspired by the HiringCafe model. Its primary purpose is to connect job seekers with relevant roles as quickly as possible, with the homepage functioning directly as the search interface, featuring instant job loading and infinite scroll. The platform operates on a business model where job seekers use the service for free (requiring an account for applications), and revenue is generated from employer subscriptions, add-ons, and premium placements.
+LaneLogic Jobs is a search-first job board tailored for the transportation and logistics industry. Its primary purpose is to connect job seekers with relevant roles as quickly as possible, with the homepage functioning directly as the search interface, featuring instant job loading and infinite scroll. The platform operates on a business model where job seekers use the service for free (requiring an account for applications), and revenue is generated from employer subscriptions, add-ons, and premium placements.
 
 Key capabilities include a deep transportation taxonomy, rich company profiles that act as storefronts for trucking companies, an industry-specific content library, programmatic SEO for specialized job searches, and a social publishing pipeline for job promotion. The vision is to be the leading niche job board in the transportation and logistics sector.
 

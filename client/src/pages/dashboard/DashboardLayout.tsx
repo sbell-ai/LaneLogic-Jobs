@@ -45,7 +45,7 @@ function AppSidebar({ role }: { role: string }) {
     { title: "Products", path: "/dashboard/admin/products", icon: Package },
     { title: "Imports", path: "/dashboard/admin/imports", icon: ArrowDownToLine },
     { title: "Employer Registry", path: "/dashboard/admin/employer-registry", icon: ShieldCheck },
-    { title: "Verification", path: "/dashboard/admin/verification", icon: ShieldCheck },
+    { title: "Employer Verification", path: "/dashboard/admin/employer-verification", icon: ShieldCheck },
     { title: "Seeker Verification", path: "/dashboard/admin/seeker-verification", icon: ShieldCheck },
   ];
 
