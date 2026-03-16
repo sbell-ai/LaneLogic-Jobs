@@ -541,7 +541,7 @@ function EmployerMembershipTab({ user }: { user: NonNullable<ReturnType<typeof u
               <Card key={addon.stripePriceId} className="p-6">
                 <h3 className="text-lg font-bold font-display mb-2" data-testid={`text-addon-name-${addon.stripePriceId}`}>{addon.name}</h3>
                 <p className="text-2xl font-bold text-primary mb-3" data-testid={`text-addon-price-${addon.stripePriceId}`}>
-                  ${(addon.price / 100).toFixed(2)}
+                  ${Number.isInteger(addon.price) ? addon.price : addon.price.toFixed(2)}
                   <span className="text-sm font-normal text-muted-foreground ml-1">one-time</span>
                 </p>
                 {addon.features.length > 0 && (
