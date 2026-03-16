@@ -523,28 +523,32 @@ export function registerAdminProductRoutes(app: Express) {
       const syncResult = await syncAllRegistries({ environment });
 
       let upsertResult = null;
-      if (syncResult.ok) {
-        const env: Environment = process.env.REPLIT_DOMAINS ? "prod" : "staging";
-        const [ppSnap, feSnap, ovrSnap] = await Promise.all([
-          getActiveRegistrySnapshot(env, "products_pricing"),
-          getActiveRegistrySnapshot(env, "features_entitlements"),
-          getActiveRegistrySnapshot(env, "product_entitlement_overrides"),
-        ]);
+      let usedFallback = false;
 
-        if (ppSnap && feSnap && ovrSnap) {
-          upsertResult = await upsertAdminFromNotionSnapshots(
-            ppSnap.payload as ProductsPricingSnapshot,
-            feSnap.payload as FeaturesEntitlementsSnapshot,
-            ovrSnap.payload as ProductEntitlementOverridesSnapshot,
-          );
+      const env: Environment = process.env.REPLIT_DOMAINS ? "prod" : "staging";
+      const [ppSnap, feSnap, ovrSnap] = await Promise.all([
+        getActiveRegistrySnapshot(env, "products_pricing"),
+        getActiveRegistrySnapshot(env, "features_entitlements"),
+        getActiveRegistrySnapshot(env, "product_entitlement_overrides"),
+      ]);
+
+      if (ppSnap && feSnap && ovrSnap) {
+        if (!syncResult.ok) {
+          usedFallback = true;
+          console.warn("[registry-sync/products] Fresh sync failed — falling back to active snapshots for upsert");
         }
-
+        upsertResult = await upsertAdminFromNotionSnapshots(
+          ppSnap.payload as ProductsPricingSnapshot,
+          feSnap.payload as FeaturesEntitlementsSnapshot,
+          ovrSnap.payload as ProductEntitlementOverridesSnapshot,
+        );
         await cleanupDuplicateAdminProducts();
       }
 
       res.json({
         ...syncResult,
         upsert: upsertResult,
+        usedFallback,
       });
     } catch (err: any) {
       console.error("[registry-sync/products] Error:", err.message);

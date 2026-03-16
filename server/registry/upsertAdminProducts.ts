@@ -39,8 +39,13 @@ export async function upsertAdminFromNotionSnapshots(
   await db.transaction(async (tx) => {
     const entitlementNotionToDbId = new Map<string, number>();
     for (const ent of feSnapshot.rows) {
-      const dbId = await upsertEntitlement(tx, ent, result);
-      entitlementNotionToDbId.set(ent.notionPageId, dbId);
+      try {
+        const dbId = await upsertEntitlement(tx, ent, result);
+        entitlementNotionToDbId.set(ent.notionPageId, dbId);
+      } catch (err: any) {
+        console.error(`[upsert-admin] entitlement "${ent.entitlementKey}" failed:`, err.message);
+        throw err;
+      }
     }
 
     const activeEntNotionIds = feSnapshot.rows.map((e) => e.notionPageId);
@@ -61,8 +66,13 @@ export async function upsertAdminFromNotionSnapshots(
 
     const productNotionToDbId = new Map<string, number>();
     for (const prod of ppSnapshot.rows) {
-      const dbId = await upsertProduct(tx, prod, entitlementNotionToDbId, result);
-      productNotionToDbId.set(prod.notionPageId, dbId);
+      try {
+        const dbId = await upsertProduct(tx, prod, entitlementNotionToDbId, result);
+        productNotionToDbId.set(prod.notionPageId, dbId);
+      } catch (err: any) {
+        console.error(`[upsert-admin] product "${prod.productName}" (${prod.notionPageId}) failed:`, err.message);
+        throw err;
+      }
     }
 
     const activeProdNotionIds = ppSnapshot.rows.map((p) => p.notionPageId);
@@ -82,10 +92,18 @@ export async function upsertAdminFromNotionSnapshots(
     result.archived.products = archiveProdResult.length;
 
     const activeOvrNotionIds: string[] = [];
-    for (const ovr of ovrSnapshot.rows) {
+    const activeOverrides = ovrSnapshot.rows.filter(
+      (ovr) => ovr.status === "Active",
+    );
+    const seenOvrPairs = new Set<string>();
+    for (const ovr of activeOverrides) {
       const productDbId = productNotionToDbId.get(ovr.productPageId);
       const entitlementDbId = entitlementNotionToDbId.get(ovr.entitlementPageId);
       if (!productDbId || !entitlementDbId) continue;
+
+      const pairKey = `${productDbId}|${entitlementDbId}`;
+      if (seenOvrPairs.has(pairKey)) continue;
+      seenOvrPairs.add(pairKey);
 
       await upsertOverride(tx, ovr, productDbId, entitlementDbId, result);
       activeOvrNotionIds.push(ovr.notionPageId);
@@ -166,39 +184,35 @@ async function upsertEntitlement(
     return existingByKey.id;
   }
 
-  try {
-    const [created] = await tx
-      .insert(adminEntitlements)
-      .values({
-        notionPageId: ent.notionPageId,
-        name: ent.entitlementName,
-        key: ent.entitlementKey,
-        type: ent.type,
-        unit: ent.unit || null,
-        defaultValue: ent.defaultValue || null,
-        status: ent.status || "Active",
-      })
-      .returning();
+  const [existingByKeyAny] = await tx
+    .select({ id: adminEntitlements.id })
+    .from(adminEntitlements)
+    .where(eq(adminEntitlements.key, ent.entitlementKey))
+    .limit(1);
+
+  const [upserted] = await tx
+    .insert(adminEntitlements)
+    .values({
+      notionPageId: ent.notionPageId,
+      name: ent.entitlementName,
+      key: ent.entitlementKey,
+      type: ent.type,
+      unit: ent.unit || null,
+      defaultValue: ent.defaultValue || null,
+      status: ent.status || "Active",
+    })
+    .onConflictDoUpdate({
+      target: adminEntitlements.key,
+      set: { ...updateFields, notionPageId: ent.notionPageId },
+    })
+    .returning();
+
+  if (existingByKeyAny) {
+    result.entitlements.updated++;
+  } else {
     result.entitlements.created++;
-    return created.id;
-  } catch (err: any) {
-    if (err.message?.includes("duplicate key") && err.message?.includes("admin_entitlements_key")) {
-      const [conflicting] = await tx
-        .select()
-        .from(adminEntitlements)
-        .where(eq(adminEntitlements.key, ent.entitlementKey))
-        .limit(1);
-      if (conflicting) {
-        await tx
-          .update(adminEntitlements)
-          .set({ ...updateFields, notionPageId: ent.notionPageId })
-          .where(eq(adminEntitlements.id, conflicting.id));
-        result.entitlements.updated++;
-        return conflicting.id;
-      }
-    }
-    throw err;
   }
+  return upserted.id;
 }
 
 async function upsertProduct(
@@ -360,29 +374,34 @@ async function upsertOverride(
     return;
   }
 
-  try {
+  {
+    const [existingByPair] = await tx
+      .select({ id: adminProductOverrides.id })
+      .from(adminProductOverrides)
+      .where(
+        and(
+          eq(adminProductOverrides.productId, productDbId),
+          eq(adminProductOverrides.entitlementId, entitlementDbId),
+        ),
+      )
+      .limit(1);
+
     await tx
       .insert(adminProductOverrides)
-      .values({ ...values, notionPageId: ovr.notionPageId });
-    result.overrides.created++;
-  } catch (err: any) {
-    if (err.message?.includes("duplicate key")) {
-      await tx
-        .update(adminProductOverrides)
-        .set({
+      .values({ ...values, notionPageId: ovr.notionPageId })
+      .onConflictDoUpdate({
+        target: [adminProductOverrides.productId, adminProductOverrides.entitlementId],
+        set: {
           ...values,
           notionPageId: ovr.notionPageId,
           updatedAt: new Date(),
-        })
-        .where(
-          and(
-            eq(adminProductOverrides.productId, productDbId),
-            eq(adminProductOverrides.entitlementId, entitlementDbId),
-          ),
-        );
+        },
+      });
+
+    if (existingByPair) {
       result.overrides.updated++;
     } else {
-      throw err;
+      result.overrides.created++;
     }
   }
 }

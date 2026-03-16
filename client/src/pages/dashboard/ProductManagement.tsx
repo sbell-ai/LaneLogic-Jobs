@@ -814,6 +814,7 @@ function NotionSyncSection() {
     elapsed?: number;
     error?: string;
     errorCount?: number;
+    usedFallback?: boolean;
     upsert?: {
       products: { created: number; updated: number };
       entitlements: { created: number; updated: number };
@@ -832,20 +833,25 @@ function NotionSyncSection() {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/entitlements"] });
       queryClient.invalidateQueries({ queryKey: ["/api/admin/product-overrides"] });
       const u = data.upsert;
-      if (data.ok) {
+      if (data.ok && !data.usedFallback) {
         const desc = u
           ? `${data.products} products synced (${u.products.created} new, ${u.products.updated} updated).`
           : `${data.products} products, ${data.entitlements} entitlements refreshed.`;
         toast({ title: "Notion sync complete", description: desc });
-      } else if (u) {
+      } else if (u && data.usedFallback) {
+        const reason = data.error === "fetch_failed"
+          ? "Could not reach Notion — applied from last successful sync."
+          : `${data.errorCount || 0} validation issue(s) in Notion — applied from last successful sync.`;
         toast({
-          title: "Notion sync: products applied with warnings",
-          description: `${u.products.created + u.products.updated} products applied. ${data.errorCount || 0} validation warning(s) in Notion data.`,
+          title: "Applied from cached data",
+          description: `${u.products.created + u.products.updated} products applied. ${reason}`,
         });
-      } else {
+      } else if (!u && !data.ok) {
         toast({
           title: "Notion sync failed",
-          description: data.error === "validation_failed" ? `${data.errorCount} validation error(s) — snapshot not promoted.` : data.message || data.error,
+          description: data.error === "validation_failed"
+            ? `${data.errorCount} validation error(s) — no cached snapshots available to fall back on.`
+            : data.message || data.error,
           variant: "destructive",
         });
       }
@@ -864,15 +870,25 @@ function NotionSyncSection() {
           <p className="text-sm text-violet-700 dark:text-violet-300 mt-1">
             Pull the latest products, entitlements, and overrides from the Notion registry and apply them to the admin database.
           </p>
-          {lastResult && lastResult.ok && lastResult.upsert && (
+          {lastResult && lastResult.upsert && !lastResult.usedFallback && (
             <div className="text-sm text-violet-800 dark:text-violet-200 mt-2 font-medium" data-testid="text-notion-sync-result">
               <p>Applied: {lastResult.upsert.products.created} new / {lastResult.upsert.products.updated} updated products · {lastResult.upsert.entitlements.created} new / {lastResult.upsert.entitlements.updated} updated entitlements · {lastResult.upsert.overrides.created} new / {lastResult.upsert.overrides.updated} updated overrides</p>
               {lastResult.elapsed && <p className="mt-1 text-xs">Synced in {lastResult.elapsed}ms</p>}
             </div>
           )}
-          {lastResult && !lastResult.ok && (
+          {lastResult && lastResult.upsert && lastResult.usedFallback && (
+            <div className="text-sm mt-2 font-medium" data-testid="text-notion-sync-fallback">
+              <p className="text-amber-700 dark:text-amber-300">
+                {lastResult.error === "fetch_failed"
+                  ? "Could not reach Notion — applied from last successful sync."
+                  : `Applied from last successful sync — Notion data has ${lastResult.errorCount || 0} validation issue(s). Fix them to get a fresh sync.`}
+              </p>
+              <p className="text-amber-600 dark:text-amber-400 mt-1">Applied: {lastResult.upsert.products.created} new / {lastResult.upsert.products.updated} updated products · {lastResult.upsert.entitlements.created} new / {lastResult.upsert.entitlements.updated} updated entitlements · {lastResult.upsert.overrides.created} new / {lastResult.upsert.overrides.updated} updated overrides</p>
+            </div>
+          )}
+          {lastResult && !lastResult.ok && !lastResult.upsert && (
             <p className="text-sm text-red-700 dark:text-red-300 mt-2 font-medium" data-testid="text-notion-sync-error">
-              Sync failed: {lastResult.error} {lastResult.errorCount ? `(${lastResult.errorCount} errors)` : ""} — Fix Notion data issues and retry to apply products.
+              Sync failed: {lastResult.error} {lastResult.errorCount ? `(${lastResult.errorCount} errors)` : ""} — No cached snapshots available. Fix Notion data issues and retry.
             </p>
           )}
           <div className="mt-4">
