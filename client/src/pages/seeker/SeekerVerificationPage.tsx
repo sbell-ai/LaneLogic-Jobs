@@ -105,7 +105,7 @@ export default function SeekerVerificationPage() {
   const allRequirements = reqData?.allRequirements || [];
   const computedRequirements = reqData?.requirements || [];
   const canEdit = !request || request.status === "draft" || request.status === "needs_more";
-  const snapshot = (request as any)?.requirementsSnapshot as string[] | null | undefined;
+  const snapshot = request?.requirementsSnapshot ?? [];
   const evidenceKeys = new Set(evidence.map(e => e.requirementKey));
   const missingKeys = (snapshot || []).filter(k => !evidenceKeys.has(k));
   const canSubmit = request && (request.status === "draft" || request.status === "needs_more") && evidence.length > 0 && missingKeys.length === 0;

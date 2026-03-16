@@ -756,6 +756,7 @@ export async function registerRoutes(
           });
         }
 
+        let verificationWarning: string | undefined;
         try {
           const job = await storage.getJob(input.jobId);
           if (job) {
@@ -772,10 +773,14 @@ export async function registerRoutes(
             }
           }
         } catch (appendErr) {
-          console.error("[applications] seeker verification append error (non-fatal):", appendErr);
+          console.error("[applications] seeker verification append error:", appendErr);
+          verificationWarning = "Application submitted, but credential requirements could not be updated. Visit your credentials page to review.";
         }
 
-        return res.status(201).json(txResult.appData);
+        const responseData = verificationWarning
+          ? { ...txResult.appData, verificationWarning }
+          : txResult.appData;
+        return res.status(201).json(responseData);
       }
 
       const appData = await storage.createApplication(input);
