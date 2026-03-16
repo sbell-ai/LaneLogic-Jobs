@@ -138,15 +138,16 @@ function ResumeTab({ userId }: { userId: number }) {
             </p>
           )}
         </div>
-        {atLimit ? (
-          <Button asChild variant="outline" data-testid="button-upgrade-resume-limit">
-            <Link href="/pricing?tab=job-seeker">Upgrade Plan</Link>
-          </Button>
-        ) : (
-          <Button onClick={() => setShowForm(!showForm)} data-testid="button-add-resume" disabled={!resumeEnt}>
+        <div className="flex items-center gap-2">
+          {atLimit && (
+            <Button asChild variant="outline" data-testid="button-upgrade-resume-limit">
+              <Link href="/pricing?tab=job-seeker">Upgrade Plan</Link>
+            </Button>
+          )}
+          <Button onClick={() => !atLimit && setShowForm(!showForm)} data-testid="button-add-resume" disabled={atLimit || !resumeEnt}>
             <Plus size={16} className="mr-2" /> Add Resume
           </Button>
-        )}
+        </div>
       </div>
 
       {atLimit && (

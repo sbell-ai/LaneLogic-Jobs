@@ -839,6 +839,9 @@ export async function registerRoutes(
     try {
       const input = api.resumes.create.input.parse(req.body);
       const user = req.user as any;
+
+      input.jobSeekerId = user.id;
+
       const entitlements = await resolveUserEntitlements(user);
       const ent = entitlements?.["resumes_per_month"];
 
