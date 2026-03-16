@@ -32,6 +32,7 @@ import SocialPublishing from "./SocialPublishing";
 import ProductManagement from "./ProductManagement";
 import ImportManagement from "./ImportManagement";
 import EmployerRegistry from "./EmployerRegistry";
+import VerificationInbox from "./VerificationInbox";
 import { insertResourceSchema, insertBlogPostSchema, insertJobSchema } from "@shared/schema";
 import { INTRO_TRUNCATE_LENGTH } from "@shared/constants";
 import { tokenize } from "@/lib/linkify";
@@ -3090,6 +3091,7 @@ export default function AdminDashboard({ section, subsection }: { section?: stri
       case "products": return <ProductManagement />;
       case "imports": return <ImportManagement />;
       case "employer-registry": return <EmployerRegistry />;
+      case "verification": return <VerificationInbox />;
       default: return <UsersLandingTab />;
     }
   };

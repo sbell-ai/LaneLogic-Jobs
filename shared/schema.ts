@@ -1,4 +1,4 @@
-import { pgTable, text, serial, integer, boolean, timestamp, jsonb, uniqueIndex, real } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, boolean, timestamp, jsonb, uniqueIndex, real, index } from "drizzle-orm/pg-core";
 import { relations, sql } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
@@ -26,6 +26,9 @@ export const users = pgTable("users", {
   stripeSubscriptionId: text("stripe_subscription_id"),
   resumeAccessExpiresAt: timestamp("resume_access_expires_at"),
   featuredEmployerExpiresAt: timestamp("featured_employer_expires_at"),
+  notionEmployerUrl: text("notion_employer_url"),
+  employerCategory: text("employer_category"),
+  verificationStatus: text("verification_status").notNull().default("unverified"),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
@@ -404,6 +407,43 @@ export const entitlementCreditConsumptions = pgTable("entitlement_credit_consump
   sourceEvent: text("source_event"),
   refId: integer("ref_id"),
 });
+
+export const employerVerificationRequests = pgTable("employer_verification_requests", {
+  id: serial("id").primaryKey(),
+  employerId: integer("employer_id").notNull(),
+  status: text("status").notNull().default("draft"),
+  adminNotes: text("admin_notes"),
+  decidedBy: integer("decided_by"),
+  decidedAt: timestamp("decided_at"),
+  submittedAt: timestamp("submitted_at"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => [
+  uniqueIndex("evr_employer_active_idx")
+    .on(table.employerId)
+    .where(sql`${table.status} IN ('draft', 'submitted', 'needs_more')`),
+  index("evr_status_idx").on(table.status),
+]);
+
+export const employerEvidenceItems = pgTable("employer_evidence_items", {
+  id: serial("id").primaryKey(),
+  requestId: integer("request_id").notNull(),
+  sourceType: text("source_type").notNull(),
+  sourceUrl: text("source_url"),
+  excerpt: text("excerpt"),
+  claim: text("claim"),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => [
+  index("eei_request_idx").on(table.requestId),
+]);
+
+export const insertEmployerVerificationRequestSchema = createInsertSchema(employerVerificationRequests).omit({ id: true, createdAt: true, updatedAt: true });
+export const insertEmployerEvidenceItemSchema = createInsertSchema(employerEvidenceItems).omit({ id: true, createdAt: true });
+
+export type EmployerVerificationRequest = typeof employerVerificationRequests.$inferSelect;
+export type InsertEmployerVerificationRequest = z.infer<typeof insertEmployerVerificationRequestSchema>;
+export type EmployerEvidenceItem = typeof employerEvidenceItems.$inferSelect;
+export type InsertEmployerEvidenceItem = z.infer<typeof insertEmployerEvidenceItemSchema>;
 
 export const insertEntitlementUsageWindowSchema = createInsertSchema(entitlementUsageWindows).omit({ id: true });
 export const insertEntitlementCreditGrantSchema = createInsertSchema(entitlementCreditGrants).omit({ id: true });

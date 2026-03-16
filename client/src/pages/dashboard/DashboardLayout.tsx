@@ -28,6 +28,7 @@ function AppSidebar({ role }: { role: string }) {
     { title: "Applicants", path: "/dashboard/applicants", icon: Users },
     { title: "Bulk Upload (CSV)", path: "/dashboard/upload", icon: Upload },
     { title: "Company Profile", path: "/dashboard/profile", icon: UserCircle },
+    { title: "Verification", path: "/employer/settings/verification", icon: ShieldCheck },
     { title: "Membership", path: "/dashboard/membership", icon: CreditCard },
   ];
 
@@ -43,6 +44,7 @@ function AppSidebar({ role }: { role: string }) {
     { title: "Products", path: "/dashboard/admin/products", icon: Package },
     { title: "Imports", path: "/dashboard/admin/imports", icon: ArrowDownToLine },
     { title: "Employer Registry", path: "/dashboard/admin/employer-registry", icon: ShieldCheck },
+    { title: "Verification", path: "/dashboard/admin/verification", icon: ShieldCheck },
   ];
 
   const pagesResourcesPaths = ["/dashboard/admin/pages-resources", "/dashboard/admin/site-pages", "/dashboard/admin/custom-pages", "/dashboard/admin/resources"];

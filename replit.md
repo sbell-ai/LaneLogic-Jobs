@@ -34,6 +34,7 @@ The front end utilizes React, TypeScript, Wouter for routing, and Tailwind CSS w
 - **Resume Management**: Job seekers can create text-based resumes.
 - **Blog and Resources**: Content management for blog posts and gated resource library.
 - **Site Management**: Admin tools for managing site settings, custom pages, categories, and coupons, including a WCAG AA contrast-validated footer theme editor.
+- **Employer Verification**: Multi-step verification system where employers submit evidence (DOT numbers, business licenses, etc.) for admin review. Schema: `employerVerificationRequests` + `employerEvidenceItems` tables; `verificationStatus` on `users`. Routes: `/api/employer/verification/*` (employer) and `/api/admin/employer-verification/*` (admin). Frontend: `VerificationPage.tsx` (employer) and `VerificationInbox.tsx` (admin dashboard).
 - **Add-on Purchase Flow**: One-time payments for features like "Resume Access" and "Featured Employer."
 - **Publish/Unpublish Flow**: `isPublished` boolean controls content visibility across all content types.
 - **Social Publishing Module**: Admin module for creating, scheduling, and queuing social media posts via Zapier webhooks to platforms like LinkedIn, Facebook, and Instagram.
