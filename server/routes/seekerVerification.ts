@@ -97,24 +97,22 @@ export async function seedSeekerCredentialData() {
   try {
     const existingReqs = await storage.getSeekerCredentialRequirements();
     const existingRules = await storage.getSeekerRequirementRules();
-    const needsReqs = existingReqs.length < SEED_REQUIREMENTS.length;
-    const needsRules = existingRules.length < SEED_RULES.length;
-    if (!needsReqs && !needsRules) {
+    const existingReqKeys = new Set(existingReqs.map(r => r.key));
+    const existingRuleKeys = new Set(existingRules.map(r => `${r.requirementKey}:${r.conditionType}:${r.conditionValue}`));
+    const missingReqs = SEED_REQUIREMENTS.filter(r => !existingReqKeys.has(r.key));
+    const missingRules = SEED_RULES.filter(r => !existingRuleKeys.has(`${r.requirementKey}:${r.conditionType}:${r.conditionValue}`));
+    if (missingReqs.length === 0 && missingRules.length === 0) {
       _seedCompleted = true;
       return;
     }
-    if (needsReqs) {
-      for (const req of SEED_REQUIREMENTS) {
-        await storage.upsertSeekerCredentialRequirement(req);
-      }
+    for (const req of missingReqs) {
+      await storage.upsertSeekerCredentialRequirement(req);
     }
-    if (needsRules) {
-      for (const rule of SEED_RULES) {
-        await storage.upsertSeekerRequirementRule(rule);
-      }
+    for (const rule of missingRules) {
+      await storage.upsertSeekerRequirementRule(rule);
     }
     _seedCompleted = true;
-    console.log("[seeker-verification] Seeded credential data", { reqs: needsReqs, rules: needsRules });
+    console.log("[seeker-verification] Seeded credential data", { reqs: missingReqs.length, rules: missingRules.length });
   } catch (err) {
     console.error("[seeker-verification] Seed error:", err);
   }
