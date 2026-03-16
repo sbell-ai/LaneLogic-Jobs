@@ -575,26 +575,24 @@ export function registerAdminProductRoutes(app: Express) {
 
         if (existing) {
           const stripeUpdates: any = {};
-          if (monthlyPriceId) stripeUpdates.stripePriceIdMonthly = monthlyPriceId;
-          if (yearlyPriceId) stripeUpdates.stripePriceIdYearly = yearlyPriceId;
-          if (oneTimePriceId) stripeUpdates.stripePriceIdOneTime = oneTimePriceId;
+          if (monthlyPriceId !== null) stripeUpdates.stripePriceIdMonthly = monthlyPriceId;
+          else stripeUpdates.stripePriceIdMonthly = null;
+          if (yearlyPriceId !== null) stripeUpdates.stripePriceIdYearly = yearlyPriceId;
+          else stripeUpdates.stripePriceIdYearly = null;
+          if (oneTimePriceId !== null) stripeUpdates.stripePriceIdOneTime = oneTimePriceId;
+          else stripeUpdates.stripePriceIdOneTime = null;
 
           if (monthlyAmount !== null && existing.priceMonthly !== null && Math.abs(monthlyAmount - existing.priceMonthly) > 0.01) {
             discrepancies.push({ productName: sp.name, field: "priceMonthly", adminValue: existing.priceMonthly, stripeValue: monthlyAmount });
-            stripeUpdates.priceMonthly = monthlyAmount;
           }
           if (yearlyAmount !== null && existing.priceYearly !== null && Math.abs(yearlyAmount - existing.priceYearly) > 0.01) {
             discrepancies.push({ productName: sp.name, field: "priceYearly", adminValue: existing.priceYearly, stripeValue: yearlyAmount });
-            stripeUpdates.priceYearly = yearlyAmount;
           }
           if (oneTimeAmount !== null && existing.priceOneTime !== null && Math.abs(oneTimeAmount - existing.priceOneTime) > 0.01) {
             discrepancies.push({ productName: sp.name, field: "priceOneTime", adminValue: existing.priceOneTime, stripeValue: oneTimeAmount });
-            stripeUpdates.priceOneTime = oneTimeAmount;
           }
 
-          if (Object.keys(stripeUpdates).length > 0) {
-            await storage.updateAdminProduct(existing.id, stripeUpdates);
-          }
+          await storage.updateAdminProduct(existing.id, stripeUpdates);
           updated++;
         } else {
           const isOneTime = !monthlyPriceId && !yearlyPriceId && !!oneTimePriceId;
