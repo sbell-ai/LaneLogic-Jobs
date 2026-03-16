@@ -803,10 +803,79 @@ function OverridesTab() {
   );
 }
 
+function NotionSyncSection() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  const [lastResult, setLastResult] = useState<{ ok: boolean; products?: number; entitlements?: number; overrides?: number; elapsed?: number; error?: string; errorCount?: number } | null>(null);
+
+  const syncMutation = useMutation({
+    mutationFn: () => apiRequest("POST", "/api/admin/registry-sync/products"),
+    onSuccess: async (res) => {
+      const data = await res.json();
+      setLastResult(data);
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/products/seed-status"] });
+      if (data.ok) {
+        toast({
+          title: "Notion sync complete",
+          description: `${data.products} products, ${data.entitlements} entitlements refreshed from Notion.`,
+        });
+      } else {
+        toast({
+          title: "Notion sync failed",
+          description: data.error === "validation_failed" ? `${data.errorCount} validation error(s) — snapshot not promoted.` : data.message || data.error,
+          variant: "destructive",
+        });
+      }
+    },
+    onError: (err: any) => {
+      toast({ title: "Notion sync failed", description: err.message, variant: "destructive" });
+    },
+  });
+
+  return (
+    <div className="border rounded-lg p-5 bg-violet-50 dark:bg-violet-950/20 border-violet-200 dark:border-violet-800" data-testid="notion-sync-section">
+      <div className="flex items-start gap-3">
+        <RefreshCw className="text-violet-600 mt-0.5" size={20} />
+        <div className="flex-1">
+          <h3 className="font-semibold text-violet-800 dark:text-violet-200">Refresh from Notion</h3>
+          <p className="text-sm text-violet-700 dark:text-violet-300 mt-1">
+            Pull the latest products, entitlements, and overrides from the Notion registry. Updates the active snapshot used for seeding. After syncing, use "Seed from Snapshot" to apply changes.
+          </p>
+          {lastResult && lastResult.ok && (
+            <p className="text-sm text-violet-800 dark:text-violet-200 mt-2 font-medium" data-testid="text-notion-sync-result">
+              Synced: {lastResult.products} products · {lastResult.entitlements} entitlements · {lastResult.overrides} overrides ({lastResult.elapsed}ms)
+            </p>
+          )}
+          {lastResult && !lastResult.ok && (
+            <p className="text-sm text-red-700 dark:text-red-300 mt-2 font-medium" data-testid="text-notion-sync-error">
+              Sync failed: {lastResult.error} {lastResult.errorCount ? `(${lastResult.errorCount} errors)` : ""}
+            </p>
+          )}
+          <div className="mt-4">
+            <Button
+              onClick={() => syncMutation.mutate()}
+              disabled={syncMutation.isPending}
+              variant="outline"
+              className="border-violet-300 text-violet-700 hover:bg-violet-100 dark:text-violet-200 dark:hover:bg-violet-900/40"
+              data-testid="button-sync-notion"
+            >
+              {syncMutation.isPending ? <Loader2 className="animate-spin mr-2" size={16} /> : <RefreshCw size={16} className="mr-2" />}
+              {syncMutation.isPending ? "Syncing…" : "Refresh from Notion"}
+            </Button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function StripeSyncSection() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
-  const [lastResult, setLastResult] = useState<{ created: number; updated: number; total: number } | null>(null);
+  const [lastResult, setLastResult] = useState<{
+    created: number; updated: number; skipped: number; total: number;
+    discrepancies?: Array<{ productName: string; field: string; adminValue: number | null; stripeValue: number | null }>;
+  } | null>(null);
 
   const syncMutation = useMutation({
     mutationFn: () => apiRequest("POST", "/api/admin/products/sync-from-stripe"),
@@ -814,9 +883,11 @@ function StripeSyncSection() {
       const data = await res.json();
       setLastResult(data);
       queryClient.invalidateQueries({ queryKey: ["/api/admin/products"] });
+      const discMsg = data.discrepancies?.length ? ` ${data.discrepancies.length} price discrepancy(ies) corrected.` : "";
+      const skipMsg = data.skipped > 0 ? ` ${data.skipped} non-Notion product(s) skipped.` : "";
       toast({
         title: "Stripe sync complete",
-        description: `${data.created} created, ${data.updated} updated (${data.total} Stripe products found).`,
+        description: `${data.created} created, ${data.updated} updated (${data.total} Stripe products).${skipMsg}${discMsg}`,
       });
     },
     onError: (err: any) => {
@@ -831,12 +902,26 @@ function StripeSyncSection() {
         <div className="flex-1">
           <h3 className="font-semibold text-blue-800 dark:text-blue-200">Sync from Stripe</h3>
           <p className="text-sm text-blue-700 dark:text-blue-300 mt-1">
-            Import active Stripe products and prices into this dashboard. Existing products are updated with current Stripe price IDs. New Stripe products are created as Active entries.
+            Import active Stripe products and prices into this dashboard. Existing products are updated with current Stripe price IDs and amounts. New Stripe products are created as Active entries.
           </p>
           {lastResult && (
-            <p className="text-sm text-blue-800 dark:text-blue-200 mt-2 font-medium" data-testid="text-stripe-sync-result">
-              Last sync: {lastResult.created} created, {lastResult.updated} updated ({lastResult.total} Stripe products)
-            </p>
+            <div className="mt-2 space-y-1">
+              <p className="text-sm text-blue-800 dark:text-blue-200 font-medium" data-testid="text-stripe-sync-result">
+                Last sync: {lastResult.created} created, {lastResult.updated} updated
+                {lastResult.skipped > 0 && `, ${lastResult.skipped} non-Notion skipped`}
+                {" "}({lastResult.total} Stripe products)
+              </p>
+              {lastResult.discrepancies && lastResult.discrepancies.length > 0 && (
+                <div className="mt-2 rounded border border-amber-300 bg-amber-50 dark:bg-amber-950/20 p-3" data-testid="stripe-discrepancy-list">
+                  <p className="text-xs font-semibold text-amber-800 dark:text-amber-200 mb-1">Price discrepancies corrected from Stripe:</p>
+                  {lastResult.discrepancies.map((d, i) => (
+                    <p key={i} className="text-xs text-amber-700 dark:text-amber-300">
+                      {d.productName} · {d.field}: admin had ${d.adminValue} → Stripe has ${d.stripeValue}
+                    </p>
+                  ))}
+                </div>
+              )}
+            </div>
           )}
           <div className="mt-4">
             <Button
@@ -988,6 +1073,7 @@ export default function ProductManagement() {
         <p className="text-muted-foreground mt-1">Manage products, entitlements, and overrides. Changes auto-sync with Stripe.</p>
       </div>
 
+      <NotionSyncSection />
       <SeedSection />
 
       <Tabs defaultValue="products">
