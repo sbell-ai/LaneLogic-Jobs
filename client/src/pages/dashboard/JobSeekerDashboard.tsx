@@ -76,6 +76,13 @@ function ApplicationsTab({ userId }: { userId: number }) {
   );
 }
 
+type EntitlementInfo = {
+  type: "Limit" | "Flag";
+  value: number;
+  isUnlimited: boolean;
+  enabled: boolean;
+};
+
 function ResumeTab({ userId }: { userId: number }) {
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -91,16 +98,29 @@ function ResumeTab({ userId }: { userId: number }) {
     },
   });
 
+  const { data: entitlementData } = useQuery<{ entitlements: Record<string, EntitlementInfo> }>({
+    queryKey: ["/api/user/entitlements"],
+  });
+
+  const resumeEnt = entitlementData?.entitlements?.["resumes_per_month"];
+  const resumeLimit = resumeEnt?.isUnlimited ? Infinity : (resumeEnt?.value ?? 0);
+  const resumeCount = resumes?.length ?? 0;
+  const atLimit = !resumeEnt?.isUnlimited && resumeCount >= resumeLimit;
+
   const createMutation = useMutation({
     mutationFn: () =>
       apiRequest("POST", "/api/resumes", { jobSeekerId: userId, content: resumeText, isUpload: false }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/resumes", userId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/user/entitlements"] });
       setResumeText("");
       setShowForm(false);
       toast({ title: "Resume saved!", description: "Your resume has been added to your profile." });
     },
-    onError: () => toast({ title: "Error", description: "Could not save resume.", variant: "destructive" }),
+    onError: (err: any) => {
+      const msg = err?.message || "Could not save resume.";
+      toast({ title: "Error", description: msg.includes("limit") ? msg : "Could not save resume.", variant: "destructive" });
+    },
   });
 
   if (isLoading) return <div className="animate-pulse h-32 bg-slate-100 dark:bg-slate-800 rounded-xl" />;
@@ -108,13 +128,40 @@ function ResumeTab({ userId }: { userId: number }) {
   return (
     <div>
       <div className="flex justify-between items-center mb-6">
-        <h2 className="text-2xl font-bold font-display">My Resumes</h2>
-        <Button onClick={() => setShowForm(!showForm)} data-testid="button-add-resume">
-          <Plus size={16} className="mr-2" /> Add Resume
-        </Button>
+        <div>
+          <h2 className="text-2xl font-bold font-display">My Resumes</h2>
+          {resumeEnt && (
+            <p className="text-sm text-muted-foreground mt-1" data-testid="text-resume-usage">
+              {resumeEnt.isUnlimited
+                ? `${resumeCount} resume${resumeCount !== 1 ? "s" : ""} (unlimited)`
+                : `${resumeCount} of ${resumeLimit} resume${resumeLimit !== 1 ? "s" : ""} used`}
+            </p>
+          )}
+        </div>
+        {atLimit ? (
+          <Button asChild variant="outline" data-testid="button-upgrade-resume-limit">
+            <Link href="/pricing?tab=job-seeker">Upgrade Plan</Link>
+          </Button>
+        ) : (
+          <Button onClick={() => setShowForm(!showForm)} data-testid="button-add-resume" disabled={!resumeEnt}>
+            <Plus size={16} className="mr-2" /> Add Resume
+          </Button>
+        )}
       </div>
 
-      {showForm && (
+      {atLimit && (
+        <div className="bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800 rounded-lg p-4 mb-6 flex items-center gap-3" data-testid="banner-resume-limit">
+          <AlertCircle className="h-5 w-5 text-amber-600 dark:text-amber-400 flex-shrink-0" />
+          <div>
+            <p className="text-sm font-medium text-amber-800 dark:text-amber-200">Resume limit reached</p>
+            <p className="text-sm text-amber-700 dark:text-amber-300">
+              You've used all {resumeLimit} resume{resumeLimit !== 1 ? "s" : ""} on your plan. Upgrade to add more.
+            </p>
+          </div>
+        </div>
+      )}
+
+      {showForm && !atLimit && (
         <div className="bg-white dark:bg-slate-900 rounded-xl border border-border p-6 mb-6">
           <h3 className="font-bold font-display mb-3">Create Text Resume</h3>
           <Textarea

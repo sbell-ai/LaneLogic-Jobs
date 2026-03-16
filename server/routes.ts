@@ -833,8 +833,31 @@ export async function registerRoutes(
   });
 
   app.post(api.resumes.create.path, async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.status(401).json({ message: "Not authenticated" });
+    }
     try {
       const input = api.resumes.create.input.parse(req.body);
+      const user = req.user as any;
+      const entitlements = await resolveUserEntitlements(user);
+      const ent = entitlements?.["resumes_per_month"];
+
+      if (!ent) {
+        return res.status(403).json({ message: "Your plan does not include resume storage. Upgrade to add resumes.", code: "NO_ENTITLEMENT" });
+      }
+
+      if (!ent.isUnlimited) {
+        const existing = await storage.getResumes(user.id);
+        if (existing.length >= ent.value) {
+          return res.status(403).json({
+            message: `You've reached your resume limit (${ent.value}). Upgrade your plan to add more.`,
+            code: "LIMIT_REACHED",
+            limit: ent.value,
+            current: existing.length,
+          });
+        }
+      }
+
       const resume = await storage.createResume(input);
       res.status(201).json(resume);
     } catch (err) {
