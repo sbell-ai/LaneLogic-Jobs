@@ -522,8 +522,6 @@ export function registerAdminProductRoutes(app: Express) {
       const environment: Environment = process.env.NODE_ENV === "production" ? "prod" : "staging";
       const syncResult = await syncAllRegistries({ environment });
 
-      await cleanupDuplicateAdminProducts();
-
       let upsertResult = null;
       if (syncResult.ok) {
         const env: Environment = process.env.REPLIT_DOMAINS ? "prod" : "staging";
@@ -540,6 +538,8 @@ export function registerAdminProductRoutes(app: Express) {
             ovrSnap.payload as ProductEntitlementOverridesSnapshot,
           );
         }
+
+        await cleanupDuplicateAdminProducts();
       }
 
       res.json({
