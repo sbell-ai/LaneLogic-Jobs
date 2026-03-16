@@ -67,6 +67,7 @@ export const jobs = pgTable("jobs", {
   externalValidThrough: timestamp("external_valid_through"),
   employmentType: text("employment_type"),
   isRemote: boolean("is_remote"),
+  workLocationType: text("work_location_type"),
   tags: text("tags").array(),
   status: text("status").notNull().default("active"),
   importedAt: timestamp("imported_at"),

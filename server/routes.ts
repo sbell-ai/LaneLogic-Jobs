@@ -232,6 +232,7 @@ function validateAndMapCsvRow(
     locationCity: get("locationCity") || null,
     locationState: get("locationState") || null,
     locationCountry: get("locationCountry") || null,
+    workLocationType: get("workLocationType") || null,
     salary,
     applyUrl,
     isExternalApply,
@@ -572,6 +573,7 @@ export async function registerRoutes(
           jobType: j.jobType,
           locationCity: j.locationCity,
           locationState: j.locationState,
+          workLocationType: j.workLocationType,
           salary: j.salary,
           category: j.category,
           expiresAt: j.expiresAt,
@@ -633,6 +635,7 @@ export async function registerRoutes(
       if (body.expiresAt === null || body.expiresAt === "") body.expiresAt = null;
       if (body.category === "") body.category = null;
       if (body.subcategory === "") body.subcategory = null;
+      if (!body.workLocationType || body.workLocationType === "none") body.workLocationType = null;
       const catCheck = validateCategoryPair(body.category ?? null, body.subcategory ?? null);
       if (!catCheck.valid) return res.status(400).json({ message: catCheck.error });
       const input = api.jobs.create.input.parse(body);
@@ -659,6 +662,7 @@ export async function registerRoutes(
       if (body.publishedAt === null || body.publishedAt === "") body.publishedAt = null;
       if (body.category === "") body.category = null;
       if (body.subcategory === "") body.subcategory = null;
+      if (body.workLocationType === "" || body.workLocationType === "none") body.workLocationType = null;
       const mergedCat = body.category !== undefined ? body.category : existingJob.category;
       const mergedSub = body.subcategory !== undefined ? body.subcategory : existingJob.subcategory;
       const catCheck = validateCategoryPair(mergedCat ?? null, mergedSub ?? null);

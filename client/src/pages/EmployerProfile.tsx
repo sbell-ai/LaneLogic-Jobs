@@ -8,6 +8,7 @@ import {
   Building2, MapPin, Mail, Phone, User, Briefcase,
   CheckCircle2, ArrowLeft, ExternalLink, DollarSign
 } from "lucide-react";
+import { formatJobLocation } from "@/components/JobFilterSidebar";
 
 interface EmployerJob {
   id: number;
@@ -15,6 +16,7 @@ interface EmployerJob {
   jobType: string | null;
   locationCity: string | null;
   locationState: string | null;
+  workLocationType: string | null;
   salary: string | null;
   category: string | null;
   expiresAt: string | null;
@@ -36,7 +38,7 @@ interface EmployerProfile {
 }
 
 function fmtLoc(job: EmployerJob) {
-  return [job.locationCity, job.locationState].filter(Boolean).join(", ");
+  return formatJobLocation(job);
 }
 
 export default function EmployerProfile() {

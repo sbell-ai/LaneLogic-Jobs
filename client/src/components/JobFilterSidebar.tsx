@@ -22,6 +22,28 @@ const CDL_OPTIONS = ["Yes", "No"];
 const WORK_ENVIRONMENTS = ["Remote", "Hybrid", "On-site"];
 const DRIVER_TYPES = ["OTR", "Regional", "Local"];
 
+const WORK_LOCATION_LABELS: Record<string, string> = {
+  remote: "Remote",
+  hybrid: "Hybrid",
+  on_site: "On-site",
+  otr: "OTR",
+  field_based: "Field-based",
+};
+
+export function formatWorkLocationType(wlt: string | null | undefined): string | null {
+  if (!wlt) return null;
+  return WORK_LOCATION_LABELS[wlt] || wlt;
+}
+
+export function formatJobLocation(job: { locationCity?: string | null; locationState?: string | null; locationCountry?: string | null; workLocationType?: string | null }): string {
+  const workType = formatWorkLocationType(job.workLocationType);
+  const geo = [job.locationCity, job.locationState].filter(Boolean).join(", ");
+  if (workType && geo) return `${workType} · ${geo}`;
+  if (workType) return workType;
+  if (geo) return geo;
+  return "Location TBD";
+}
+
 export function fmtLoc(job: Job) {
   return [job.locationCity, job.locationState, job.locationCountry].filter(Boolean).join(", ");
 }
@@ -202,7 +224,7 @@ export function filterJobs(jobs: Job[], f: JobFilters): Job[] {
     const loc = fmtLoc(job).toLowerCase();
     const matchLoc = !f.locationFilter || loc.includes(f.locationFilter.toLowerCase());
 
-    const matchRemote = !f.remoteOnly || loc.includes("remote") ||
+    const matchRemote = !f.remoteOnly || job.workLocationType === "remote" || loc.includes("remote") ||
       (job.title || "").toLowerCase().includes("remote") ||
       (job.description || "").toLowerCase().includes("remote");
 
@@ -232,7 +254,8 @@ export function filterJobs(jobs: Job[], f: JobFilters): Job[] {
 
     const matchWorkEnv = f.workEnvironments.length === 0 || f.workEnvironments.some((env) => {
       const el = env.toLowerCase();
-      return loc.includes(el) || jobTitle.includes(el) || jobDesc.includes(el);
+      const wlt = formatWorkLocationType(job.workLocationType)?.toLowerCase() || "";
+      return wlt === el || loc.includes(el) || jobTitle.includes(el) || jobDesc.includes(el);
     });
 
     const matchDriverType = f.driverTypes.length === 0 || f.driverTypes.some((dt) => {

@@ -12,9 +12,10 @@ import { apiRequest } from "@/lib/queryClient";
 import type { Job } from "@shared/schema";
 import { formatDistanceToNow } from "date-fns";
 import MarkdownDescription from "@/components/MarkdownDescription";
+import { formatJobLocation } from "@/components/JobFilterSidebar";
 
 function fmtLoc(job: Job) {
-  return [job.locationCity, job.locationState, job.locationCountry].filter(Boolean).join(", ");
+  return formatJobLocation(job);
 }
 
 export default function JobDetail() {

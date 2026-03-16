@@ -124,6 +124,7 @@ export async function runImport(source: JobSource, singleImportTargetId?: number
           locationState: mapped.locationState,
           locationCountry: mapped.locationCountry,
           isRemote: mapped.isRemote,
+          workLocationType: mapped.workLocationType,
           externalPostedAt: mapped.externalPostedAt,
           externalCreatedAt: mapped.externalCreatedAt,
           externalValidThrough: mapped.externalValidThrough,

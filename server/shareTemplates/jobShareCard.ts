@@ -6,9 +6,18 @@ interface JobData {
   locationCity?: string | null;
   locationState?: string | null;
   locationCountry?: string | null;
+  workLocationType?: string | null;
   jobType?: string | null;
   salary?: string | null;
 }
+
+const WORK_LOC_LABELS: Record<string, string> = {
+  remote: "Remote",
+  hybrid: "Hybrid",
+  on_site: "On-site",
+  otr: "OTR",
+  field_based: "Field-based",
+};
 
 export function buildJobShareCard(job: JobData, variant: Variant) {
   const width = variant === "square" ? 1080 : 1200;
@@ -17,8 +26,10 @@ export function buildJobShareCard(job: JobData, variant: Variant) {
 
   const title = job.title;
   const company = job.companyName || null;
-  const locationParts = [job.locationCity, job.locationState, job.locationCountry].filter(Boolean);
-  const location = locationParts.length > 0 ? locationParts.join(", ") : null;
+  const workTypeLabel = job.workLocationType ? WORK_LOC_LABELS[job.workLocationType] || job.workLocationType : null;
+  const geoParts = [job.locationCity, job.locationState, job.locationCountry].filter(Boolean);
+  const geoStr = geoParts.length > 0 ? geoParts.join(", ") : null;
+  const location = workTypeLabel && geoStr ? `${workTypeLabel} · ${geoStr}` : workTypeLabel || geoStr;
   const jobType = job.jobType || null;
   const salary = job.salary || null;
 

@@ -839,6 +839,7 @@ export class DatabaseStorage implements IStorage {
         externalValidThrough: jobData.externalValidThrough,
         employmentType: jobData.employmentType,
         isRemote: jobData.isRemote,
+        workLocationType: jobData.workLocationType,
         status: "draft",
         importedAt: now,
         lastImportedAt: now,
@@ -857,6 +858,7 @@ export class DatabaseStorage implements IStorage {
       locationCountry: jobData.locationCountry,
       employmentType: jobData.employmentType,
       isRemote: jobData.isRemote,
+      workLocationType: jobData.workLocationType,
       lastImportedAt: now,
       rawSourceSnippet: jobData.rawSourceSnippet,
     };

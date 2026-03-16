@@ -12,7 +12,7 @@ import type { Job, Category } from "@shared/schema";
 import { formatDistanceToNow } from "date-fns";
 import { motion } from "framer-motion";
 import {
-  JobFilterSidebar, MobileFilterButton, useJobFilters, filterJobs, getActiveFilterCount, clearAllFilters, fmtLoc,
+  JobFilterSidebar, MobileFilterButton, useJobFilters, filterJobs, getActiveFilterCount, clearAllFilters, formatJobLocation,
 } from "@/components/JobFilterSidebar";
 
 export default function Jobs() {
@@ -119,9 +119,9 @@ export default function Jobs() {
                           )}
 
                           <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-2 text-xs text-muted-foreground">
-                            {fmtLoc(job) && (
+                            {formatJobLocation(job) && (
                               <span className="flex items-center gap-1">
-                                <MapPin size={12} /> <span className="line-clamp-1">{fmtLoc(job)}</span>
+                                <MapPin size={12} /> <span className="line-clamp-1">{formatJobLocation(job)}</span>
                               </span>
                             )}
                             {job.jobType && (

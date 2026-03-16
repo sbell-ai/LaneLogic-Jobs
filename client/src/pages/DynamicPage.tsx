@@ -6,6 +6,7 @@ import { MapPin } from "lucide-react";
 import { Navbar } from "@/components/layout/Navbar";
 import { Footer } from "@/components/layout/Footer";
 import { useJobs } from "@/hooks/use-jobs";
+import { formatJobLocation } from "@/components/JobFilterSidebar";
 import type { Page } from "@shared/schema";
 
 function PageMeta({ title, description }: { title: string; description?: string | null }) {
@@ -54,7 +55,7 @@ function JobCard({ job }: { job: any }) {
         )}
         <div className="flex items-center text-muted-foreground text-xs mb-3">
           <MapPin size={14} className="mr-1 shrink-0" />
-          <span className="line-clamp-1">{[job.locationCity, job.locationState].filter(Boolean).join(", ") || "Remote / TBD"}</span>
+          <span className="line-clamp-1">{formatJobLocation(job)}</span>
         </div>
         <div className="flex items-center gap-2 mt-auto">
           {job.salary && (

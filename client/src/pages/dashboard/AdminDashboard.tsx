@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { DashboardLayout } from "./DashboardLayout";
 import { useAuth } from "@/hooks/use-auth";
 import { Link, useLocation } from "wouter";
+import { formatJobLocation } from "@/components/JobFilterSidebar";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
@@ -346,6 +347,7 @@ function AllJobsTab() {
       description: j.description, requirements: j.requirements,
       benefits: j.benefits || "", salary: j.salary || "",
       locationCity: j.locationCity || "", locationState: j.locationState || "", locationCountry: j.locationCountry || "",
+      workLocationType: j.workLocationType || "",
       applyUrl: j.applyUrl || "", isExternalApply: j.isExternalApply || false,
       expiresAt: j.expiresAt ? new Date(j.expiresAt).toISOString().slice(0, 10) : "",
       isPublished: j.isPublished ?? false,
@@ -355,7 +357,7 @@ function AllJobsTab() {
 
   const industries = (categories || []).filter(c => c.type === "industry");
 
-  const fmtLoc = (j: Job) => [j.locationCity, j.locationState, j.locationCountry].filter(Boolean).join(", ");
+  const fmtLoc = (j: Job) => formatJobLocation(j);
   const filtered = (jobs || []).filter(j => {
     if (catFilter === "__missing__") { if (j.category) return false; }
     else if (catFilter !== "all" && j.category !== catFilter) return false;
@@ -533,6 +535,20 @@ function AllJobsTab() {
               <div><Label>State</Label><Input value={editForm.locationState || ""} onChange={e => setEditForm(f => ({ ...f, locationState: e.target.value }))} /></div>
               <div><Label>Country</Label><Input value={editForm.locationCountry || ""} onChange={e => setEditForm(f => ({ ...f, locationCountry: e.target.value }))} /></div>
             </div>
+            <div>
+              <Label>Work Location Type</Label>
+              <Select value={editForm.workLocationType || "none"} onValueChange={v => setEditForm(f => ({ ...f, workLocationType: v === "none" ? "" : v }))}>
+                <SelectTrigger data-testid="select-edit-work-location-type"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">Not specified</SelectItem>
+                  <SelectItem value="on_site">On-site</SelectItem>
+                  <SelectItem value="remote">Remote</SelectItem>
+                  <SelectItem value="hybrid">Hybrid</SelectItem>
+                  <SelectItem value="otr">OTR</SelectItem>
+                  <SelectItem value="field_based">Field-based</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
             <div className="grid grid-cols-2 gap-3">
               <div><Label>Salary</Label><Input value={editForm.salary || ""} onChange={e => setEditForm(f => ({ ...f, salary: e.target.value }))} /></div>
               <div><Label>Expiration Date</Label><Input type="date" value={editForm.expiresAt || ""} onChange={e => setEditForm(f => ({ ...f, expiresAt: e.target.value }))} data-testid="input-edit-job-expires" /></div>
@@ -670,6 +686,7 @@ function PostJobTab({ userId }: { userId: number }) {
       category: "", subcategory: "", industry: "",
       description: "", requirements: "", benefits: "",
       locationCity: "", locationState: "", locationCountry: "USA",
+      workLocationType: "",
       salary: "", applyUrl: "", isExternalApply: false,
       expiresAt: "",
     },
@@ -745,6 +762,23 @@ function PostJobTab({ userId }: { userId: number }) {
                 </FormItem>
               )} />
             </div>
+
+            <FormField control={form.control} name="workLocationType" render={({ field }) => (
+              <FormItem>
+                <FormLabel>Work Location Type</FormLabel>
+                <Select onValueChange={v => field.onChange(v === "none" ? "" : v)} value={field.value || "none"}>
+                  <FormControl><SelectTrigger data-testid="select-work-location-type"><SelectValue /></SelectTrigger></FormControl>
+                  <SelectContent>
+                    <SelectItem value="none">Not specified</SelectItem>
+                    <SelectItem value="on_site">On-site</SelectItem>
+                    <SelectItem value="remote">Remote</SelectItem>
+                    <SelectItem value="hybrid">Hybrid</SelectItem>
+                    <SelectItem value="otr">OTR</SelectItem>
+                    <SelectItem value="field_based">Field-based</SelectItem>
+                  </SelectContent>
+                </Select>
+              </FormItem>
+            )} />
 
             <div className="grid grid-cols-2 gap-4">
               <FormField control={form.control} name="category" render={({ field }) => (
@@ -927,9 +961,9 @@ function UploadJobsTab({ userId }: { userId: number }) {
     }
   };
 
-  const sampleCsv = `externalJobKey,title,companyName,jobType,category,subcategory,industry,locationCity,locationState,locationCountry,description,coreResponsibilities,requirements,benefits,salaryMin,salaryMax,salaryUnit,experienceLevel,skills,keywords,applyUrl
-CDL-001,CDL Class A Driver,Fast Trucking Co.,Full-time,Drivers (CDL & Non-CDL),CDL A Driver (OTR),Trucking,Chicago,IL,USA,"Long haul driver needed","Drive routes; maintain logs","CDL Class A; 3+ years","Health insurance; 401k",70000,90000,year,Mid-level,"CDL,long haul,freight","trucking,driver",
-DISP-001,Fleet Dispatcher,Metro Logistics,Contract,"Ground Transportation Ops (Dispatch, Planning, Fleet)",Dispatcher,Logistics,Atlanta,GA,USA,"Manage driver schedules","Schedule routes; coordinate","2+ years dispatching","PTO; remote",55000,65000,year,Entry-level,"dispatching,routing","logistics,dispatch",https://example.com/apply`;
+  const sampleCsv = `externalJobKey,title,companyName,jobType,category,subcategory,industry,locationCity,locationState,locationCountry,workLocationType,description,coreResponsibilities,requirements,benefits,salaryMin,salaryMax,salaryUnit,experienceLevel,skills,keywords,applyUrl
+CDL-001,CDL Class A Driver,Fast Trucking Co.,Full-time,Drivers (CDL & Non-CDL),CDL A Driver (OTR),Trucking,Chicago,IL,USA,otr,"Long haul driver needed","Drive routes; maintain logs","CDL Class A; 3+ years","Health insurance; 401k",70000,90000,year,Mid-level,"CDL,long haul,freight","trucking,driver",
+DISP-001,Fleet Dispatcher,Metro Logistics,Contract,"Ground Transportation Ops (Dispatch, Planning, Fleet)",Dispatcher,Logistics,Atlanta,GA,USA,on_site,"Manage driver schedules","Schedule routes; coordinate","2+ years dispatching","PTO; remote",55000,65000,year,Entry-level,"dispatching,routing","logistics,dispatch",https://example.com/apply`;
 
   const downloadSample = () => {
     const blob = new Blob([sampleCsv], { type: "text/csv" });

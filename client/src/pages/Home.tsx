@@ -12,7 +12,7 @@ import { useSiteSettings } from "@/hooks/use-settings";
 import { useQuery } from "@tanstack/react-query";
 import type { Category } from "@shared/schema";
 import {
-  JobFilterSidebar, MobileFilterButton, useJobFilters, filterJobs, getActiveFilterCount, clearAllFilters,
+  JobFilterSidebar, MobileFilterButton, useJobFilters, filterJobs, getActiveFilterCount, clearAllFilters, formatJobLocation,
 } from "@/components/JobFilterSidebar";
 
 export default function Home() {
@@ -201,7 +201,7 @@ export default function Home() {
                           )}
                           <div className="flex items-center text-muted-foreground text-xs mb-3">
                             <MapPin size={14} className="mr-1 shrink-0" />
-                            <span className="line-clamp-1">{[job.locationCity, job.locationState].filter(Boolean).join(", ") || "Remote / TBD"}</span>
+                            <span className="line-clamp-1">{formatJobLocation(job)}</span>
                           </div>
                           <div className="flex items-center gap-2 mt-auto">
                             {job.salary && (
