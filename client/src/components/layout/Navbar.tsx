@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/use-auth";
 import { useSiteSettings } from "@/hooks/use-settings";
 import { useAuthModal } from "@/components/AuthModal";
-import { Truck, Search, Menu, Briefcase, BookOpen, FileText, CreditCard, LayoutDashboard, LogIn, LogOut, UserPlus } from "lucide-react";
+import { Truck, Search, Menu, Briefcase, BookOpen, FileText, CreditCard, LayoutDashboard, LogIn, LogOut, UserPlus, GraduationCap } from "lucide-react";
 import { useState, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 
@@ -46,6 +46,7 @@ export function Navbar() {
     { name: "Resources", path: "/resources", icon: BookOpen },
     { name: "Blog", path: "/blog", icon: FileText },
     { name: "Pricing", path: "/pricing", icon: CreditCard },
+    { name: "User Guides", path: "/guides/job-seeker", icon: GraduationCap },
   ];
 
   return (

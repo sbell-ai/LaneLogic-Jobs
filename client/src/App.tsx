@@ -24,6 +24,7 @@ import Contact from "@/pages/Contact";
 import JobsByTypeAndState from "@/pages/JobsByTypeAndState";
 import ResourceDetail from "@/pages/ResourceDetail";
 import DynamicPage from "@/pages/DynamicPage";
+import GuidePage from "@/pages/GuidePage";
 import type { Page } from "@shared/schema";
 import { findCategoryBySlug, US_STATES } from "@/config/jobCategories";
 
@@ -198,6 +199,7 @@ function Router() {
       <Route path="/pricing" component={Pricing} />
       <Route path="/contact" component={Contact} />
 
+      <Route path="/guides/:slug" component={GuidePage} />
       <Route path="/pages/:slug" component={DynamicPage} />
 
       <Route path="/employer/settings/verification" component={VerificationPage} />

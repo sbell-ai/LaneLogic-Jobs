@@ -1,0 +1,64 @@
+Implement “User Guides” as site-hosted pages rendered from Notion (Option B).
+
+Pages to render:
+- /guides/job-seeker → Notion page https://www.notion.so/013835e339c247d680a652935bdbccf8
+- /guides/employer → Notion page https://www.notion.so/8b9930c2d9914d8d83b9a95445da5b66
+
+1) Secrets + Notion access
+- In Replit Secrets, set NOTION_TOKEN to your Notion integration token.
+- In Notion, open each guide page and Share → Connections → enable the integration so the token can read them.
+
+2) Backend: Notion client + fetch blocks
+A) Create a Notion client module (example path: server/notion/client.ts):
+- Import @notionhq/client
+- Export notion = new Client({ auth: process.env.NOTION_TOKEN })
+- Throw a clear error if NOTION_TOKEN missing.
+
+B) Create an API route: GET /api/content/notion-guide?slug=job-seeker|employer
+- Hardcode a slug → pageUrl map:
+  - job-seeker: https://www.notion.so/013835e339c247d680a652935bdbccf8
+  - employer: https://www.notion.so/8b9930c2d9914d8d83b9a95445da5b66
+- Convert Notion page URL to pageId (strip URL, remove dashes if needed).
+- Fetch:
+  - notion.pages.retrieve({ page_id })
+  - notion.blocks.children.list({ block_id: page_id }) with pagination until done
+- Return JSON:
+  {
+    "title": "<page title>",
+    "blocks": [ ...raw blocks... ]
+  }
+
+3) Frontend: add two routes and render
+- Add routes using Wouter:
+  - /guides/job-seeker
+  - /guides/employer
+- Create a shared page component, e.g. client/src/pages/GuidePage.tsx
+- Use TanStack Query v5 to call:
+  /api/content/notion-guide?slug=job-seeker
+  /api/content/notion-guide?slug=employer
+- Render blocks with an MVP renderer:
+  - heading_1/2/3 → <h1>/<h2>/<h3>
+  - paragraph → <p>
+  - bulleted_list_item / numbered_list_item → <ul>/<ol>
+  - divider → <hr>
+  - callout → a styled <div> (Shadcn alert/callout style)
+  - toggle → <details><summary>...</summary>...</details>
+If you can’t render a block type yet, safely skip it and log it (do not crash).
+
+4) Add navigation
+- Add a “User Guides” section (navbar or footer):
+  - Job Seeker Guide → /guides/job-seeker
+  - Employer Guide → /guides/employer
+
+5) Output required
+After implementing, show me:
+- The backend route file(s)
+- The Notion client module
+- The GuidePage.tsx
+- The block renderer component
+- Where you mounted the routes in your app
+- Any new dependencies you added
+
+Important security requirement:
+- Do NOT call Notion directly from the browser.
+- NOTION_TOKEN must only be used server-side.

@@ -108,6 +108,7 @@ export function Footer() {
                 { href: "/register", text: "Create Profile" },
                 { href: "/resources", text: "Resource Center" },
                 { href: "/blog", text: "Career Advice" },
+                { href: "/guides/job-seeker", text: "Job Seeker Guide" },
               ].map(l => (
                 <li key={l.href}>
                   <Link href={l.href} className="ftl focus-visible:underline focus-visible:outline-none">
@@ -125,6 +126,7 @@ export function Footer() {
                 { href: "/register", text: "Post a Job" },
                 { href: "/pricing", text: "Pricing" },
                 { href: "/resources", text: "Employer Resources" },
+                { href: "/guides/employer", text: "Employer Guide" },
               ].map(l => (
                 <li key={l.href}>
                   <Link href={l.href} className="ftl focus-visible:underline focus-visible:outline-none">

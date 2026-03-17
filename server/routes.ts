@@ -1194,6 +1194,39 @@ export async function registerRoutes(
     res.json(page);
   });
 
+  const GUIDE_PAGES: Record<string, string> = {
+    "job-seeker": "https://www.notion.so/013835e339c247d680a652935bdbccf8",
+    "employer":   "https://www.notion.so/8b9930c2d9914d8d83b9a95445da5b66",
+  };
+
+  app.get("/api/content/notion-guide", async (req, res) => {
+    const slug = String(req.query.slug || "");
+    const pageUrl = GUIDE_PAGES[slug];
+    if (!pageUrl) return res.status(404).json({ message: "Guide not found" });
+
+    try {
+      const { pageIdFromUrl, notionGetPage, notionGetAllBlocks } = await import("./notion/client.js");
+      const pageId = pageIdFromUrl(pageUrl);
+
+      const [pageRes, allBlocks] = await Promise.all([
+        notionGetPage(pageId),
+        notionGetAllBlocks(pageId),
+      ]);
+
+      const props = (pageRes as any).properties ?? {};
+      let title = slug;
+      const titleProp = props.title ?? props.Name;
+      if (titleProp?.title) {
+        title = titleProp.title.map((t: any) => t.plain_text).join("") || slug;
+      }
+
+      res.json({ title, blocks: allBlocks });
+    } catch (err: any) {
+      console.error("[notion-guide]", err?.message ?? err);
+      res.status(500).json({ message: "Failed to fetch guide from Notion", detail: err?.message });
+    }
+  });
+
   function sanitizeHtml(html: string): string {
     const allowedTags = new Set([
       "h1","h2","h3","h4","h5","h6","p","br","hr","blockquote",
