@@ -15,7 +15,7 @@ import { Switch } from "@/components/ui/switch";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Progress } from "@/components/ui/progress";
-import { FileText, Briefcase, CreditCard, Plus, CheckCircle2, Clock, XCircle, AlertCircle, Eye, EyeOff, User, Gauge, ShoppingCart, CalendarClock, Zap, ChevronDown, ChevronRight, MessageSquare, PauseCircle } from "lucide-react";
+import { FileText, Briefcase, CreditCard, Plus, CheckCircle2, Clock, XCircle, AlertCircle, Eye, EyeOff, User, Gauge, ShoppingCart, CalendarClock, Zap, ChevronDown, ChevronRight, MessageSquare, PauseCircle, StickyNote, Save, Check } from "lucide-react";
 import type { Application, Resume, Job } from "@shared/schema";
 import { Link, useLocation } from "wouter";
 import { formatDistanceToNow, format } from "date-fns";
@@ -38,6 +38,107 @@ const SEEKER_GROUPS = [
   { key: "on_hold", label: "On Hold",              icon: PauseCircle,  headerColor: "text-orange-600",   defaultOpen: true },
   { key: "closed",  label: "Position Filled",      icon: XCircle,      headerColor: "text-slate-500",    defaultOpen: false },
 ];
+
+function SeekerApplicationCard({
+  app, meta, Icon, job, isMessaging, canMessage, onMessage, onNotesSaved,
+}: {
+  app: Application & { seekerNotes?: string | null };
+  meta: { label: string; color: string };
+  Icon: typeof Clock;
+  job: Job | undefined;
+  isMessaging: boolean;
+  canMessage: boolean;
+  onMessage: () => void;
+  onNotesSaved: (notes: string) => void;
+}) {
+  const { toast } = useToast();
+  const [draft, setDraft] = useState((app as any).seekerNotes ?? "");
+  const saved = (app as any).seekerNotes ?? "";
+  const isDirty = draft !== saved;
+
+  const noteMutation = useMutation({
+    mutationFn: (notes: string) =>
+      apiRequest("PUT", `/api/applications/${app.id}`, { seekerNotes: notes }).then((r) => r.json()),
+    onSuccess: (updated: any) => {
+      onNotesSaved(updated.seekerNotes ?? "");
+      toast({ title: "Note saved" });
+    },
+    onError: () => toast({ title: "Error", description: "Could not save note.", variant: "destructive" }),
+  });
+
+  return (
+    <div data-testid={`card-application-${app.id}`} className="bg-white dark:bg-slate-900 rounded-xl border border-border p-5">
+      <div className="flex items-start justify-between gap-4">
+        <div className="flex-1 min-w-0">
+          <p className="font-semibold truncate" data-testid={`text-job-title-${app.id}`}>
+            {job ? job.title : `Job #${app.jobId}`}
+          </p>
+          {job?.companyName && (
+            <p className="text-sm text-muted-foreground truncate">{job.companyName}</p>
+          )}
+          <p className="text-xs text-muted-foreground mt-1">
+            Applied {app.createdAt ? formatDistanceToNow(new Date(app.createdAt), { addSuffix: true }) : "recently"}
+          </p>
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
+          <Badge className={`border ${meta.color} flex items-center gap-1.5 whitespace-nowrap`}>
+            <Icon size={12} /> {meta.label}
+          </Badge>
+          {canMessage && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-1.5"
+              data-testid={`button-message-employer-${app.id}`}
+              disabled={isMessaging}
+              onClick={onMessage}
+            >
+              <MessageSquare size={13} />
+              {isMessaging ? "Opening…" : "Message"}
+            </Button>
+          )}
+        </div>
+      </div>
+
+      <div className="mt-4 pt-4 border-t border-border">
+        <div className="flex items-center gap-1.5 mb-2">
+          <StickyNote size={13} className="text-muted-foreground" />
+          <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">My Notes</span>
+          {isDirty && <span className="text-xs text-orange-500 ml-1">● unsaved</span>}
+        </div>
+        <div className="flex gap-2">
+          <textarea
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            placeholder="Jot down anything useful — interview prep, contacts, follow-up reminders…"
+            rows={2}
+            data-testid={`textarea-seeker-notes-${app.id}`}
+            className="flex-1 text-sm rounded-lg border border-border bg-slate-50 dark:bg-slate-800 px-3 py-2 resize-none focus:outline-none focus:ring-2 focus:ring-primary/30 placeholder:text-muted-foreground/50"
+          />
+          <Button
+            size="sm"
+            variant={isDirty ? "default" : "ghost"}
+            disabled={!isDirty || noteMutation.isPending}
+            onClick={() => noteMutation.mutate(draft)}
+            data-testid={`button-save-seeker-notes-${app.id}`}
+            className="self-end gap-1.5 shrink-0"
+          >
+            {noteMutation.isPending ? <Check size={14} /> : <Save size={14} />}
+            {noteMutation.isPending ? "Saving…" : "Save"}
+          </Button>
+        </div>
+      </div>
+
+      {job && (
+        <div className="mt-3 pt-3 border-t border-border">
+          <Link href={`/jobs/${job.id}`} className="text-xs text-primary hover:underline">
+            View job listing →
+          </Link>
+        </div>
+      )}
+    </div>
+  );
+}
 
 function ApplicationsTab({ userId }: { userId: number }) {
   const [, setLocation] = useLocation();
@@ -100,7 +201,7 @@ function ApplicationsTab({ userId }: { userId: number }) {
     grouped[meta.group].push(app);
   });
 
-  const renderCard = (app: Application) => {
+  const renderCard = (app: Application & { seekerNotes?: string | null }) => {
     const meta = SEEKER_STATUS_MAP[app.status] ?? SEEKER_STATUS_MAP.pending;
     const Icon = meta.icon;
     const job = jobMap.get(app.jobId);
@@ -108,46 +209,21 @@ function ApplicationsTab({ userId }: { userId: number }) {
     const canMessage = !!job?.employerId;
 
     return (
-      <div key={app.id} data-testid={`card-application-${app.id}`} className="bg-white dark:bg-slate-900 rounded-xl border border-border p-5">
-        <div className="flex items-start justify-between gap-4">
-          <div className="flex-1 min-w-0">
-            <p className="font-semibold truncate" data-testid={`text-job-title-${app.id}`}>
-              {job ? job.title : `Job #${app.jobId}`}
-            </p>
-            {job?.companyName && (
-              <p className="text-sm text-muted-foreground truncate">{job.companyName}</p>
-            )}
-            <p className="text-xs text-muted-foreground mt-1">
-              Applied {app.createdAt ? formatDistanceToNow(new Date(app.createdAt), { addSuffix: true }) : "recently"}
-            </p>
-          </div>
-          <div className="flex items-center gap-2 shrink-0">
-            <Badge className={`border ${meta.color} flex items-center gap-1.5 whitespace-nowrap`}>
-              <Icon size={12} /> {meta.label}
-            </Badge>
-            {canMessage && (
-              <Button
-                variant="outline"
-                size="sm"
-                className="gap-1.5"
-                data-testid={`button-message-employer-${app.id}`}
-                disabled={isMessaging}
-                onClick={() => { setMessagingAppId(app.id); messageMutation.mutate(app); }}
-              >
-                <MessageSquare size={13} />
-                {isMessaging ? "Opening…" : "Message"}
-              </Button>
-            )}
-          </div>
-        </div>
-        {job && (
-          <div className="mt-3 pt-3 border-t border-border">
-            <Link href={`/jobs/${job.id}`} className="text-xs text-primary hover:underline">
-              View job listing →
-            </Link>
-          </div>
-        )}
-      </div>
+      <SeekerApplicationCard
+        key={app.id}
+        app={app}
+        meta={meta}
+        Icon={Icon}
+        job={job}
+        isMessaging={isMessaging}
+        canMessage={canMessage}
+        onMessage={() => { setMessagingAppId(app.id); messageMutation.mutate(app); }}
+        onNotesSaved={(notes) => {
+          queryClient.setQueryData<Application[]>(["/api/applications"], (prev) =>
+            (prev || []).map((a) => (a.id === app.id ? { ...a, seekerNotes: notes } as any : a))
+          );
+        }}
+      />
     );
   };
 

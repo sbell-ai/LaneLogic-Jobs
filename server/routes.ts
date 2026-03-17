@@ -759,7 +759,9 @@ export async function registerRoutes(
   // Applications
   app.get(api.applications.list.path, async (req, res) => {
     const apps = await storage.getApplications();
-    res.json(apps);
+    // Strip employer-private notes before returning to seekers
+    const safeApps = apps.map(({ employerNotes: _e, ...rest }) => rest);
+    res.json(safeApps);
   });
 
   // Enriched applicants for the logged-in employer
@@ -768,7 +770,9 @@ export async function registerRoutes(
     const user = req.user as any;
     if (user.role !== "employer" && user.role !== "admin") return res.status(403).json({ message: "Forbidden" });
     const apps = await storage.getEmployerApplicationsEnriched(user.id);
-    res.json(apps);
+    // Strip seeker-private notes before returning to employers
+    const safeApps = apps.map(({ seekerNotes: _s, ...rest }: any) => rest);
+    res.json(safeApps);
   });
 
   app.post(api.applications.create.path, async (req, res) => {
@@ -838,19 +842,32 @@ export async function registerRoutes(
     if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
     const user = req.user as any;
     const appId = Number(req.params.id);
-    // Verify the employer owns the job this application belongs to
+
+    if (user.role === "job_seeker") {
+      // Seekers may only update seekerNotes on their own applications
+      const existing = await db.query.applications.findFirst({ where: (a, { eq }) => eq(a.id, appId) });
+      if (!existing) return res.status(404).json({ message: "Not found" });
+      if (existing.jobSeekerId !== user.id) return res.status(403).json({ message: "Forbidden" });
+      const { seekerNotes } = req.body;
+      const appData = await storage.updateApplication(appId, { seekerNotes: seekerNotes ?? existing.seekerNotes });
+      const { employerNotes: _e, ...seekerView } = appData as any;
+      return res.json(seekerView);
+    }
+
     if (user.role === "employer") {
-      const app = await db.query.applications.findFirst({ where: (a, { eq }) => eq(a.id, appId) });
-      if (!app) return res.status(404).json({ message: "Not found" });
-      const job = await storage.getJob(app.jobId);
+      const existing = await db.query.applications.findFirst({ where: (a, { eq }) => eq(a.id, appId) });
+      if (!existing) return res.status(404).json({ message: "Not found" });
+      const job = await storage.getJob(existing.jobId);
       if (!job || job.employerId !== user.id) return res.status(403).json({ message: "Forbidden" });
     } else if (user.role !== "admin") {
       return res.status(403).json({ message: "Forbidden" });
     }
+
     try {
       const input = api.applications.update.input.parse(req.body);
       const appData = await storage.updateApplication(appId, input);
-      res.json(appData);
+      const { seekerNotes: _s, ...employerView } = appData as any;
+      res.json(employerView);
     } catch (err) {
       if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
       res.status(500).json({ message: "Internal server error" });
