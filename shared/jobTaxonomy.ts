@@ -205,7 +205,7 @@ export function validateCategoryPair(
   if (!hasCat && !hasSub) return { valid: true };
 
   if (hasCat && !hasSub) {
-    return { valid: false, error: "Subcategory is required when category is set." };
+    return { valid: true };
   }
   if (!hasCat && hasSub) {
     return { valid: false, error: "Category is required when subcategory is set." };

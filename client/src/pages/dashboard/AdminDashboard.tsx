@@ -330,11 +330,7 @@ function AllJobsTab() {
       return;
     }
     if ("category" in updates && updates.category) {
-      if (!("subcategory" in updates) || !updates.subcategory) {
-        toast({ title: "Validation Error", description: "Subcategory is required when changing category.", variant: "destructive" });
-        return;
-      }
-      const pairCheck = validateCategoryPair(updates.category, updates.subcategory);
+      const pairCheck = validateCategoryPair(updates.category, updates.subcategory ?? null);
       if (!pairCheck.valid) { toast({ title: "Validation Error", description: pairCheck.error, variant: "destructive" }); return; }
     }
     if ("subcategory" in updates && updates.subcategory && !("category" in updates)) {
