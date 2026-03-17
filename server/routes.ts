@@ -835,9 +835,21 @@ export async function registerRoutes(
   });
 
   app.put(api.applications.update.path, async (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+    const user = req.user as any;
+    const appId = Number(req.params.id);
+    // Verify the employer owns the job this application belongs to
+    if (user.role === "employer") {
+      const app = await db.query.applications.findFirst({ where: (a, { eq }) => eq(a.id, appId) });
+      if (!app) return res.status(404).json({ message: "Not found" });
+      const job = await storage.getJob(app.jobId);
+      if (!job || job.employerId !== user.id) return res.status(403).json({ message: "Forbidden" });
+    } else if (user.role !== "admin") {
+      return res.status(403).json({ message: "Forbidden" });
+    }
     try {
       const input = api.applications.update.input.parse(req.body);
-      const appData = await storage.updateApplication(Number(req.params.id), input);
+      const appData = await storage.updateApplication(appId, input);
       res.json(appData);
     } catch (err) {
       if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });

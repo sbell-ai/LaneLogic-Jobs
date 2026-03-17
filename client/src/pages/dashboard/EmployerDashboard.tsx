@@ -544,6 +544,13 @@ function MyJobsTab({ userId }: { userId: number }) {
 
 type EnrichedApplication = Application & { seekerName: string; seekerEmail: string };
 
+const APPLICATION_STATUSES = [
+  { value: "pending",  label: "Pending",  color: "bg-yellow-100 text-yellow-700 border-yellow-200" },
+  { value: "reviewed", label: "Reviewed", color: "bg-blue-100 text-blue-700 border-blue-200" },
+  { value: "accepted", label: "Accepted", color: "bg-green-100 text-green-700 border-green-200" },
+  { value: "rejected", label: "Rejected", color: "bg-red-100 text-red-700 border-red-200" },
+] as const;
+
 function ApplicantsTab({ userId }: { userId: number }) {
   const [, setLocation] = useLocation();
   const queryClient = useQueryClient();
@@ -554,6 +561,23 @@ function ApplicantsTab({ userId }: { userId: number }) {
   });
 
   const [messagingAppId, setMessagingAppId] = useState<number | null>(null);
+  const [updatingStatusId, setUpdatingStatusId] = useState<number | null>(null);
+
+  const statusMutation = useMutation({
+    mutationFn: ({ id, status }: { id: number; status: string }) =>
+      apiRequest("PUT", `/api/applications/${id}`, { status }).then((r) => r.json()),
+    onSuccess: (updated: any) => {
+      setUpdatingStatusId(null);
+      queryClient.setQueryData<EnrichedApplication[]>(["/api/employer/applicants"], (prev) =>
+        (prev || []).map((a) => (a.id === updated.id ? { ...a, status: updated.status } : a))
+      );
+      toast({ title: "Status updated", description: `Applicant marked as ${updated.status}.` });
+    },
+    onError: () => {
+      setUpdatingStatusId(null);
+      toast({ title: "Error", description: "Could not update status.", variant: "destructive" });
+    },
+  });
 
   const messageMutation = useMutation({
     mutationFn: (app: EnrichedApplication) =>
@@ -579,7 +603,10 @@ function ApplicantsTab({ userId }: { userId: number }) {
 
   return (
     <div>
-      <h2 className="text-2xl font-bold font-display mb-6">Applicants ({myApps.length})</h2>
+      <h2 className="text-2xl font-bold font-display mb-2">Applicants ({myApps.length})</h2>
+      <p className="text-sm text-muted-foreground mb-6">
+        Use the status dropdown on each card to move candidates through your hiring pipeline.
+      </p>
       {myApps.length === 0 ? (
         <div className="text-center py-16 bg-white dark:bg-slate-900 rounded-2xl border border-dashed border-border">
           <Users className="mx-auto mb-4 text-muted-foreground" size={40} />
@@ -591,29 +618,21 @@ function ApplicantsTab({ userId }: { userId: number }) {
           {myApps.map((app) => {
             const job = jobMap.get(app.jobId);
             return (
-              <div key={app.id} data-testid={`card-applicant-${app.id}`} className="bg-white dark:bg-slate-900 rounded-xl border border-border p-5 flex items-center justify-between gap-4">
-                <div className="flex-1 min-w-0">
-                  <p className="font-semibold truncate" data-testid={`text-seeker-name-${app.id}`}>{app.seekerName}</p>
-                  {app.seekerEmail && app.seekerEmail !== app.seekerName && (
-                    <p className="text-xs text-muted-foreground truncate">{app.seekerEmail}</p>
-                  )}
-                  <p className="text-sm text-muted-foreground mt-0.5 truncate">
-                    {job ? job.title : `Job #${app.jobId}`}
-                  </p>
-                </div>
-                <div className="flex items-center gap-3 shrink-0">
-                  <Badge className={`capitalize border ${
-                    app.status === "accepted" ? "bg-green-100 text-green-700 border-green-200" :
-                    app.status === "rejected" ? "bg-red-100 text-red-700 border-red-200" :
-                    app.status === "reviewed" ? "bg-blue-100 text-blue-700 border-blue-200" :
-                    "bg-yellow-100 text-yellow-700 border-yellow-200"
-                  }`}>
-                    {app.status}
-                  </Badge>
+              <div key={app.id} data-testid={`card-applicant-${app.id}`} className="bg-white dark:bg-slate-900 rounded-xl border border-border p-5">
+                <div className="flex items-start justify-between gap-4">
+                  <div className="flex-1 min-w-0">
+                    <p className="font-semibold truncate" data-testid={`text-seeker-name-${app.id}`}>{app.seekerName}</p>
+                    {app.seekerEmail && app.seekerEmail !== app.seekerName && (
+                      <p className="text-xs text-muted-foreground truncate">{app.seekerEmail}</p>
+                    )}
+                    <p className="text-sm text-muted-foreground mt-0.5 truncate">
+                      {job ? job.title : `Job #${app.jobId}`}
+                    </p>
+                  </div>
                   <Button
                     variant="outline"
                     size="sm"
-                    className="gap-1.5"
+                    className="gap-1.5 shrink-0"
                     data-testid={`button-message-applicant-${app.id}`}
                     disabled={messagingAppId === app.id}
                     onClick={() => { setMessagingAppId(app.id); messageMutation.mutate(app); }}
@@ -621,6 +640,34 @@ function ApplicantsTab({ userId }: { userId: number }) {
                     <MessageSquare size={14} />
                     {messagingAppId === app.id ? "Opening..." : "Message"}
                   </Button>
+                </div>
+
+                <div className="mt-4 pt-4 border-t border-border flex items-center gap-3">
+                  <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Status</span>
+                  <div className="flex flex-wrap gap-2">
+                    {APPLICATION_STATUSES.map((s) => (
+                      <button
+                        key={s.value}
+                        data-testid={`status-option-${s.value}-${app.id}`}
+                        disabled={updatingStatusId === app.id}
+                        onClick={() => {
+                          if (app.status === s.value) return;
+                          setUpdatingStatusId(app.id);
+                          statusMutation.mutate({ id: app.id, status: s.value });
+                        }}
+                        className={`
+                          px-3 py-1 rounded-full text-xs font-medium border transition-all
+                          ${app.status === s.value
+                            ? `${s.color} ring-2 ring-offset-1 ring-current cursor-default`
+                            : "bg-transparent text-muted-foreground border-border hover:border-foreground/40 cursor-pointer"
+                          }
+                          ${updatingStatusId === app.id ? "opacity-50 pointer-events-none" : ""}
+                        `}
+                      >
+                        {s.label}
+                      </button>
+                    ))}
+                  </div>
                 </div>
               </div>
             );
