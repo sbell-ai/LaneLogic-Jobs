@@ -158,6 +158,7 @@ async function startServer() {
     }
   }
 
+  await loadTaxonomyFromDB();
   await seedDatabaseIfEmpty();
   await seedSeekerCredentials();
   await runParagraphizeMigration();
@@ -332,6 +333,21 @@ async function runResourceContentBackfill() {
     log("Resource content backfill migration complete");
   } catch (err) {
     console.error("Resource content backfill migration error:", err);
+  }
+}
+
+async function loadTaxonomyFromDB() {
+  try {
+    const { storage } = await import("./storage");
+    const { setLiveTaxonomy } = await import("../shared/jobTaxonomy.ts");
+    const settings = await storage.getSiteSettings();
+    const saved = (settings as any).job_taxonomy;
+    if (saved && typeof saved === "object" && !Array.isArray(saved) && Object.keys(saved).length > 0) {
+      setLiveTaxonomy(saved);
+      log("[taxonomy] Loaded from database");
+    }
+  } catch (err) {
+    console.error("[taxonomy] Failed to load from database:", err);
   }
 }
 

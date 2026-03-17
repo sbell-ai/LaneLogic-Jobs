@@ -23,7 +23,8 @@ import type { Job, Application, Category } from "@shared/schema";
 import { insertJobSchema } from "@shared/schema";
 import { z } from "zod";
 import { Link, useLocation } from "wouter";
-import { getCategories, getSubcategories, validateCategoryPair } from "@shared/jobTaxonomy";
+import { validateCategoryPair } from "@shared/jobTaxonomy";
+import { useTaxonomy } from "@/hooks/use-taxonomy";
 
 const JOB_TYPES = ["Full-time", "Part-time", "Contract", "Seasonal", "Owner-Operator", "Lease Purchase", "OTR", "Temporary", "Other"];
 
@@ -45,7 +46,7 @@ function PostJobTab({ userId }: { userId: number }) {
 
   const { data: categories } = useQuery<Category[]>({ queryKey: ["/api/categories"] });
   const industries = (categories || []).filter((c) => c.type === "industry");
-  const taxonomyCats = getCategories();
+  const { categories: taxonomyCats, getSubcategories } = useTaxonomy();
 
   const form = useForm<JobFormValues>({
     resolver: zodResolver(jobFormSchema),
@@ -242,7 +243,7 @@ function EditJobDialog({ job }: { job: Job }) {
   const [open, setOpen] = useState(false);
   const { data: categories } = useQuery<Category[]>({ queryKey: ["/api/categories"] });
   const industries = (categories || []).filter((c) => c.type === "industry");
-  const taxonomyCats = getCategories();
+  const { categories: taxonomyCats, getSubcategories } = useTaxonomy();
 
   const form = useForm<JobFormValues>({
     resolver: zodResolver(jobFormSchema),

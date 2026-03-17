@@ -17,7 +17,7 @@ import { createHash } from "crypto";
 import { getPricingData, resolveUserEntitlements, checkEntitlement, consumeEntitlement, getQuotaStatus } from "./registry/entitlementResolver";
 import { JOB_CATEGORIES, US_STATES as SEO_STATES } from "@shared/seoConfig";
 import { validateKeywords } from "./taggingValidator";
-import { validateCategoryPair, normalizeCategory, normalizeSubcategory, getCategories } from "@shared/jobTaxonomy";
+import { validateCategoryPair, normalizeCategory, normalizeSubcategory, getCategories, getLiveTaxonomy, setLiveTaxonomy, type TaxonomyData } from "@shared/jobTaxonomy";
 import { isR2Configured, uploadToR2 } from "./r2";
 import { loadEmployerRegistry } from "./registry/employerRegistryLoader.ts";
 import { syncEmployers } from "./registry/syncEmployers.ts";
@@ -1559,6 +1559,35 @@ export async function registerRoutes(
     } catch (err: any) {
       console.error("Employer logo upload error:", err);
       res.status(500).json({ message: err.message || "Logo upload failed" });
+    }
+  });
+
+  // ── Taxonomy API ─────────────────────────────────────────────────────────────
+
+  app.get("/api/taxonomy", (_req, res) => {
+    res.json(getLiveTaxonomy());
+  });
+
+  app.put("/api/admin/taxonomy", async (req, res) => {
+    if (!req.isAuthenticated() || !req.user || (req.user as any).role !== "admin") {
+      return res.status(403).json({ message: "Admin access required" });
+    }
+    const { taxonomy } = req.body as { taxonomy: TaxonomyData };
+    if (!taxonomy || typeof taxonomy !== "object" || Array.isArray(taxonomy)) {
+      return res.status(400).json({ message: "taxonomy must be an object" });
+    }
+    for (const [cat, subs] of Object.entries(taxonomy)) {
+      if (typeof cat !== "string" || !Array.isArray(subs) || subs.some(s => typeof s !== "string")) {
+        return res.status(400).json({ message: "Each category must map to an array of strings" });
+      }
+    }
+    try {
+      const current = await storage.getSiteSettings();
+      await storage.updateSiteSettings({ ...(current as any), job_taxonomy: taxonomy });
+      setLiveTaxonomy(taxonomy);
+      res.json({ ok: true, categoryCount: Object.keys(taxonomy).length });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
     }
   });
 

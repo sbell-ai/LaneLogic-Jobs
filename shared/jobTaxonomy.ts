@@ -126,49 +126,72 @@ export const JOB_TAXONOMY = {
 } as const;
 
 export type JobCategory = keyof typeof JOB_TAXONOMY;
+export type TaxonomyData = Record<string, string[]>;
 
-const categoryKeysLower = new Map<string, JobCategory>(
-  (Object.keys(JOB_TAXONOMY) as JobCategory[]).map(k => [k.toLowerCase(), k])
+// ── Live (mutable) taxonomy ───────────────────────────────────────────────────
+// Starts as the static default; overridden at runtime from the DB on the server
+// and from the /api/taxonomy API response on the client via useTaxonomy().
+
+let _liveTaxonomy: TaxonomyData = Object.fromEntries(
+  Object.entries(JOB_TAXONOMY).map(([k, v]) => [k, [...v]])
 );
 
-const subcategoryLookup = new Map<string, Map<string, string>>();
-for (const [cat, subs] of Object.entries(JOB_TAXONOMY)) {
-  const subMap = new Map<string, string>();
-  for (const sub of subs) {
-    subMap.set(sub.toLowerCase(), sub);
+function buildCategoryMap(t: TaxonomyData): Map<string, string> {
+  return new Map(Object.keys(t).map(k => [k.toLowerCase(), k]));
+}
+
+function buildSubcategoryMap(t: TaxonomyData): Map<string, Map<string, string>> {
+  const m = new Map<string, Map<string, string>>();
+  for (const [cat, subs] of Object.entries(t)) {
+    m.set(cat, new Map(subs.map(s => [s.toLowerCase(), s])));
   }
-  subcategoryLookup.set(cat, subMap);
+  return m;
 }
 
-export function getCategories(): JobCategory[] {
-  return Object.keys(JOB_TAXONOMY) as JobCategory[];
+let _categoryKeysLower = buildCategoryMap(_liveTaxonomy);
+let _subcategoryLookup = buildSubcategoryMap(_liveTaxonomy);
+
+export function getLiveTaxonomy(): TaxonomyData {
+  return _liveTaxonomy;
 }
 
-export function getSubcategories(category: string): readonly string[] {
-  const normalized = categoryKeysLower.get(category.toLowerCase());
+export function setLiveTaxonomy(data: TaxonomyData): void {
+  _liveTaxonomy = data;
+  _categoryKeysLower = buildCategoryMap(data);
+  _subcategoryLookup = buildSubcategoryMap(data);
+}
+
+// ── Public API functions (all use live taxonomy) ──────────────────────────────
+
+export function getCategories(): string[] {
+  return Object.keys(_liveTaxonomy);
+}
+
+export function getSubcategories(category: string): string[] {
+  const normalized = _categoryKeysLower.get(category.toLowerCase());
   if (!normalized) return [];
-  return JOB_TAXONOMY[normalized];
+  return _liveTaxonomy[normalized] ?? [];
 }
 
 export function isValidCategory(category: string): boolean {
-  return categoryKeysLower.has(category.toLowerCase());
+  return _categoryKeysLower.has(category.toLowerCase());
 }
 
 export function isValidSubcategory(category: string, subcategory: string): boolean {
-  const normalized = categoryKeysLower.get(category.toLowerCase());
+  const normalized = _categoryKeysLower.get(category.toLowerCase());
   if (!normalized) return false;
-  const subMap = subcategoryLookup.get(normalized);
+  const subMap = _subcategoryLookup.get(normalized);
   return !!subMap?.has(subcategory.toLowerCase());
 }
 
 export function normalizeCategory(category: string): string | null {
-  return categoryKeysLower.get(category.toLowerCase()) ?? null;
+  return _categoryKeysLower.get(category.toLowerCase()) ?? null;
 }
 
 export function normalizeSubcategory(category: string, subcategory: string): string | null {
-  const normalizedCat = categoryKeysLower.get(category.toLowerCase());
+  const normalizedCat = _categoryKeysLower.get(category.toLowerCase());
   if (!normalizedCat) return null;
-  const subMap = subcategoryLookup.get(normalizedCat);
+  const subMap = _subcategoryLookup.get(normalizedCat);
   return subMap?.get(subcategory.toLowerCase()) ?? null;
 }
 
@@ -189,7 +212,7 @@ export function validateCategoryPair(
   }
 
   if (!isValidCategory(category!)) {
-    return { valid: false, error: `Invalid category: "${category}". Must be one of the 15 standard categories.` };
+    return { valid: false, error: `Invalid category: "${category}".` };
   }
 
   if (!isValidSubcategory(category!, subcategory!)) {

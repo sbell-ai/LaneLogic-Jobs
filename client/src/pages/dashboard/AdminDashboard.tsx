@@ -43,7 +43,8 @@ import { INTRO_TRUNCATE_LENGTH } from "@shared/constants";
 import { tokenize } from "@/lib/linkify";
 import { z } from "zod";
 import { formatDistanceToNow, format } from "date-fns";
-import { JOB_TAXONOMY, getCategories, getSubcategories, validateCategoryPair } from "@shared/jobTaxonomy";
+import { validateCategoryPair } from "@shared/jobTaxonomy";
+import { useTaxonomy, type TaxonomyData } from "@/hooks/use-taxonomy";
 
 // ─── USERS TAB ────────────────────────────────────────────────────────────────
 
@@ -267,7 +268,7 @@ function AllJobsTab() {
   const [bulkEditOpen, setBulkEditOpen] = useState(false);
   const [bulkForm, setBulkForm] = useState<{ jobType: string; category: string; subcategory: string; industry: string }>({ jobType: "", category: "", subcategory: "", industry: "" });
   const [shareJob, setShareJob] = useState<Job | null>(null);
-  const taxonomyCategories = getCategories();
+  const { categories: taxonomyCategories, getSubcategories } = useTaxonomy();
 
   const deleteMutation = useMutation({
     mutationFn: (id: number) => apiRequest("DELETE", `/api/jobs/${id}`),
@@ -680,7 +681,7 @@ function PostJobTab({ userId }: { userId: number }) {
   const { toast } = useToast();
   const { data: categories } = useQuery<Category[]>({ queryKey: ["/api/categories"] });
   const industries = (categories || []).filter(c => c.type === "industry");
-  const taxonomyCats = getCategories();
+  const { categories: taxonomyCats, getSubcategories } = useTaxonomy();
 
   const form = useForm<z.infer<typeof jobFormSchema>>({
     resolver: zodResolver(jobFormSchema),
@@ -1916,7 +1917,65 @@ function ResourcesTab() {
 function CategoriesTab() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
-  const { data: categories, isLoading } = useQuery<Category[]>({ queryKey: ["/api/categories"] });
+  const { data: categoriesData, isLoading: categoriesLoading } = useQuery<Category[]>({ queryKey: ["/api/categories"] });
+  const { taxonomy: liveTaxonomy, isLoading: taxonomyLoading } = useTaxonomy();
+
+  // ── editable taxonomy state ────────────────────────────────────────────────
+  const [localTaxonomy, setLocalTaxonomy] = useState<TaxonomyData>({});
+  const [isDirty, setIsDirty] = useState(false);
+  const [expandedCats, setExpandedCats] = useState<Set<string>>(new Set());
+  const [newCatName, setNewCatName] = useState("");
+  const [newSubInputs, setNewSubInputs] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    if (liveTaxonomy && Object.keys(liveTaxonomy).length > 0 && !isDirty) {
+      setLocalTaxonomy(Object.fromEntries(Object.entries(liveTaxonomy).map(([k, v]) => [k, [...v]])));
+    }
+  }, [liveTaxonomy]);
+
+  const saveMutation = useMutation({
+    mutationFn: () => apiRequest("PUT", "/api/admin/taxonomy", { taxonomy: localTaxonomy }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/taxonomy"] });
+      setIsDirty(false);
+      toast({ title: "Taxonomy saved", description: "Changes are now live across all job forms and filters." });
+    },
+    onError: () => toast({ title: "Save failed", variant: "destructive" }),
+  });
+
+  const toggleCat = (cat: string) => setExpandedCats(prev => {
+    const next = new Set(prev); if (next.has(cat)) next.delete(cat); else next.add(cat); return next;
+  });
+  const expandAll = () => setExpandedCats(new Set(Object.keys(localTaxonomy)));
+  const collapseAll = () => setExpandedCats(new Set());
+
+  const addCategory = () => {
+    const name = newCatName.trim();
+    if (!name || name in localTaxonomy) return;
+    setLocalTaxonomy(prev => ({ ...prev, [name]: [] }));
+    setNewCatName("");
+    setIsDirty(true);
+  };
+
+  const deleteCategory = (cat: string) => {
+    setLocalTaxonomy(prev => { const next = { ...prev }; delete next[cat]; return next; });
+    setIsDirty(true);
+  };
+
+  const addSubcategory = (cat: string) => {
+    const sub = (newSubInputs[cat] || "").trim();
+    if (!sub || (localTaxonomy[cat] || []).includes(sub)) return;
+    setLocalTaxonomy(prev => ({ ...prev, [cat]: [...(prev[cat] || []), sub] }));
+    setNewSubInputs(prev => ({ ...prev, [cat]: "" }));
+    setIsDirty(true);
+  };
+
+  const deleteSubcategory = (cat: string, sub: string) => {
+    setLocalTaxonomy(prev => ({ ...prev, [cat]: prev[cat].filter(s => s !== sub) }));
+    setIsDirty(true);
+  };
+
+  // ── industry / blog categories (DB-backed) ─────────────────────────────────
   const [newName, setNewName] = useState("");
   const [newType, setNewType] = useState<"industry" | "blog">("industry");
   const [csvUploading, setCsvUploading] = useState(false);
@@ -1931,6 +1990,14 @@ function CategoriesTab() {
     onError: () => toast({ title: "Error", description: "Could not add category.", variant: "destructive" }),
   });
 
+  const deleteMutation = useMutation({
+    mutationFn: (id: number) => apiRequest("DELETE", `/api/categories/${id}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/categories"] });
+      toast({ title: "Category removed" });
+    },
+  });
+
   const handleCsvUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -1938,9 +2005,8 @@ function CategoriesTab() {
     try {
       const text = await file.text();
       const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
-      const existing = new Set((categories || []).map(c => `${c.type}:${c.name.toLowerCase()}`));
-      let added = 0;
-      let skipped = 0;
+      const existing = new Set((categoriesData || []).map(c => `${c.type}:${c.name.toLowerCase()}`));
+      let added = 0; let skipped = 0;
       for (const line of lines) {
         const parts = line.split(",").map(p => p.trim().replace(/^["']|["']$/g, ""));
         if (parts.length < 2) continue;
@@ -1962,33 +2028,15 @@ function CategoriesTab() {
     }
   };
 
-  const deleteMutation = useMutation({
-    mutationFn: (id: number) => apiRequest("DELETE", `/api/categories/${id}`),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/categories"] });
-      toast({ title: "Category removed" });
-    },
-  });
-
   const handleAdd = () => {
     if (!newName.trim()) return;
     createMutation.mutate({ name: newName.trim(), type: newType });
   };
 
-  const [expandedTaxCats, setExpandedTaxCats] = useState<Set<string>>(new Set());
-  const toggleTaxCat = (cat: string) => setExpandedTaxCats(prev => {
-    const next = new Set(prev);
-    if (next.has(cat)) next.delete(cat); else next.add(cat);
-    return next;
-  });
-  const expandAllTax = () => setExpandedTaxCats(new Set(Object.keys(JOB_TAXONOMY)));
-  const collapseAllTax = () => setExpandedTaxCats(new Set());
-  const taxonomyEntries = Object.entries(JOB_TAXONOMY) as [string, readonly string[]][];
+  if (categoriesLoading || taxonomyLoading) return <div className="animate-pulse h-40 bg-slate-100 dark:bg-slate-800 rounded-xl" />;
 
-  if (isLoading) return <div className="animate-pulse h-40 bg-slate-100 dark:bg-slate-800 rounded-xl" />;
-
-  const industries = (categories || []).filter(c => c.type === "industry");
-  const blogCats = (categories || []).filter(c => c.type === "blog");
+  const industries = (categoriesData || []).filter(c => c.type === "industry");
+  const blogCats = (categoriesData || []).filter(c => c.type === "blog");
 
   const renderEditableSection = (title: string, type: "industry" | "blog", items: Category[]) => (
     <div className="bg-white dark:bg-slate-900 rounded-2xl border border-border p-6">
@@ -2011,12 +2059,8 @@ function CategoriesTab() {
           className="max-w-xs"
           data-testid={`input-add-${type}-category`}
         />
-        <Button
-          size="sm"
-          disabled={createMutation.isPending || !newName.trim() || newType !== type}
-          onClick={() => { setNewType(type); handleAdd(); }}
-          data-testid={`button-add-${type}-category`}
-        >
+        <Button size="sm" disabled={createMutation.isPending || !newName.trim() || newType !== type}
+          onClick={() => { setNewType(type); handleAdd(); }} data-testid={`button-add-${type}-category`}>
           <Plus size={16} />
         </Button>
       </div>
@@ -2028,7 +2072,7 @@ function CategoriesTab() {
       <div className="flex flex-wrap items-end justify-between gap-4 mb-6">
         <div>
           <h2 className="text-2xl font-bold font-display">Categories & Labels</h2>
-          <p className="text-muted-foreground text-sm mt-1">Browse the job taxonomy and manage industries and blog categories.</p>
+          <p className="text-muted-foreground text-sm mt-1">Edit job taxonomy live — changes propagate to job forms and filters instantly after saving.</p>
         </div>
         <div className="bg-white dark:bg-slate-900 rounded-xl border border-border p-4 flex flex-col gap-2 max-w-sm">
           <p className="text-sm font-semibold">Bulk Upload via CSV</p>
@@ -2042,38 +2086,89 @@ function CategoriesTab() {
         </div>
       </div>
       <div className="space-y-6">
+        {/* ── Editable Job Taxonomy ── */}
         <div className="bg-white dark:bg-slate-900 rounded-2xl border border-border p-6" data-testid="section-job-taxonomy">
-          <div className="flex items-center justify-between mb-2">
-            <h3 className="font-bold font-display text-lg">Job Categories</h3>
-            <div className="flex gap-2">
-              <Button variant="ghost" size="sm" onClick={expandAllTax} data-testid="button-expand-all-taxonomy">Expand All</Button>
-              <Button variant="ghost" size="sm" onClick={collapseAllTax} data-testid="button-collapse-all-taxonomy">Collapse All</Button>
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h3 className="font-bold font-display text-lg">Job Categories</h3>
+              <p className="text-xs text-muted-foreground mt-0.5">{Object.keys(localTaxonomy).length} categories</p>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button variant="ghost" size="sm" onClick={expandAll} data-testid="button-expand-all-taxonomy">Expand All</Button>
+              <Button variant="ghost" size="sm" onClick={collapseAll} data-testid="button-collapse-all-taxonomy">Collapse All</Button>
+              {isDirty && (
+                <Button size="sm" onClick={() => saveMutation.mutate()} disabled={saveMutation.isPending} data-testid="button-save-taxonomy">
+                  {saveMutation.isPending ? "Saving…" : "Save Changes"}
+                </Button>
+              )}
             </div>
           </div>
-          <div className="flex items-center gap-1.5 mb-4 text-xs text-muted-foreground">
-            <Info size={12} />
-            <span>{taxonomyEntries.length} categories defined in code — read-only</span>
+
+          {/* Add new category */}
+          <div className="flex gap-2 mb-4">
+            <Input
+              placeholder="New category name…"
+              value={newCatName}
+              onChange={e => setNewCatName(e.target.value)}
+              onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); addCategory(); } }}
+              className="max-w-xs"
+              data-testid="input-add-taxonomy-category"
+            />
+            <Button size="sm" onClick={addCategory} disabled={!newCatName.trim()} data-testid="button-add-taxonomy-category">
+              <Plus size={16} /> Add Category
+            </Button>
           </div>
+
           <div className="space-y-1">
-            {taxonomyEntries.map(([cat, subs]) => {
-              const isOpen = expandedTaxCats.has(cat);
+            {Object.entries(localTaxonomy).map(([cat, subs]) => {
+              const isOpen = expandedCats.has(cat);
               return (
                 <div key={cat} className="border border-border rounded-lg overflow-hidden">
-                  <button
-                    onClick={() => toggleTaxCat(cat)}
-                    className="w-full flex items-center gap-2 px-4 py-2.5 text-left text-sm font-medium hover:bg-accent/50 transition-colors"
-                    data-testid={`taxonomy-cat-${cat.replace(/[^a-zA-Z0-9]/g, "-").toLowerCase()}`}
-                  >
-                    {isOpen ? <ChevronDown size={14} className="text-muted-foreground shrink-0" /> : <ChevronRight size={14} className="text-muted-foreground shrink-0" />}
-                    <span>{cat}</span>
-                    <Badge variant="outline" className="ml-auto text-xs">{subs.length}</Badge>
-                  </button>
+                  <div className="flex items-center gap-2 px-4 py-2.5">
+                    <button
+                      onClick={() => toggleCat(cat)}
+                      className="flex items-center gap-2 flex-1 text-left text-sm font-medium"
+                      data-testid={`taxonomy-cat-${cat.replace(/[^a-zA-Z0-9]/g, "-").toLowerCase()}`}
+                    >
+                      {isOpen ? <ChevronDown size={14} className="text-muted-foreground shrink-0" /> : <ChevronRight size={14} className="text-muted-foreground shrink-0" />}
+                      <span>{cat}</span>
+                      <Badge variant="outline" className="ml-1 text-xs">{subs.length}</Badge>
+                    </button>
+                    <button
+                      onClick={() => deleteCategory(cat)}
+                      className="text-muted-foreground hover:text-destructive transition-colors p-1"
+                      title={`Delete category "${cat}"`}
+                      data-testid={`button-delete-taxonomy-cat-${cat.replace(/[^a-zA-Z0-9]/g, "-").toLowerCase()}`}
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
                   {isOpen && (
-                    <div className="px-4 pb-3 pt-1 border-t border-border bg-muted/30">
-                      <div className="flex flex-wrap gap-1.5">
+                    <div className="px-4 pb-3 pt-2 border-t border-border bg-muted/30">
+                      <div className="flex flex-wrap gap-1.5 mb-3">
                         {subs.map(sub => (
-                          <Badge key={sub} variant="secondary" className="text-xs py-1 px-2.5" data-testid={`taxonomy-sub-${sub.replace(/[^a-zA-Z0-9]/g, "-").toLowerCase()}`}>{sub}</Badge>
+                          <Badge key={sub} variant="secondary" className="text-xs py-1 px-2.5 gap-1.5" data-testid={`taxonomy-sub-${sub.replace(/[^a-zA-Z0-9]/g, "-").toLowerCase()}`}>
+                            {sub}
+                            <button onClick={() => deleteSubcategory(cat, sub)} className="hover:text-destructive" data-testid={`button-delete-sub-${sub.replace(/[^a-zA-Z0-9]/g, "-").toLowerCase()}`}>
+                              <X size={11} />
+                            </button>
+                          </Badge>
                         ))}
+                        {subs.length === 0 && <p className="text-xs text-muted-foreground">No subcategories yet.</p>}
+                      </div>
+                      <div className="flex gap-2">
+                        <Input
+                          placeholder="Add subcategory…"
+                          value={newSubInputs[cat] || ""}
+                          onChange={e => setNewSubInputs(prev => ({ ...prev, [cat]: e.target.value }))}
+                          onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); addSubcategory(cat); } }}
+                          className="h-8 text-xs max-w-xs"
+                          data-testid={`input-add-sub-${cat.replace(/[^a-zA-Z0-9]/g, "-").toLowerCase()}`}
+                        />
+                        <Button size="sm" className="h-8 px-2" onClick={() => addSubcategory(cat)} disabled={!(newSubInputs[cat] || "").trim()}
+                          data-testid={`button-add-sub-${cat.replace(/[^a-zA-Z0-9]/g, "-").toLowerCase()}`}>
+                          <Plus size={13} />
+                        </Button>
                       </div>
                     </div>
                   )}
@@ -2081,7 +2176,16 @@ function CategoriesTab() {
               );
             })}
           </div>
+
+          {isDirty && (
+            <div className="mt-4 flex justify-end">
+              <Button onClick={() => saveMutation.mutate()} disabled={saveMutation.isPending} data-testid="button-save-taxonomy-bottom">
+                {saveMutation.isPending ? "Saving…" : "Save Taxonomy Changes"}
+              </Button>
+            </div>
+          )}
         </div>
+
         {renderEditableSection("Industries", "industry", industries)}
         {renderEditableSection("Blog Categories", "blog", blogCats)}
       </div>

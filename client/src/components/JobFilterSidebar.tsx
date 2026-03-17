@@ -11,12 +11,11 @@ import {
 import { motion, AnimatePresence } from "framer-motion";
 import type { Job, Category } from "@shared/schema";
 import { subDays } from "date-fns";
-import { getCategories, getSubcategories } from "@shared/jobTaxonomy";
+import { useTaxonomy } from "@/hooks/use-taxonomy";
 
 export const SALARY_MAX = 250000;
 
 const JOB_TYPES = ["Full-time", "Part-time", "Contract", "Internship"];
-const SECTORS = getCategories() as unknown as string[];
 const EXPERIENCE_LEVELS = ["Entry Level", "Mid Level", "Senior"];
 const CDL_OPTIONS = ["Yes", "No"];
 const WORK_ENVIRONMENTS = ["Remote", "Hybrid", "On-site"];
@@ -280,9 +279,11 @@ type SidebarContentProps = {
   activeFilterCount: number;
   onClearAll: () => void;
   industries?: Category[];
+  sectors: string[];
+  getSubcategories: (cat: string) => string[];
 };
 
-function SidebarContent({ filters: f, activeFilterCount, onClearAll, industries = [] }: SidebarContentProps) {
+function SidebarContent({ filters: f, activeFilterCount, onClearAll, industries = [], sectors, getSubcategories }: SidebarContentProps) {
   return (
     <div className="space-y-0">
       <div className="flex items-center justify-between mb-5">
@@ -345,7 +346,7 @@ function SidebarContent({ filters: f, activeFilterCount, onClearAll, industries 
       </FilterSection>
 
       <FilterSection title="Job Category">
-        <CheckboxFilter items={SECTORS} selected={f.sectors} onChange={(v) => { f.setSectors(v); if (v.length === 0) f.setSubcategories([]); }} testIdPrefix="checkbox-sector" />
+        <CheckboxFilter items={sectors} selected={f.sectors} onChange={(v) => { f.setSectors(v); if (v.length === 0) f.setSubcategories([]); }} testIdPrefix="checkbox-sector" />
       </FilterSection>
 
       {f.sectors.length > 0 && (() => {
@@ -422,6 +423,7 @@ type JobFilterSidebarProps = {
 export function JobFilterSidebar({ filters, filteredCount, industries = [], mobileOpen, onMobileClose }: JobFilterSidebarProps) {
   const activeFilterCount = getActiveFilterCount(filters);
   const onClearAll = () => clearAllFilters(filters);
+  const { categories, getSubcategories } = useTaxonomy();
 
   const content = (
     <SidebarContent
@@ -429,6 +431,8 @@ export function JobFilterSidebar({ filters, filteredCount, industries = [], mobi
       activeFilterCount={activeFilterCount}
       onClearAll={onClearAll}
       industries={industries}
+      sectors={categories}
+      getSubcategories={getSubcategories}
     />
   );
 
