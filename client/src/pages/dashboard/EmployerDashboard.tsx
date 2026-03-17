@@ -16,7 +16,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Briefcase, Plus, Trash2, Users, Upload, CreditCard, CheckCircle2, MapPin, Eye, Building2, Phone, Mail, User, MessageSquare, Pencil, ExternalLink, ChevronDown, ChevronRight, StickyNote, Check, Save } from "lucide-react";
+import { Briefcase, Plus, Trash2, Users, Upload, CreditCard, CheckCircle2, MapPin, Eye, Building2, Phone, Mail, User, MessageSquare, Pencil, ExternalLink, ChevronDown, ChevronRight, StickyNote, Check, Save, Loader2 } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ImageUpload } from "@/components/ui/image-upload";
 import type { Job, Application, Category } from "@shared/schema";
@@ -890,7 +890,7 @@ function CsvUploadTab() {
           <p className="text-muted-foreground text-sm mb-4">Upload a CSV file to bulk-add jobs, candidates, or employer profiles.</p>
           <Label htmlFor="csv-upload" className="cursor-pointer">
             <Button asChild variant="outline" disabled={uploading}>
-              <span data-testid="button-upload-csv">{uploading ? "Uploading..." : "Choose CSV File"}</span>
+              <span data-testid="button-upload-csv" className="inline-flex items-center gap-1.5">{uploading ? <><Loader2 size={14} className="animate-spin" /> Uploading...</> : "Choose CSV File"}</span>
             </Button>
           </Label>
           <Input

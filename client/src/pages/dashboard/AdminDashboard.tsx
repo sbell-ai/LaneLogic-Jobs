@@ -24,7 +24,7 @@ import {
   AlertCircle, Download, Pencil, X, Tag, Ticket, ExternalLink,
   FilePlus2, Globe, Search as SearchIcon, Share2, PlusCircle, ArrowLeft,
   FileEdit, LayoutList, UserCircle, ChevronDown, ChevronRight, Info,
-  Building2, ImageIcon, Mail, Save, Send, AlertTriangle, ToggleLeft, ToggleRight
+  Building2, ImageIcon, Mail, Save, Send, AlertTriangle, ToggleLeft, ToggleRight, Loader2
 } from "lucide-react";
 import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
@@ -1048,7 +1048,7 @@ DISP-001,Fleet Dispatcher,Metro Logistics,Contract,"Ground Transportation Ops (D
           <p className="text-sm text-muted-foreground mb-4">UTF-8 encoded .csv files only</p>
           <Label htmlFor="csv-jobs-upload" className="cursor-pointer">
             <Button asChild variant="outline" disabled={importing}>
-              <span data-testid="button-choose-csv">{importing ? "Processing..." : "Choose CSV File"}</span>
+              <span data-testid="button-choose-csv" className="inline-flex items-center gap-1.5">{importing ? <><Loader2 size={14} className="animate-spin" /> Processing...</> : "Choose CSV File"}</span>
             </Button>
           </Label>
           <Input id="csv-jobs-upload" type="file" accept=".csv" className="hidden" onChange={handleFile} data-testid="input-csv-upload" />
@@ -1107,7 +1107,7 @@ DISP-001,Fleet Dispatcher,Metro Logistics,Contract,"Ground Transportation Ops (D
                 disabled={logoUploading || !logoFile || !logoCompanyName.trim()}
                 data-testid="button-upload-logo"
               >
-                {logoUploading ? "Uploading..." : "Upload Logo"}
+                {logoUploading ? <span className="inline-flex items-center gap-1.5"><Loader2 size={14} className="animate-spin" /> Uploading...</span> : "Upload Logo"}
               </Button>
               {logoFile && (
                 <button
@@ -2076,7 +2076,7 @@ function CategoriesTab() {
           <label className="cursor-pointer">
             <input type="file" accept=".csv,.txt" onChange={handleCsvUpload} className="hidden" data-testid="input-csv-categories" />
             <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-lg border border-border hover:bg-accent transition-colors ${csvUploading ? "opacity-50 pointer-events-none" : ""}`}>
-              <Upload size={14} /> {csvUploading ? "Uploading..." : "Choose CSV File"}
+              {csvUploading ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} />} {csvUploading ? "Uploading..." : "Choose CSV File"}
             </span>
           </label>
         </div>
