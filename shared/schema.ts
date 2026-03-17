@@ -31,6 +31,8 @@ export const users = pgTable("users", {
   verificationStatus: text("verification_status").notNull().default("unverified"),
   seekerTrack: text("seeker_track").default("Unknown"),
   seekerVerificationStatus: text("seeker_verification_status").notNull().default("unverified"),
+  cdlIsNonDomiciled: boolean("cdl_is_non_domiciled").notNull().default(false),
+  cdlMarkedNonDomiciledIssuingState: boolean("cdl_marked_non_domiciled_issuing_state").notNull().default(false),
   createdAt: timestamp("created_at").defaultNow(),
 });
 

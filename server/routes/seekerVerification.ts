@@ -27,13 +27,16 @@ function isValidHttpUrl(str: string): boolean {
   }
 }
 
+const NON_DOMICILED_KEYS = ["cdl_non_domiciled_eligibility_2026", "cdl_non_domiciled_validity_i94_2026"];
+
 export function computeRequirements(
   allRequirements: SeekerCredentialRequirement[],
   allRules: SeekerRequirementRule[],
   userTrack: string | null | undefined,
   appliedJobTags: string[],
   employerCategory?: string | null,
-  jobState?: string | null
+  jobState?: string | null,
+  userFlags?: { cdlIsNonDomiciled?: boolean; cdlMarkedNonDomiciledIssuingState?: boolean }
 ): SeekerCredentialRequirement[] {
   const matched = new Set<string>();
   for (const rule of allRules) {
@@ -52,18 +55,26 @@ export function computeRequirements(
       matched.add(rule.requirementKey);
     }
   }
-  return allRequirements.filter(r => matched.has(r.key));
+  const isNonDomiciled = !!(userFlags?.cdlIsNonDomiciled || userFlags?.cdlMarkedNonDomiciledIssuingState);
+  if (isNonDomiciled) {
+    NON_DOMICILED_KEYS.forEach(k => matched.add(k));
+  }
+  return allRequirements.filter(r => {
+    if (NON_DOMICILED_KEYS.includes(r.key)) return isNonDomiciled;
+    return matched.has(r.key);
+  });
 }
 
 export async function computeRequirementsForSeeker(
   userTrack: string | null | undefined,
   jobTags?: string[],
   employerCategory?: string | null,
-  jobState?: string | null
+  jobState?: string | null,
+  userFlags?: { cdlIsNonDomiciled?: boolean; cdlMarkedNonDomiciledIssuingState?: boolean }
 ): Promise<SeekerCredentialRequirement[]> {
   const allReqs = await storage.getSeekerCredentialRequirements();
   const allRules = await storage.getSeekerRequirementRules();
-  return computeRequirements(allReqs, allRules, userTrack, jobTags || [], employerCategory, jobState);
+  return computeRequirements(allReqs, allRules, userTrack, jobTags || [], employerCategory, jobState, userFlags);
 }
 
 const SEED_REQUIREMENTS = [
@@ -74,6 +85,8 @@ const SEED_REQUIREMENTS = [
   { key: "forklift_cert", label: "Forklift Operator Certification", description: "OSHA-compliant certification for powered industrial truck operation", category: "certification" },
   { key: "icao_iata_training", label: "ICAO/IATA Dangerous Goods Training", description: "Required for handling and shipping dangerous goods by air", category: "training" },
   { key: "msha_part48", label: "MSHA Part 48 Training", description: "Mine Safety and Health Administration surface/underground training", category: "training" },
+  { key: "cdl_non_domiciled_eligibility_2026", label: "2026 Non-domiciled CDL eligibility (FMCSA)", description: "FMCSA eligibility documentation for non-domiciled CDL holders under 2026 rules", category: "license" },
+  { key: "cdl_non_domiciled_validity_i94_2026", label: "Non-domiciled CDL validity tied to authorized stay (I-94) (2026)", description: "I-94 documentation confirming authorized stay period for CDL validity under 2026 non-domiciled rules", category: "license" },
 ];
 
 const SEED_RULES = [
@@ -138,7 +151,8 @@ seekerVerificationRouter.get("/api/seeker/verification/requirements", async (req
         if (employer) employerCategory = employer.employerCategory || null;
       }
     }
-    const computed = computeRequirements(allReqs, allRules, user.seekerTrack, jobTags, employerCategory, jobState);
+    const userFlags = { cdlIsNonDomiciled: !!(user as any).cdlIsNonDomiciled, cdlMarkedNonDomiciledIssuingState: !!(user as any).cdlMarkedNonDomiciledIssuingState };
+    const computed = computeRequirements(allReqs, allRules, user.seekerTrack, jobTags, employerCategory, jobState, userFlags);
     res.json({ requirements: computed, allRequirements: allReqs });
   } catch (err) {
     console.error("[SeekerVerification] requirements error:", err);
@@ -179,7 +193,8 @@ seekerVerificationRouter.post("/api/seeker/verification/request/get-or-create", 
         if (employer) employerCategory = employer.employerCategory || null;
       }
     }
-    const computed = await computeRequirementsForSeeker(user.seekerTrack, jobTags, employerCategory, jobState);
+    const userFlags = { cdlIsNonDomiciled: !!(user as any).cdlIsNonDomiciled, cdlMarkedNonDomiciledIssuingState: !!(user as any).cdlMarkedNonDomiciledIssuingState };
+    const computed = await computeRequirementsForSeeker(user.seekerTrack, jobTags, employerCategory, jobState, userFlags);
     const keys = computed.map(r => r.key);
     if (keys.length > 0) {
       await storage.appendRequirementsSnapshot(request.id, keys);
@@ -207,7 +222,8 @@ seekerVerificationRouter.post("/api/seeker/verification/request/append-requireme
     const employer = await storage.getUser(job.employerId);
     if (employer) employerCategory = employer.employerCategory || null;
     const jobState = job.locationState || null;
-    const computed = await computeRequirementsForSeeker(user.seekerTrack, jobTags, employerCategory, jobState);
+    const userFlags2 = { cdlIsNonDomiciled: !!(user as any).cdlIsNonDomiciled, cdlMarkedNonDomiciledIssuingState: !!(user as any).cdlMarkedNonDomiciledIssuingState };
+    const computed = await computeRequirementsForSeeker(user.seekerTrack, jobTags, employerCategory, jobState, userFlags2);
     const keys = computed.map(r => r.key);
     if (keys.length === 0) {
       const request = await storage.getActiveSeekerVerificationRequest(user.id);
@@ -349,6 +365,39 @@ seekerVerificationRouter.post("/api/admin/seeker-verification/request/decision",
       return res.status(400).json({ ok: false, error: "validation_error", message: err.errors[0].message });
     }
     console.error("[SeekerVerification] decision error:", err);
+    res.status(500).json({ ok: false, error: "internal_error" });
+  }
+});
+
+seekerVerificationRouter.post("/api/seeker/cdl-non-domiciled", async (req, res) => {
+  if (!requireSeekerSession(req, res)) return;
+  try {
+    const { cdlIsNonDomiciled } = z.object({ cdlIsNonDomiciled: z.boolean() }).parse(req.body);
+    await storage.updateUser(req.user.id, { cdlIsNonDomiciled } as any);
+    res.json({ ok: true, cdlIsNonDomiciled });
+  } catch (err) {
+    if (err instanceof z.ZodError) {
+      return res.status(400).json({ ok: false, error: "validation_error", message: err.errors[0].message });
+    }
+    console.error("[SeekerVerification] cdl-non-domiciled error:", err);
+    res.status(500).json({ ok: false, error: "internal_error" });
+  }
+});
+
+seekerVerificationRouter.post("/api/admin/seeker-verification/set-cdl-non-domiciled-state", async (req, res) => {
+  if (!requireAdminSession(req, res)) return;
+  try {
+    const { seekerId, cdlMarkedNonDomiciledIssuingState } = z.object({
+      seekerId: z.number(),
+      cdlMarkedNonDomiciledIssuingState: z.boolean(),
+    }).parse(req.body);
+    await storage.updateUser(seekerId, { cdlMarkedNonDomiciledIssuingState } as any);
+    res.json({ ok: true, seekerId, cdlMarkedNonDomiciledIssuingState });
+  } catch (err) {
+    if (err instanceof z.ZodError) {
+      return res.status(400).json({ ok: false, error: "validation_error", message: err.errors[0].message });
+    }
+    console.error("[SeekerVerification] set-cdl-non-domiciled-state error:", err);
     res.status(500).json({ ok: false, error: "internal_error" });
   }
 });

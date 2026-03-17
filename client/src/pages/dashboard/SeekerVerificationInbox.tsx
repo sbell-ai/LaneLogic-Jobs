@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
+import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
 import { ShieldCheck, CheckCircle2, XCircle, AlertCircle, ChevronDown, ChevronRight, Link as LinkIcon, Clock, User } from "lucide-react";
 import type { SeekerVerificationRequest, SeekerCredentialEvidenceItem } from "@shared/schema";
@@ -13,6 +14,8 @@ type InboxItem = SeekerVerificationRequest & {
   seekerName: string | null;
   seekerEmail: string;
   seekerTrack: string | null;
+  cdlIsNonDomiciled: boolean;
+  cdlMarkedNonDomiciledIssuingState: boolean;
   evidence: SeekerCredentialEvidenceItem[];
   requirementLabels: string[];
 };
@@ -89,10 +92,21 @@ function DecisionPanel({ item, onComplete }: { item: InboxItem; onComplete: () =
 
 export default function SeekerVerificationInbox() {
   const queryClient = useQueryClient();
+  const { toast } = useToast();
   const [expanded, setExpanded] = useState<number | null>(null);
 
   const { data: items, isLoading } = useQuery<InboxItem[]>({
     queryKey: ["/api/admin/seeker-verification/inbox"],
+  });
+
+  const nonDomiciledStateMutation = useMutation({
+    mutationFn: ({ seekerId, cdlMarkedNonDomiciledIssuingState }: { seekerId: number; cdlMarkedNonDomiciledIssuingState: boolean }) =>
+      apiRequest("POST", "/api/admin/seeker-verification/set-cdl-non-domiciled-state", { seekerId, cdlMarkedNonDomiciledIssuingState }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/seeker-verification/inbox"] });
+      toast({ title: "Flag updated" });
+    },
+    onError: () => toast({ title: "Error", description: "Could not update flag.", variant: "destructive" }),
   });
 
   const handleComplete = () => {
@@ -192,6 +206,25 @@ export default function SeekerVerificationInbox() {
                     {item.evidence.length === 0 && (
                       <p className="text-sm text-muted-foreground">No evidence items attached.</p>
                     )}
+                  </div>
+                  <div className="border rounded-lg p-4 bg-slate-50 dark:bg-slate-900" data-testid={`card-admin-cdl-non-domiciled-${item.id}`}>
+                    <div className="flex items-center justify-between gap-4">
+                      <div>
+                        <p className="text-sm font-semibold">Issuing state marks CDL as non-domiciled</p>
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          Enable if the seeker's issuing state has confirmed their CDL is classified as non-domiciled. This triggers the 2026 non-domiciled requirements for the seeker.
+                        </p>
+                        {item.cdlIsNonDomiciled && (
+                          <p className="text-xs text-blue-600 dark:text-blue-400 mt-1">Seeker has self-reported as non-domiciled</p>
+                        )}
+                      </div>
+                      <Switch
+                        checked={item.cdlMarkedNonDomiciledIssuingState}
+                        onCheckedChange={(val) => nonDomiciledStateMutation.mutate({ seekerId: item.seekerId, cdlMarkedNonDomiciledIssuingState: val })}
+                        disabled={nonDomiciledStateMutation.isPending}
+                        data-testid={`toggle-admin-cdl-non-domiciled-${item.id}`}
+                      />
+                    </div>
                   </div>
                   <DecisionPanel item={item} onComplete={handleComplete} />
                 </div>

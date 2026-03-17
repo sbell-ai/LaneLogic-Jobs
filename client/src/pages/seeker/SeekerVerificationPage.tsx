@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
+import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { ShieldCheck, Plus, Send, FileText, Link as LinkIcon, AlertCircle, CheckCircle2, Clock, XCircle } from "lucide-react";
@@ -50,6 +51,17 @@ export default function SeekerVerificationPage() {
   const [sourceUrl, setSourceUrl] = useState("");
   const [excerpt, setExcerpt] = useState("");
   const [claim, setClaim] = useState("");
+
+  const cdlNonDomiciledMutation = useMutation({
+    mutationFn: (cdlIsNonDomiciled: boolean) =>
+      apiRequest("POST", "/api/seeker/cdl-non-domiciled", { cdlIsNonDomiciled }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/seeker/verification/requirements"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/me"] });
+      toast({ title: "Preference saved" });
+    },
+    onError: () => toast({ title: "Error", description: "Could not save preference.", variant: "destructive" }),
+  });
 
   const isSeeker = !!user && user.role === "job_seeker";
 
@@ -124,6 +136,23 @@ export default function SeekerVerificationPage() {
             <p className="text-muted-foreground text-sm">Verify your licenses and credentials to stand out to employers</p>
           </div>
         </div>
+
+        <Card className="p-5 mb-6" data-testid="card-cdl-non-domiciled-toggle">
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <p className="font-semibold text-sm">My CDL is non-domiciled</p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Select if your CDL was issued to you as a non-domiciled resident under FMCSA rules. This will add 2026 non-domiciled CDL requirements to your verification.
+              </p>
+            </div>
+            <Switch
+              checked={!!(user as any).cdlIsNonDomiciled}
+              onCheckedChange={(val) => cdlNonDomiciledMutation.mutate(val)}
+              disabled={cdlNonDomiciledMutation.isPending}
+              data-testid="toggle-cdl-non-domiciled"
+            />
+          </div>
+        </Card>
 
         {computedRequirements.length > 0 && (
           <Card className="p-5 mb-6 border-blue-200 bg-blue-50 dark:bg-blue-950 dark:border-blue-800" data-testid="card-recommended-credentials">

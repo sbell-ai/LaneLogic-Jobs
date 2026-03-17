@@ -213,7 +213,7 @@ export interface IStorage {
   getLatestSeekerVerificationRequest(seekerId: number): Promise<SeekerVerificationRequest | undefined>;
   getOrCreateSeekerVerificationRequest(seekerId: number): Promise<SeekerVerificationRequest>;
   appendRequirementsSnapshot(requestId: number, keys: string[]): Promise<SeekerVerificationRequest>;
-  getSeekerVerificationRequestsByStatus(statuses: string[]): Promise<(SeekerVerificationRequest & { seekerName: string | null; seekerEmail: string; seekerTrack: string | null })[]>;
+  getSeekerVerificationRequestsByStatus(statuses: string[]): Promise<(SeekerVerificationRequest & { seekerName: string | null; seekerEmail: string; seekerTrack: string | null; cdlIsNonDomiciled: boolean; cdlMarkedNonDomiciledIssuingState: boolean })[]>;
   updateSeekerVerificationRequestStatus(requestId: number, status: string, adminNotes?: string, decidedBy?: number): Promise<SeekerVerificationRequest>;
   createSeekerEvidenceItem(item: InsertSeekerCredentialEvidenceItem): Promise<SeekerCredentialEvidenceItem>;
   getSeekerEvidenceItemsByRequest(requestId: number): Promise<SeekerCredentialEvidenceItem[]>;
@@ -1083,7 +1083,7 @@ export class DatabaseStorage implements IStorage {
     return updated;
   }
 
-  async getSeekerVerificationRequestsByStatus(statuses: string[]): Promise<(SeekerVerificationRequest & { seekerName: string | null; seekerEmail: string; seekerTrack: string | null })[]> {
+  async getSeekerVerificationRequestsByStatus(statuses: string[]): Promise<(SeekerVerificationRequest & { seekerName: string | null; seekerEmail: string; seekerTrack: string | null; cdlIsNonDomiciled: boolean; cdlMarkedNonDomiciledIssuingState: boolean })[]> {
     const rows = await db
       .select({
         id: seekerVerificationRequests.id,
@@ -1099,6 +1099,8 @@ export class DatabaseStorage implements IStorage {
         seekerName: sql<string | null>`COALESCE(${users.firstName} || ' ' || ${users.lastName}, ${users.email})`.as("seeker_name"),
         seekerEmail: users.email,
         seekerTrack: users.seekerTrack,
+        cdlIsNonDomiciled: users.cdlIsNonDomiciled,
+        cdlMarkedNonDomiciledIssuingState: users.cdlMarkedNonDomiciledIssuingState,
       })
       .from(seekerVerificationRequests)
       .innerJoin(users, eq(seekerVerificationRequests.seekerId, users.id))
