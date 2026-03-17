@@ -32,6 +32,7 @@ import JobSeekerDashboard from "@/pages/dashboard/JobSeekerDashboard";
 import EmployerDashboard from "@/pages/dashboard/EmployerDashboard";
 import AdminDashboard from "@/pages/dashboard/AdminDashboard";
 import DesignSettings from "@/pages/dashboard/DesignSettings";
+import InboxPage from "@/pages/dashboard/Inbox";
 import VerificationPage from "@/pages/employer/VerificationPage";
 import SeekerVerificationPage from "@/pages/seeker/SeekerVerificationPage";
 
@@ -203,6 +204,7 @@ function Router() {
       <Route path="/seeker/settings/verification" component={SeekerVerificationPage} />
 
       <Route path="/dashboard" component={DashboardRouter} />
+      <Route path="/dashboard/messages" component={InboxPage} />
       <Route path="/dashboard/:section" component={DashboardSectionRouter} />
       <Route path="/dashboard/admin/:section/:subsection" component={AdminSubSectionRouter} />
       <Route path="/dashboard/admin/:section" component={AdminSectionRouter} />

@@ -498,6 +498,37 @@ export const insertSeekerRequirementRuleSchema = createInsertSchema(seekerRequir
 export const insertSeekerVerificationRequestSchema = createInsertSchema(seekerVerificationRequests).omit({ id: true, createdAt: true, updatedAt: true });
 export const insertSeekerCredentialEvidenceItemSchema = createInsertSchema(seekerCredentialEvidenceItems).omit({ id: true, createdAt: true });
 
+export const conversations = pgTable("conversations", {
+  id: serial("id").primaryKey(),
+  seekerId: integer("seeker_id").notNull(),
+  employerId: integer("employer_id").notNull(),
+  jobId: integer("job_id"),
+  lastMessageAt: timestamp("last_message_at").defaultNow(),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => [
+  index("conv_seeker_idx").on(table.seekerId),
+  index("conv_employer_idx").on(table.employerId),
+]);
+
+export const messages = pgTable("messages", {
+  id: serial("id").primaryKey(),
+  conversationId: integer("conversation_id").notNull(),
+  senderId: integer("sender_id").notNull(),
+  content: text("content").notNull(),
+  isRead: boolean("is_read").notNull().default(false),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => [
+  index("msg_conversation_idx").on(table.conversationId),
+]);
+
+export const insertConversationSchema = createInsertSchema(conversations).omit({ id: true, createdAt: true, lastMessageAt: true });
+export const insertMessageSchema = createInsertSchema(messages).omit({ id: true, createdAt: true });
+
+export type Conversation = typeof conversations.$inferSelect;
+export type InsertConversation = z.infer<typeof insertConversationSchema>;
+export type Message = typeof messages.$inferSelect;
+export type InsertMessage = z.infer<typeof insertMessageSchema>;
+
 export type EmployerVerificationRequest = typeof employerVerificationRequests.$inferSelect;
 export type InsertEmployerVerificationRequest = z.infer<typeof insertEmployerVerificationRequestSchema>;
 export type EmployerEvidenceItem = typeof employerEvidenceItems.$inferSelect;

@@ -3,7 +3,7 @@ import { Navbar } from "@/components/layout/Navbar";
 import { Footer } from "@/components/layout/Footer";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { MapPin, DollarSign, Clock, ExternalLink, CheckCircle2, Briefcase, Building2, Star } from "lucide-react";
+import { MapPin, DollarSign, Clock, ExternalLink, CheckCircle2, Briefcase, Building2, Star, MessageSquare } from "lucide-react";
 import { BackButton } from "@/components/nav/BackButton";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/use-auth";
@@ -50,6 +50,21 @@ export default function JobDetail() {
     },
   });
 
+  const messageMutation = useMutation({
+    mutationFn: () =>
+      apiRequest("POST", "/api/conversations", {
+        seekerId: user!.id,
+        employerId: (job as any).employerId,
+        jobId: Number(id),
+      }).then((r) => r.json()),
+    onSuccess: (conv: any) => {
+      setLocation(`/dashboard/messages?conv=${conv.id}`);
+    },
+    onError: () => {
+      toast({ title: "Error", description: "Could not open conversation.", variant: "destructive" });
+    },
+  });
+
   const handleApply = () => {
     if (!user) { setLocation("/login"); return; }
     if (job?.isExternalApply && job.applyUrl) {
@@ -58,6 +73,12 @@ export default function JobDetail() {
       applyMutation.mutate();
     }
   };
+
+  const canMessageEmployer =
+    user &&
+    user.role === "job_seeker" &&
+    (job as any)?.employerIsRegistered &&
+    (job as any)?.employerVerificationStatus === "verified";
 
   if (isLoading) {
     return (
@@ -160,6 +181,18 @@ export default function JobDetail() {
                     {applyMutation.isPending ? "Submitting..." : job.isExternalApply ? "Apply on Company Site" : "Apply Now"}
                     {job.isExternalApply && <ExternalLink size={16} className="ml-2" />}
                   </Button>
+                  {canMessageEmployer && (
+                    <Button
+                      variant="outline"
+                      onClick={() => messageMutation.mutate()}
+                      disabled={messageMutation.isPending}
+                      data-testid="button-message-employer"
+                      className="gap-2"
+                    >
+                      <MessageSquare size={16} />
+                      {messageMutation.isPending ? "Opening..." : "Message Employer"}
+                    </Button>
+                  )}
                   {!user && (
                     <p className="text-xs text-muted-foreground text-center">You must be logged in to apply</p>
                   )}

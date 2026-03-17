@@ -1,8 +1,9 @@
 import { SidebarProvider, SidebarTrigger, Sidebar, SidebarContent, SidebarGroup, SidebarGroupLabel, SidebarGroupContent, SidebarMenu, SidebarMenuItem, SidebarMenuButton } from "@/components/ui/sidebar";
 import { useAuth } from "@/hooks/use-auth";
 import { Link, useLocation } from "wouter";
-import { Briefcase, LayoutDashboard, FileText, LogOut, Users, BookOpen, Upload, CreditCard, UserPlus, PlusCircle, Palette, FileEdit, Tag, Ticket, UserCircle, FilePlus2, Share2, Database, Package, Gauge, ArrowDownToLine, ShieldCheck } from "lucide-react";
+import { Briefcase, LayoutDashboard, FileText, LogOut, Users, BookOpen, Upload, CreditCard, UserPlus, PlusCircle, Palette, FileEdit, Tag, Ticket, UserCircle, FilePlus2, Share2, Database, Package, Gauge, ArrowDownToLine, ShieldCheck, MessageSquare } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useQuery } from "@tanstack/react-query";
 
 interface AdminLink {
   title: string;
@@ -13,6 +14,13 @@ interface AdminLink {
 function AppSidebar({ role }: { role: string }) {
   const [location] = useLocation();
 
+  const { data: unreadData } = useQuery<{ count: number }>({
+    queryKey: ["/api/conversations/unread-count"],
+    refetchInterval: 30000,
+    enabled: role !== "admin",
+  });
+  const unreadCount = unreadData?.count ?? 0;
+
   const seekerLinks = [
     { title: "Overview", path: "/dashboard", icon: LayoutDashboard },
     { title: "Applied Jobs", path: "/dashboard/applications", icon: Briefcase },
@@ -21,6 +29,7 @@ function AppSidebar({ role }: { role: string }) {
     { title: "Verification", path: "/seeker/settings/verification", icon: ShieldCheck },
     { title: "Usage & Quota", path: "/dashboard/quota", icon: Gauge },
     { title: "Membership", path: "/dashboard/membership", icon: CreditCard },
+    { title: "Messages", path: "/dashboard/messages", icon: MessageSquare, badge: unreadCount },
   ];
 
   const employerLinks = [
@@ -31,6 +40,7 @@ function AppSidebar({ role }: { role: string }) {
     { title: "Company Profile", path: "/dashboard/profile", icon: UserCircle },
     { title: "Verification", path: "/employer/settings/verification", icon: ShieldCheck },
     { title: "Membership", path: "/dashboard/membership", icon: CreditCard },
+    { title: "Messages", path: "/dashboard/messages", icon: MessageSquare, badge: unreadCount },
   ];
 
   const adminLinks: AdminLink[] = [
@@ -123,6 +133,7 @@ function AppSidebar({ role }: { role: string }) {
             <SidebarMenu className="space-y-1 px-1">
               {links.map((item) => {
                 const active = location === item.path;
+                const badge = (item as any).badge ?? 0;
                 return (
                   <SidebarMenuItem key={item.title}>
                     <SidebarMenuButton asChild isActive={active}>
@@ -133,9 +144,15 @@ function AppSidebar({ role }: { role: string }) {
                             ? "bg-primary text-primary-foreground border border-primary"
                             : "bg-white text-gray-700 border border-gray-400 hover:bg-gray-50 hover:border-gray-500"
                         }`}
+                        data-testid={`nav-${item.title.toLowerCase().replace(/\s+/g, "-")}`}
                       >
                         <item.icon size={18} />
-                        <span>{item.title}</span>
+                        <span className="flex-1">{item.title}</span>
+                        {badge > 0 && (
+                          <span className="ml-auto bg-primary text-primary-foreground text-[10px] font-bold px-1.5 py-0.5 rounded-full min-w-[18px] text-center leading-none" data-testid="badge-unread-messages">
+                            {badge}
+                          </span>
+                        )}
                       </Link>
                     </SidebarMenuButton>
                   </SidebarMenuItem>

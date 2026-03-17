@@ -641,7 +641,12 @@ export async function registerRoutes(
       if (expires < new Date()) return res.status(404).json({ message: "Not found" });
     }
     const employer = await storage.getUser(job.employerId);
-    res.json({ ...job, employerLogo: employer?.companyLogo || null });
+    res.json({
+      ...job,
+      employerLogo: employer?.companyLogo || null,
+      employerVerificationStatus: employer?.verificationStatus || null,
+      employerIsRegistered: !!employer,
+    });
   });
 
   app.post(api.jobs.create.path, async (req, res) => {
@@ -1915,6 +1920,104 @@ export async function registerRoutes(
       console.error("Mailgun error:", error?.message || error);
       res.status(500).json({ success: false, message: "Failed to send message. Please try again later." });
     }
+  });
+
+  // ── Messaging ───────────────────────────────────────────────────────────────
+
+  // GET /api/conversations – list my conversations
+  app.get("/api/conversations", async (req, res) => {
+    if (!req.user) return res.status(401).json({ error: "Unauthorized" });
+    const userId = (req.user as any).id;
+    const convs = await storage.getConversations(userId);
+    res.json(convs);
+  });
+
+  // GET /api/conversations/unread-count – unread badge count
+  app.get("/api/conversations/unread-count", async (req, res) => {
+    if (!req.user) return res.status(401).json({ error: "Unauthorized" });
+    const count = await storage.getUnreadMessageCount((req.user as any).id);
+    res.json({ count });
+  });
+
+  // POST /api/conversations – get or create a conversation
+  app.post("/api/conversations", async (req, res) => {
+    if (!req.user) return res.status(401).json({ error: "Unauthorized" });
+    const { seekerId, employerId, jobId } = req.body;
+    if (!seekerId || !employerId) return res.status(400).json({ error: "seekerId and employerId required" });
+    const conv = await storage.getOrCreateConversation(Number(seekerId), Number(employerId), jobId ? Number(jobId) : null);
+    res.json(conv);
+  });
+
+  // GET /api/conversations/:id/messages
+  app.get("/api/conversations/:id/messages", async (req, res) => {
+    if (!req.user) return res.status(401).json({ error: "Unauthorized" });
+    const userId = (req.user as any).id;
+    const convId = Number(req.params.id);
+    const conv = await storage.getConversation(convId);
+    if (!conv) return res.status(404).json({ error: "Conversation not found" });
+    if (conv.seekerId !== userId && conv.employerId !== userId) return res.status(403).json({ error: "Forbidden" });
+    const msgs = await storage.getMessages(convId);
+    res.json(msgs);
+  });
+
+  // POST /api/conversations/:id/messages – send a message
+  app.post("/api/conversations/:id/messages", async (req, res) => {
+    if (!req.user) return res.status(401).json({ error: "Unauthorized" });
+    const userId = (req.user as any).id;
+    const convId = Number(req.params.id);
+    const { content } = req.body;
+    if (!content?.trim()) return res.status(400).json({ error: "Content required" });
+    const conv = await storage.getConversation(convId);
+    if (!conv) return res.status(404).json({ error: "Conversation not found" });
+    if (conv.seekerId !== userId && conv.employerId !== userId) return res.status(403).json({ error: "Forbidden" });
+    const msg = await storage.createMessage(convId, userId, content.trim());
+
+    // Email notification to recipient (fire-and-forget)
+    const recipientId = conv.seekerId === userId ? conv.employerId : conv.seekerId;
+    const [sender, recipient] = await Promise.all([
+      storage.getUser(userId),
+      storage.getUser(recipientId),
+    ]);
+    if (sender && recipient) {
+      const apiKey = process.env.MAILGUN_API_KEY;
+      const domain = process.env.MAILGUN_DOMAIN;
+      if (apiKey && domain) {
+        (async () => {
+          try {
+            const FormData = (await import("form-data")).default;
+            const Mailgun = (await import("mailgun.js")).default;
+            const mailgun = new Mailgun(FormData);
+            const mg = mailgun.client({ username: "api", key: apiKey });
+            const senderName = [sender.firstName, sender.lastName].filter(Boolean).join(" ") || sender.companyName || sender.email;
+            const preview = content.trim().slice(0, 200);
+            const inboxUrl = `${process.env.CANONICAL_HOST || "https://lanelogicjobs.com"}/dashboard/messages`;
+            await mg.messages.create(domain, {
+              from: `LaneLogic Jobs <noreply@${domain}>`,
+              to: [recipient.email],
+              subject: "New message on LaneLogic Jobs",
+              text: `You have a new message from ${senderName}.\n\n"${preview}"\n\nReply at: ${inboxUrl}`,
+              html: `<p>You have a new message from <strong>${escapeHtml(senderName)}</strong>.</p><blockquote>${escapeHtml(preview)}</blockquote><p><a href="${inboxUrl}">View your inbox on LaneLogic Jobs</a></p>`,
+            });
+          } catch (e: any) {
+            console.error("Messaging email notification failed:", e?.message);
+          }
+        })();
+      }
+    }
+
+    res.json(msg);
+  });
+
+  // POST /api/conversations/:id/read – mark as read
+  app.post("/api/conversations/:id/read", async (req, res) => {
+    if (!req.user) return res.status(401).json({ error: "Unauthorized" });
+    const userId = (req.user as any).id;
+    const convId = Number(req.params.id);
+    const conv = await storage.getConversation(convId);
+    if (!conv) return res.status(404).json({ error: "Not found" });
+    if (conv.seekerId !== userId && conv.employerId !== userId) return res.status(403).json({ error: "Forbidden" });
+    await storage.markConversationRead(convId, userId);
+    res.json({ ok: true });
   });
 
   // Sitemap

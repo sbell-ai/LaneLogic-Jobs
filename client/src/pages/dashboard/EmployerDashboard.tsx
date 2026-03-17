@@ -16,13 +16,13 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Briefcase, Plus, Trash2, Users, Upload, CreditCard, CheckCircle2, MapPin, Eye, Building2, Phone, Mail, User } from "lucide-react";
+import { Briefcase, Plus, Trash2, Users, Upload, CreditCard, CheckCircle2, MapPin, Eye, Building2, Phone, Mail, User, MessageSquare } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ImageUpload } from "@/components/ui/image-upload";
 import type { Job, Application, Category } from "@shared/schema";
 import { insertJobSchema } from "@shared/schema";
 import { z } from "zod";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { getCategories, getSubcategories, validateCategoryPair } from "@shared/jobTaxonomy";
 
 const JOB_TYPES = ["Full-time", "Part-time", "Contract", "Seasonal", "Owner-Operator", "Lease Purchase", "OTR", "Temporary", "Other"];
@@ -302,11 +302,33 @@ function MyJobsTab({ userId }: { userId: number }) {
 }
 
 function ApplicantsTab({ userId }: { userId: number }) {
+  const [, setLocation] = useLocation();
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
   const { data: jobs } = useQuery<Job[]>({ queryKey: ["/api/jobs"] });
   const { data: applications, isLoading } = useQuery<Application[]>({ queryKey: ["/api/applications"] });
 
   const myJobIds = new Set((jobs || []).filter((j) => j.employerId === userId).map((j) => j.id));
   const myApps = (applications || []).filter((a) => myJobIds.has(a.jobId));
+
+  const [messagingAppId, setMessagingAppId] = useState<number | null>(null);
+
+  const messageMutation = useMutation({
+    mutationFn: (app: Application) =>
+      apiRequest("POST", "/api/conversations", {
+        seekerId: app.jobSeekerId,
+        employerId: userId,
+        jobId: app.jobId,
+      }).then((r) => r.json()),
+    onSuccess: (conv: any) => {
+      setMessagingAppId(null);
+      setLocation(`/dashboard/messages?conv=${conv.id}`);
+    },
+    onError: () => {
+      setMessagingAppId(null);
+      toast({ title: "Error", description: "Could not open conversation.", variant: "destructive" });
+    },
+  });
 
   if (isLoading) return <div className="animate-pulse h-32 bg-slate-100 dark:bg-slate-800 rounded-xl" />;
 
@@ -327,14 +349,27 @@ function ApplicantsTab({ userId }: { userId: number }) {
                 <p className="font-semibold">Applicant #{app.jobSeekerId}</p>
                 <p className="text-sm text-muted-foreground">For Job #{app.jobId}</p>
               </div>
-              <Badge className={`capitalize border ${
-                app.status === "accepted" ? "bg-green-100 text-green-700 border-green-200" :
-                app.status === "rejected" ? "bg-red-100 text-red-700 border-red-200" :
-                app.status === "reviewed" ? "bg-blue-100 text-blue-700 border-blue-200" :
-                "bg-yellow-100 text-yellow-700 border-yellow-200"
-              }`}>
-                {app.status}
-              </Badge>
+              <div className="flex items-center gap-3">
+                <Badge className={`capitalize border ${
+                  app.status === "accepted" ? "bg-green-100 text-green-700 border-green-200" :
+                  app.status === "rejected" ? "bg-red-100 text-red-700 border-red-200" :
+                  app.status === "reviewed" ? "bg-blue-100 text-blue-700 border-blue-200" :
+                  "bg-yellow-100 text-yellow-700 border-yellow-200"
+                }`}>
+                  {app.status}
+                </Badge>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="gap-1.5"
+                  data-testid={`button-message-applicant-${app.id}`}
+                  disabled={messagingAppId === app.id}
+                  onClick={() => { setMessagingAppId(app.id); messageMutation.mutate(app); }}
+                >
+                  <MessageSquare size={14} />
+                  {messagingAppId === app.id ? "Opening..." : "Message"}
+                </Button>
+              </div>
             </div>
           ))}
         </div>
