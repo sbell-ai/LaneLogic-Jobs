@@ -3,14 +3,13 @@ import { Navbar } from "@/components/layout/Navbar";
 import { Footer } from "@/components/layout/Footer";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/use-auth";
+import { useAuthModal } from "@/components/AuthModal";
 import type { Resource } from "@shared/schema";
 import { INTRO_TRUNCATE_LENGTH } from "@shared/constants";
-import { BookOpen, Lock, Unlock, Users, Briefcase, ArrowRight } from "lucide-react";
+import { BookOpen, Lock, Unlock, Users, Briefcase, ArrowRight, LogIn } from "lucide-react";
 import { motion } from "framer-motion";
-import { useMemo } from "react";
 
 const tierOrder: Record<string, number> = { free: 0, basic: 1, premium: 2 };
 
@@ -137,23 +136,45 @@ function ResourceGrid({ resources, userTier, userRole }: { resources: Resource[]
   );
 }
 
+function AuthGate() {
+  const { open } = useAuthModal();
+  return (
+    <div className="flex flex-col items-center justify-center py-24 px-4 text-center">
+      <div className="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center mb-6">
+        <Lock size={32} className="text-primary" />
+      </div>
+      <h2 className="text-2xl font-bold font-display mb-3" data-testid="text-resource-gate-heading">
+        Members-Only Resource Library
+      </h2>
+      <p className="text-muted-foreground max-w-md mb-8 leading-relaxed">
+        Sign in to access career guides, hiring templates, industry reports, and more — curated specifically for your role in transportation and logistics.
+      </p>
+      <div className="flex flex-col sm:flex-row gap-3 justify-center">
+        <Button onClick={() => open("login")} data-testid="button-signin-gate" className="gap-2">
+          <LogIn size={16} /> Sign In
+        </Button>
+        <Button asChild variant="outline" data-testid="button-register-gate">
+          <Link href="/register">Create Free Account</Link>
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+const sectionLabel: Record<string, { label: string; icon: React.ReactNode }> = {
+  employer: { label: "Employer Resources", icon: <Briefcase size={18} /> },
+  job_seeker: { label: "Job Seeker Resources", icon: <Users size={18} /> },
+  admin: { label: "All Resources", icon: <BookOpen size={18} /> },
+};
+
 export default function Resources() {
   const { user } = useAuth();
   const { data: resources, isLoading } = useQuery<Resource[]>({
     queryKey: ["/api/resources"],
+    enabled: !!user,
   });
 
-  const defaultTab = user?.role === "employer" ? "employer" : "job_seeker";
-
-  const employerResources = useMemo(
-    () => (resources || []).filter((r) => r.targetAudience === "employer" || r.targetAudience === "both"),
-    [resources]
-  );
-
-  const jobSeekerResources = useMemo(
-    () => (resources || []).filter((r) => r.targetAudience === "job_seeker" || r.targetAudience === "both"),
-    [resources]
-  );
+  const section = user ? (sectionLabel[user.role] ?? sectionLabel["job_seeker"]) : null;
 
   return (
     <div className="min-h-screen flex flex-col font-sans">
@@ -168,45 +189,28 @@ export default function Resources() {
             <p className="text-muted-foreground max-w-xl mx-auto">
               Career guides, hiring templates, industry reports, and more — all curated for the transportation sector.
             </p>
-            {!user && (
-              <div className="mt-6">
-                <Button asChild className="mr-3">
-                  <Link href="/register">Sign Up Free</Link>
-                </Button>
-                <Button asChild variant="outline">
-                  <Link href="/pricing">View Membership Plans</Link>
-                </Button>
-              </div>
-            )}
           </div>
         </div>
 
         <div className="container mx-auto px-4 md:px-6 py-12 space-y-10">
-          {isLoading ? (
+          {!user ? (
+            <AuthGate />
+          ) : isLoading ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {Array.from({ length: 6 }).map((_, i) => (
                 <div key={i} className="bg-white dark:bg-slate-900 rounded-2xl border border-border h-52 animate-pulse" />
               ))}
             </div>
           ) : (
-            <Tabs defaultValue={defaultTab}>
-              <TabsList className="mb-8" data-testid="tabs-resource-audience">
-                <TabsTrigger value="employer" data-testid="tab-employer">
-                  <Briefcase size={14} className="mr-1.5" />
-                  For Employers
-                </TabsTrigger>
-                <TabsTrigger value="job_seeker" data-testid="tab-job-seeker">
-                  <Users size={14} className="mr-1.5" />
-                  For Job Seekers
-                </TabsTrigger>
-              </TabsList>
-              <TabsContent value="employer">
-                <ResourceGrid resources={employerResources} userTier={user?.membershipTier} userRole={user?.role} />
-              </TabsContent>
-              <TabsContent value="job_seeker">
-                <ResourceGrid resources={jobSeekerResources} userTier={user?.membershipTier} userRole={user?.role} />
-              </TabsContent>
-            </Tabs>
+            <div>
+              {section && (
+                <div className="flex items-center gap-2 mb-8 text-lg font-semibold font-display text-foreground" data-testid="text-resources-section-label">
+                  {section.icon}
+                  {section.label}
+                </div>
+              )}
+              <ResourceGrid resources={resources || []} userTier={user.membershipTier} userRole={user.role} />
+            </div>
           )}
         </div>
       </main>

@@ -4,9 +4,11 @@ import { Navbar } from "@/components/layout/Navbar";
 import { Footer } from "@/components/layout/Footer";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, BookOpen, Briefcase, Users } from "lucide-react";
+import { ArrowLeft, BookOpen, Briefcase, Users, ShieldOff } from "lucide-react";
 import { BackButton } from "@/components/nav/BackButton";
 import { useQuery } from "@tanstack/react-query";
+import { useAuthModal } from "@/components/AuthModal";
+import { useAuth } from "@/hooks/use-auth";
 import type { Resource } from "@shared/schema";
 import { tokenize } from "@/lib/linkify";
 
@@ -46,19 +48,30 @@ function LinkifiedText({ text }: { text: string }) {
   );
 }
 
+type FetchError = { status: number; message: string };
+
+async function fetchResource(url: string): Promise<Resource> {
+  const res = await fetch(url);
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({ message: "Error" }));
+    const err: FetchError = { status: res.status, message: body.message ?? "Error" };
+    throw err;
+  }
+  return res.json();
+}
+
 export default function ResourceDetail() {
   const { slug } = useParams<{ slug: string }>();
   const [, setLocation] = useLocation();
+  const { open: openAuth } = useAuthModal();
+  const { user } = useAuth();
   const isNumeric = /^\d+$/.test(slug || "");
 
-  const { data: numericResource, isLoading: numericLoading, error: numericError } = useQuery<Resource>({
+  const { data: numericResource, isLoading: numericLoading, error: numericError } = useQuery<Resource, FetchError>({
     queryKey: ["/api/resources", slug],
-    queryFn: async () => {
-      const res = await fetch(`/api/resources/${slug}`);
-      if (!res.ok) throw new Error("Resource not found");
-      return res.json();
-    },
+    queryFn: () => fetchResource(`/api/resources/${slug}`),
     enabled: isNumeric,
+    retry: false,
   });
 
   useEffect(() => {
@@ -67,18 +80,22 @@ export default function ResourceDetail() {
     }
   }, [isNumeric, numericResource, setLocation]);
 
-  const { data: resource, isLoading: slugLoading, error: slugError } = useQuery<Resource>({
+  const { data: resource, isLoading: slugLoading, error: slugError } = useQuery<Resource, FetchError>({
     queryKey: ["/api/resources/slug", slug],
-    queryFn: async () => {
-      const res = await fetch(`/api/resources/slug/${slug}`);
-      if (!res.ok) throw new Error("Resource not found");
-      return res.json();
-    },
+    queryFn: () => fetchResource(`/api/resources/slug/${slug}`),
     enabled: !isNumeric,
+    retry: false,
   });
 
   const isLoading = isNumeric ? numericLoading : slugLoading;
   const error = isNumeric ? numericError : slugError;
+
+  useEffect(() => {
+    if (error && (error as FetchError).status === 401) {
+      setLocation("/");
+      openAuth("login");
+    }
+  }, [error, setLocation, openAuth]);
 
   if (isLoading) {
     return (
@@ -104,7 +121,59 @@ export default function ResourceDetail() {
     );
   }
 
-  if (error || !resource) {
+  if (error) {
+    const status = (error as FetchError).status;
+
+    if (status === 401) {
+      return (
+        <div className="min-h-screen flex flex-col">
+          <Navbar />
+          <div className="flex-grow flex items-center justify-center" />
+          <Footer />
+        </div>
+      );
+    }
+
+    if (status === 403) {
+      const accountType = user?.role === "employer" ? "employer" : "job seeker";
+      const oppositeType = user?.role === "employer" ? "job seeker" : "employer";
+      return (
+        <div className="min-h-screen flex flex-col">
+          <Navbar />
+          <div className="flex-grow flex flex-col items-center justify-center gap-4 px-4 text-center">
+            <ShieldOff className="text-muted-foreground" size={48} />
+            <h1 className="text-2xl font-bold font-display" data-testid="text-resource-forbidden">
+              Not Available for Your Account
+            </h1>
+            <p className="text-muted-foreground max-w-sm">
+              This resource is intended for {oppositeType} accounts. Your account is registered as an {accountType}.
+            </p>
+            <Button variant="outline" onClick={() => setLocation("/resources")} data-testid="button-back-resources">
+              Back to Resources
+            </Button>
+          </div>
+          <Footer />
+        </div>
+      );
+    }
+
+    return (
+      <div className="min-h-screen flex flex-col">
+        <Navbar />
+        <div className="flex-grow flex flex-col items-center justify-center gap-4">
+          <BookOpen className="text-muted-foreground" size={48} />
+          <h1 className="text-2xl font-bold font-display" data-testid="text-resource-not-found">Resource Not Found</h1>
+          <p className="text-muted-foreground">This resource may not exist or is no longer available.</p>
+          <Button variant="outline" onClick={() => setLocation("/resources")} data-testid="button-back-resources">
+            Back to Resources
+          </Button>
+        </div>
+        <Footer />
+      </div>
+    );
+  }
+
+  if (!resource) {
     return (
       <div className="min-h-screen flex flex-col">
         <Navbar />

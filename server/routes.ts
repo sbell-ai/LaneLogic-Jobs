@@ -838,24 +838,55 @@ export async function registerRoutes(
 
   // Resources
   app.get(api.resources.list.path, async (req, res) => {
-    const isAdmin = req.isAuthenticated() && (req.user as any).role === "admin";
+    if (!req.isAuthenticated()) return res.status(401).json({ message: "Login required" });
+    const user = req.user as any;
+    const isAdmin = user.role === "admin";
     const allResources = await storage.getResources(isAdmin ? "admin" : "public");
-    res.json(allResources);
+    if (isAdmin) return res.json(allResources);
+    const role: string = user.role;
+    const filtered = allResources.filter((r) => {
+      if (role === "employer") return r.targetAudience === "employer" || r.targetAudience === "both";
+      if (role === "job_seeker") return r.targetAudience === "job_seeker" || r.targetAudience === "both";
+      return false;
+    });
+    res.json(filtered);
   });
 
   app.get("/api/resources/slug/:slug", async (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).json({ message: "Login required" });
     const resource = await storage.getResourceBySlug(req.params.slug);
     if (!resource) return res.status(404).json({ message: "Not found" });
-    const isAdmin = req.isAuthenticated() && (req.user as any).role === "admin";
+    const user = req.user as any;
+    const isAdmin = user.role === "admin";
     if (!isAdmin && !resource.isPublished) return res.status(404).json({ message: "Not found" });
+    if (!isAdmin) {
+      const role: string = user.role;
+      const allowed = role === "employer"
+        ? resource.targetAudience === "employer" || resource.targetAudience === "both"
+        : role === "job_seeker"
+          ? resource.targetAudience === "job_seeker" || resource.targetAudience === "both"
+          : false;
+      if (!allowed) return res.status(403).json({ message: "This resource is not available for your account type" });
+    }
     res.json(resource);
   });
 
   app.get("/api/resources/:id", async (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).json({ message: "Login required" });
     const resource = await storage.getResource(Number(req.params.id));
     if (!resource) return res.status(404).json({ message: "Not found" });
-    const isAdmin = req.isAuthenticated() && (req.user as any).role === "admin";
+    const user = req.user as any;
+    const isAdmin = user.role === "admin";
     if (!isAdmin && !resource.isPublished) return res.status(404).json({ message: "Not found" });
+    if (!isAdmin) {
+      const role: string = user.role;
+      const allowed = role === "employer"
+        ? resource.targetAudience === "employer" || resource.targetAudience === "both"
+        : role === "job_seeker"
+          ? resource.targetAudience === "job_seeker" || resource.targetAudience === "both"
+          : false;
+      if (!allowed) return res.status(403).json({ message: "This resource is not available for your account type" });
+    }
     res.json(resource);
   });
 
@@ -2081,13 +2112,6 @@ export async function registerRoutes(
       for (const blog of publishedBlogs) {
         const lastmod = blog.publishedAt ? new Date(blog.publishedAt).toISOString().split("T")[0] : now;
         urls.push(`  <url><loc>${canonicalHost}/blog/${blog.id}</loc><lastmod>${lastmod}</lastmod><changefreq>monthly</changefreq><priority>0.6</priority></url>`);
-      }
-
-      const allResources = await storage.getResources("public");
-      const publishedResources = allResources.filter((r) => r.isPublished);
-      for (const resource of publishedResources) {
-        const lastmod = resource.updatedAt ? new Date(resource.updatedAt).toISOString().split("T")[0] : now;
-        urls.push(`  <url><loc>${canonicalHost}/resources/${resource.slug}</loc><lastmod>${lastmod}</lastmod><changefreq>monthly</changefreq><priority>0.6</priority></url>`);
       }
 
       const allPages = await storage.getPages();
