@@ -15,63 +15,180 @@ import { Switch } from "@/components/ui/switch";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Progress } from "@/components/ui/progress";
-import { FileText, Briefcase, CreditCard, Plus, CheckCircle2, Clock, XCircle, AlertCircle, Eye, EyeOff, User, Gauge, ShoppingCart, CalendarClock, Zap } from "lucide-react";
-import type { Application, Resume } from "@shared/schema";
-import { Link } from "wouter";
+import { FileText, Briefcase, CreditCard, Plus, CheckCircle2, Clock, XCircle, AlertCircle, Eye, EyeOff, User, Gauge, ShoppingCart, CalendarClock, Zap, ChevronDown, ChevronRight, MessageSquare, PauseCircle } from "lucide-react";
+import type { Application, Resume, Job } from "@shared/schema";
+import { Link, useLocation } from "wouter";
 import { formatDistanceToNow, format } from "date-fns";
 
-const statusConfig: Record<string, { label: string; icon: typeof Clock; color: string }> = {
-  pending: { label: "Pending", icon: Clock, color: "bg-yellow-100 text-yellow-700 border-yellow-200" },
-  reviewed: { label: "Reviewed", icon: AlertCircle, color: "bg-blue-100 text-blue-700 border-blue-200" },
-  accepted: { label: "Accepted", icon: CheckCircle2, color: "bg-green-100 text-green-700 border-green-200" },
-  rejected: { label: "Rejected", icon: XCircle, color: "bg-red-100 text-red-700 border-red-200" },
+const SEEKER_STATUS_MAP: Record<string, { label: string; icon: typeof Clock; color: string; group: string }> = {
+  new:         { label: "Application Received", icon: Clock,        color: "bg-yellow-100 text-yellow-700 border-yellow-200", group: "active" },
+  pending:     { label: "Application Received", icon: Clock,        color: "bg-yellow-100 text-yellow-700 border-yellow-200", group: "active" },
+  shortlisted: { label: "Under Review",         icon: Eye,          color: "bg-blue-100 text-blue-700 border-blue-200",       group: "active" },
+  reviewed:    { label: "Under Review",         icon: Eye,          color: "bg-blue-100 text-blue-700 border-blue-200",       group: "active" },
+  hired:       { label: "Offer Extended",       icon: CheckCircle2, color: "bg-green-100 text-green-700 border-green-200",   group: "offer"  },
+  accepted:    { label: "Offer Extended",       icon: CheckCircle2, color: "bg-green-100 text-green-700 border-green-200",   group: "offer"  },
+  on_hold:     { label: "On Hold",              icon: PauseCircle,  color: "bg-orange-100 text-orange-700 border-orange-200", group: "on_hold"},
+  not_a_fit:   { label: "Position Filled",      icon: XCircle,      color: "bg-slate-100 text-slate-500 border-slate-200",   group: "closed" },
+  rejected:    { label: "Position Filled",      icon: XCircle,      color: "bg-slate-100 text-slate-500 border-slate-200",   group: "closed" },
 };
 
+const SEEKER_GROUPS = [
+  { key: "active",  label: "Active Applications", icon: Briefcase,    headerColor: "text-foreground",   defaultOpen: true },
+  { key: "offer",   label: "Offer Extended",       icon: CheckCircle2, headerColor: "text-green-600",    defaultOpen: true },
+  { key: "on_hold", label: "On Hold",              icon: PauseCircle,  headerColor: "text-orange-600",   defaultOpen: true },
+  { key: "closed",  label: "Position Filled",      icon: XCircle,      headerColor: "text-slate-500",    defaultOpen: false },
+];
+
 function ApplicationsTab({ userId }: { userId: number }) {
-  const { data: applications, isLoading } = useQuery<Application[]>({
+  const [, setLocation] = useLocation();
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  const { data: applications, isLoading: appsLoading } = useQuery<Application[]>({
     queryKey: ["/api/applications"],
   });
+  const { data: allJobs } = useQuery<Job[]>({ queryKey: ["/api/jobs"] });
+
+  const [openGroups, setOpenGroups] = useState<Record<string, boolean>>(() =>
+    Object.fromEntries(SEEKER_GROUPS.map((g) => [g.key, g.defaultOpen]))
+  );
+  const [messagingAppId, setMessagingAppId] = useState<number | null>(null);
 
   const myApps = (applications || []).filter((a) => a.jobSeekerId === userId);
+  const jobMap = new Map((allJobs || []).map((j) => [j.id, j]));
 
-  if (isLoading) return <div className="animate-pulse h-32 bg-slate-100 dark:bg-slate-800 rounded-xl" />;
+  const messageMutation = useMutation({
+    mutationFn: (app: Application) =>
+      apiRequest("POST", "/api/conversations", {
+        seekerId: userId,
+        employerId: jobMap.get(app.jobId)?.employerId,
+        jobId: app.jobId,
+      }).then((r) => r.json()),
+    onSuccess: (conv: any) => {
+      setMessagingAppId(null);
+      queryClient.invalidateQueries({ queryKey: ["/api/conversations"] });
+      setLocation(`/dashboard/messages?conv=${conv.id}`);
+    },
+    onError: () => {
+      setMessagingAppId(null);
+      toast({ title: "Error", description: "Could not open conversation.", variant: "destructive" });
+    },
+  });
 
-  return (
-    <div>
-      <div className="flex justify-between items-center mb-6">
-        <h2 className="text-2xl font-bold font-display">My Applications</h2>
-        <Button asChild variant="outline" size="sm">
-          <Link href="/jobs">Browse Jobs</Link>
-        </Button>
-      </div>
-      {myApps.length === 0 ? (
+  if (appsLoading) return <div className="animate-pulse h-32 bg-slate-100 dark:bg-slate-800 rounded-xl" />;
+
+  if (myApps.length === 0) {
+    return (
+      <div>
+        <div className="flex justify-between items-center mb-6">
+          <h2 className="text-2xl font-bold font-display">My Applications</h2>
+          <Button asChild variant="outline" size="sm"><Link href="/jobs">Browse Jobs</Link></Button>
+        </div>
         <div className="text-center py-16 bg-white dark:bg-slate-900 rounded-2xl border border-dashed border-border">
           <Briefcase className="mx-auto mb-4 text-muted-foreground" size={40} />
           <h3 className="font-bold font-display text-lg mb-2">No applications yet</h3>
           <p className="text-muted-foreground mb-4">Start applying to transportation jobs that match your skills.</p>
           <Button asChild><Link href="/jobs">Find Jobs</Link></Button>
         </div>
-      ) : (
-        <div className="space-y-4">
-          {myApps.map((app) => {
-            const status = statusConfig[app.status] || statusConfig.pending;
-            const Icon = status.icon;
-            return (
-              <div key={app.id} data-testid={`card-application-${app.id}`} className="bg-white dark:bg-slate-900 rounded-xl border border-border p-5 flex items-center justify-between gap-4">
-                <div>
-                  <p className="font-semibold">Job Application #{app.jobId}</p>
-                  <p className="text-sm text-muted-foreground mt-1">
-                    Applied {app.createdAt ? formatDistanceToNow(new Date(app.createdAt), { addSuffix: true }) : "recently"}
-                  </p>
-                </div>
-                <Badge className={`border ${status.color} flex items-center gap-1.5`}>
-                  <Icon size={13} /> {status.label}
-                </Badge>
-              </div>
-            );
-          })}
+      </div>
+    );
+  }
+
+  const grouped: Record<string, Application[]> = Object.fromEntries(SEEKER_GROUPS.map((g) => [g.key, []]));
+  myApps.forEach((app) => {
+    const meta = SEEKER_STATUS_MAP[app.status] ?? SEEKER_STATUS_MAP.pending;
+    grouped[meta.group].push(app);
+  });
+
+  const renderCard = (app: Application) => {
+    const meta = SEEKER_STATUS_MAP[app.status] ?? SEEKER_STATUS_MAP.pending;
+    const Icon = meta.icon;
+    const job = jobMap.get(app.jobId);
+    const isMessaging = messagingAppId === app.id;
+    const canMessage = !!job?.employerId;
+
+    return (
+      <div key={app.id} data-testid={`card-application-${app.id}`} className="bg-white dark:bg-slate-900 rounded-xl border border-border p-5">
+        <div className="flex items-start justify-between gap-4">
+          <div className="flex-1 min-w-0">
+            <p className="font-semibold truncate" data-testid={`text-job-title-${app.id}`}>
+              {job ? job.title : `Job #${app.jobId}`}
+            </p>
+            {job?.companyName && (
+              <p className="text-sm text-muted-foreground truncate">{job.companyName}</p>
+            )}
+            <p className="text-xs text-muted-foreground mt-1">
+              Applied {app.createdAt ? formatDistanceToNow(new Date(app.createdAt), { addSuffix: true }) : "recently"}
+            </p>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <Badge className={`border ${meta.color} flex items-center gap-1.5 whitespace-nowrap`}>
+              <Icon size={12} /> {meta.label}
+            </Badge>
+            {canMessage && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-1.5"
+                data-testid={`button-message-employer-${app.id}`}
+                disabled={isMessaging}
+                onClick={() => { setMessagingAppId(app.id); messageMutation.mutate(app); }}
+              >
+                <MessageSquare size={13} />
+                {isMessaging ? "Opening…" : "Message"}
+              </Button>
+            )}
+          </div>
         </div>
-      )}
+        {job && (
+          <div className="mt-3 pt-3 border-t border-border">
+            <Link href={`/jobs/${job.id}`} className="text-xs text-primary hover:underline">
+              View job listing →
+            </Link>
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  return (
+    <div>
+      <div className="flex justify-between items-center mb-6">
+        <h2 className="text-2xl font-bold font-display">My Applications ({myApps.length})</h2>
+        <Button asChild variant="outline" size="sm"><Link href="/jobs">Browse More Jobs</Link></Button>
+      </div>
+      <div className="space-y-6">
+        {SEEKER_GROUPS.map((group) => {
+          const cards = grouped[group.key] || [];
+          if (cards.length === 0 && group.key !== "active") return null;
+          const isOpen = openGroups[group.key];
+          const GroupIcon = group.icon;
+          return (
+            <div key={group.key} data-testid={`group-${group.key}`}>
+              <button
+                className="w-full flex items-center gap-2 mb-3"
+                onClick={() => setOpenGroups((p) => ({ ...p, [group.key]: !p[group.key] }))}
+                data-testid={`group-toggle-${group.key}`}
+              >
+                <GroupIcon size={16} className={group.headerColor} />
+                <span className={`font-bold font-display ${group.headerColor}`}>{group.label}</span>
+                <Badge variant="outline" className="text-xs px-1.5 py-0 font-normal">{cards.length}</Badge>
+                <div className="flex-1 h-px bg-border mx-2" />
+                {isOpen ? <ChevronDown size={15} className="text-muted-foreground" /> : <ChevronRight size={15} className="text-muted-foreground" />}
+              </button>
+              {isOpen && (
+                <div className="space-y-4">
+                  {cards.length === 0 ? (
+                    <p className="text-sm text-muted-foreground py-4 text-center">No applications here yet.</p>
+                  ) : (
+                    cards.map(renderCard)
+                  )}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
