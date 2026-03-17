@@ -46,7 +46,7 @@ export function Navbar() {
     { name: "Resources", path: "/resources", icon: BookOpen },
     { name: "Blog", path: "/blog", icon: FileText },
     { name: "Pricing", path: "/pricing", icon: CreditCard },
-    { name: "User Guides", path: "/guides/job-seeker", icon: GraduationCap },
+    { name: "User Guides", path: "/guides", icon: GraduationCap },
   ];
 
   return (
