@@ -23,7 +23,8 @@ import {
   Upload, CheckCircle2, Copy, Eye, EyeOff, UserPlus,
   AlertCircle, Download, Pencil, X, Tag, Ticket, ExternalLink,
   FilePlus2, Globe, Search as SearchIcon, Share2, PlusCircle, ArrowLeft,
-  FileEdit, LayoutList, UserCircle, ChevronDown, ChevronRight, Info
+  FileEdit, LayoutList, UserCircle, ChevronDown, ChevronRight, Info,
+  Building2, ImageIcon
 } from "lucide-react";
 import { ImageUpload } from "@/components/ui/image-upload";
 import { RichTextEditor } from "@/components/ui/rich-text-editor";
@@ -909,12 +910,22 @@ interface ImportRunRecord {
   status: string;
 }
 
+interface UploadedLogo { companyName: string; logoUrl: string; employerId: number; }
+
 function UploadJobsTab({ userId }: { userId: number }) {
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const [importing, setImporting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [lastResult, setLastResult] = useState<ImportResult | null>(null);
+
+  // Logo upload state
+  const [logoCompanyName, setLogoCompanyName] = useState("");
+  const [logoFile, setLogoFile] = useState<File | null>(null);
+  const [logoPreview, setLogoPreview] = useState<string | null>(null);
+  const [logoUploading, setLogoUploading] = useState(false);
+  const [logoError, setLogoError] = useState<string | null>(null);
+  const [uploadedLogos, setUploadedLogos] = useState<UploadedLogo[]>([]);
 
   const { data: importHistory = [], isLoading: historyLoading } = useQuery<ImportRunRecord[]>({
     queryKey: ["/api/admin/jobs/import/runs"],
@@ -961,6 +972,45 @@ function UploadJobsTab({ userId }: { userId: number }) {
     }
   };
 
+  const handleLogoFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setLogoFile(file);
+    setLogoError(null);
+    const reader = new FileReader();
+    reader.onload = (ev) => setLogoPreview(ev.target?.result as string);
+    reader.readAsDataURL(file);
+  };
+
+  const handleLogoUpload = async () => {
+    if (!logoFile) { setLogoError("Please select an image file."); return; }
+    if (!logoCompanyName.trim()) { setLogoError("Please enter a company name."); return; }
+    setLogoUploading(true);
+    setLogoError(null);
+    try {
+      const formData = new FormData();
+      formData.append("file", logoFile);
+      formData.append("companyName", logoCompanyName.trim());
+      const res = await fetch("/api/admin/employer-logo", {
+        method: "POST",
+        body: formData,
+        credentials: "include",
+      });
+      const data = await res.json();
+      if (!res.ok) { setLogoError(data.message || "Logo upload failed"); return; }
+      setUploadedLogos(prev => [{ companyName: data.companyName, logoUrl: data.logoUrl, employerId: data.employerId }, ...prev]);
+      setLogoCompanyName("");
+      setLogoFile(null);
+      setLogoPreview(null);
+      queryClient.invalidateQueries({ queryKey: ["/api/jobs"] });
+      toast({ title: `Logo uploaded for ${data.companyName}` });
+    } catch (err: any) {
+      setLogoError(err.message || "Upload failed");
+    } finally {
+      setLogoUploading(false);
+    }
+  };
+
   const sampleCsv = `externalJobKey,title,companyName,jobType,category,subcategory,industry,locationCity,locationState,locationCountry,workLocationType,description,coreResponsibilities,requirements,benefits,salaryMin,salaryMax,salaryUnit,experienceLevel,skills,keywords,applyUrl
 CDL-001,CDL Class A Driver,Fast Trucking Co.,Full-time,Drivers (CDL & Non-CDL),CDL A Driver (OTR),Trucking,Chicago,IL,USA,otr,"Long haul driver needed","Drive routes; maintain logs","CDL Class A; 3+ years","Health insurance; 401k",70000,90000,year,Mid-level,"CDL,long haul,freight","trucking,driver",
 DISP-001,Fleet Dispatcher,Metro Logistics,Contract,"Ground Transportation Ops (Dispatch, Planning, Fleet)",Dispatcher,Logistics,Atlanta,GA,USA,on_site,"Manage driver schedules","Schedule routes; coordinate","2+ years dispatching","PTO; remote",55000,65000,year,Entry-level,"dispatching,routing","logistics,dispatch",https://example.com/apply`;
@@ -1004,6 +1054,94 @@ DISP-001,Fleet Dispatcher,Metro Logistics,Contract,"Ground Transportation Ops (D
           </Label>
           <Input id="csv-jobs-upload" type="file" accept=".csv" className="hidden" onChange={handleFile} data-testid="input-csv-upload" />
         </div>
+      </div>
+
+      {/* ── Company Logo Upload ── */}
+      <div className="bg-white dark:bg-slate-900 rounded-2xl border border-border p-6 mb-6">
+        <div className="flex items-center gap-2 mb-4">
+          <Building2 size={18} className="text-muted-foreground" />
+          <h3 className="font-semibold text-base">Company Logo Upload</h3>
+          <span className="text-xs text-muted-foreground">(optional — attach a logo to any company by name)</span>
+        </div>
+
+        <div className="flex flex-col sm:flex-row gap-4 items-start">
+          {/* Logo file picker */}
+          <Label htmlFor="logo-file-input" className="cursor-pointer shrink-0">
+            <div
+              className="w-24 h-24 rounded-xl border-2 border-dashed border-border flex flex-col items-center justify-center text-muted-foreground hover:border-primary hover:text-primary transition-colors overflow-hidden"
+              data-testid="logo-dropzone"
+            >
+              {logoPreview ? (
+                <img src={logoPreview} alt="preview" className="w-full h-full object-contain rounded-xl" />
+              ) : (
+                <>
+                  <ImageIcon size={28} />
+                  <span className="text-[10px] mt-1 text-center leading-tight">Click to<br/>choose logo</span>
+                </>
+              )}
+            </div>
+            <Input
+              id="logo-file-input"
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={handleLogoFileSelect}
+              data-testid="input-logo-file"
+            />
+          </Label>
+
+          {/* Company name + upload button */}
+          <div className="flex-1 flex flex-col gap-3">
+            <div>
+              <Label htmlFor="logo-company-name" className="text-sm mb-1 block">Company Name</Label>
+              <Input
+                id="logo-company-name"
+                placeholder="e.g. Fast Trucking Co."
+                value={logoCompanyName}
+                onChange={(e) => setLogoCompanyName(e.target.value)}
+                data-testid="input-logo-company-name"
+              />
+            </div>
+            <div className="flex items-center gap-3">
+              <Button
+                onClick={handleLogoUpload}
+                disabled={logoUploading || !logoFile || !logoCompanyName.trim()}
+                data-testid="button-upload-logo"
+              >
+                {logoUploading ? "Uploading..." : "Upload Logo"}
+              </Button>
+              {logoFile && (
+                <button
+                  className="text-xs text-muted-foreground hover:text-foreground"
+                  onClick={() => { setLogoFile(null); setLogoPreview(null); setLogoError(null); }}
+                  data-testid="button-clear-logo"
+                >
+                  Clear
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {logoError && (
+          <div className="flex items-center gap-2 mt-3 text-sm text-red-600 dark:text-red-400" data-testid="alert-logo-error">
+            <AlertCircle size={15} /> {logoError}
+          </div>
+        )}
+
+        {uploadedLogos.length > 0 && (
+          <div className="mt-4 pt-4 border-t border-border">
+            <p className="text-xs font-medium text-muted-foreground mb-2 uppercase tracking-wide">Uploaded this session</p>
+            <div className="flex flex-wrap gap-3">
+              {uploadedLogos.map((ul, i) => (
+                <div key={i} className="flex items-center gap-2 bg-muted/50 rounded-lg px-3 py-1.5" data-testid={`uploaded-logo-${i}`}>
+                  <img src={ul.logoUrl} alt={ul.companyName} className="w-6 h-6 object-contain rounded" />
+                  <span className="text-sm font-medium">{ul.companyName}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
 
       {error && (
