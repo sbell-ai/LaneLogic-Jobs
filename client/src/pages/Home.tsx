@@ -1,11 +1,11 @@
 import { Link, useLocation } from "wouter";
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Navbar } from "@/components/layout/Navbar";
 import { Footer } from "@/components/layout/Footer";
-import { Search, MapPin, Briefcase, ArrowRight, ShieldCheck, Users, ChevronDown, Filter, RotateCcw } from "lucide-react";
+import { Search, MapPin, Briefcase, ArrowRight, ShieldCheck, Users, ChevronDown, Filter, RotateCcw, Building2 } from "lucide-react";
 import { motion } from "framer-motion";
 import { useJobs } from "@/hooks/use-jobs";
 import { useSiteSettings } from "@/hooks/use-settings";
@@ -32,6 +32,20 @@ export default function Home() {
   const industries = (categories || []).filter((c) => c.type === "industry");
   const filtered = filterJobs(jobs || [], filters);
   const activeFilterCount = getActiveFilterCount(filters);
+
+  const grouped = useMemo(() => {
+    const groups = new Map<string, typeof filtered>();
+    for (const job of filtered) {
+      const key = (job.companyName || "").trim().toLowerCase() || `__noc_${(job as any).employerId}`;
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key)!.push(job);
+    }
+    for (const jobs of groups.values())
+      jobs.sort((a, b) => new Date(b.createdAt ?? 0).getTime() - new Date(a.createdAt ?? 0).getTime());
+    return Array.from(groups.values()).sort((a, b) =>
+      new Date(b[0].createdAt ?? 0).getTime() - new Date(a[0].createdAt ?? 0).getTime()
+    );
+  }, [filtered]);
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
@@ -149,7 +163,7 @@ export default function Home() {
               <div>
                 <h2 className="text-3xl md:text-4xl font-bold font-display tracking-tight text-foreground mb-2" data-testid="text-all-jobs-heading">All Jobs</h2>
                 <p className="text-muted-foreground text-lg">
-                  {isLoading ? "Loading..." : `${filtered.length} openings in transportation and logistics.`}
+                  {isLoading ? "Loading..." : `${filtered.length} opening${filtered.length !== 1 ? "s" : ""} at ${grouped.length} ${grouped.length !== 1 ? "companies" : "company"}`}
                 </p>
               </div>
               <div className="flex items-center gap-3">
@@ -177,47 +191,62 @@ export default function Home() {
                     Array.from({ length: 12 }).map((_, i) => (
                       <div key={i} className="bg-card rounded-2xl p-5 border border-border h-48 animate-pulse" />
                     ))
-                  ) : filtered.length > 0 ? (
-                    filtered.slice(0, visibleJobCount).map(job => (
-                      <Link key={job.id} href={`/jobs/${job.id}`} data-testid={`card-job-${job.id}`}>
-                        <div className="bg-card rounded-2xl p-5 border border-border shadow-sm hover:shadow-lg hover:border-primary/40 transition-all duration-300 h-full flex flex-col group cursor-pointer">
-                          <div className="flex items-start justify-between mb-3">
-                            {(job as any).employerLogo ? (
-                              <img src={(job as any).employerLogo} alt={job.companyName || ""} className="w-10 h-10 rounded-xl object-contain bg-white dark:bg-slate-800 border border-border shrink-0" data-testid={`img-company-logo-${job.id}`} />
-                            ) : (
-                              <div className="w-10 h-10 rounded-xl bg-primary flex items-center justify-center text-lg font-bold text-white shrink-0" data-testid={`placeholder-company-logo-${job.id}`}>
-                                {(job.title || job.companyName || "J").charAt(0).toUpperCase()}
-                              </div>
+                  ) : grouped.length > 0 ? (
+                    grouped.slice(0, visibleJobCount).map(group => {
+                      const job = group[0];
+                      const extraCount = group.length - 1;
+                      const employerId = (job as any).employerId as number;
+                      return (
+                        <div key={job.id} data-testid={`card-job-${job.id}`} className="bg-card rounded-2xl border border-border shadow-sm hover:shadow-lg hover:border-primary/40 transition-all duration-300 flex flex-col group">
+                          <Link href={`/jobs/${job.id}`} className="p-5 flex flex-col flex-1 cursor-pointer">
+                            <div className="flex items-start justify-between mb-3">
+                              {(job as any).employerLogo ? (
+                                <img src={(job as any).employerLogo} alt={job.companyName || ""} className="w-10 h-10 rounded-xl object-contain bg-white dark:bg-slate-800 border border-border shrink-0" data-testid={`img-company-logo-${job.id}`} />
+                              ) : (
+                                <div className="w-10 h-10 rounded-xl bg-primary flex items-center justify-center text-lg font-bold text-white shrink-0" data-testid={`placeholder-company-logo-${job.id}`}>
+                                  {(job.title || job.companyName || "J").charAt(0).toUpperCase()}
+                                </div>
+                              )}
+                              {job.jobType && (
+                                <span className="px-2.5 py-0.5 bg-primary/10 text-primary text-xs font-semibold rounded-full">
+                                  {job.jobType}
+                                </span>
+                              )}
+                            </div>
+                            <h3 className="text-base font-bold font-display mb-1 group-hover:text-primary transition-colors line-clamp-1" data-testid={`text-job-title-${job.id}`}>{job.title}</h3>
+                            {job.companyName && (
+                              <p className="text-sm text-muted-foreground mb-2">{job.companyName}</p>
                             )}
-                            {job.jobType && (
-                              <span className="px-2.5 py-0.5 bg-primary/10 text-primary text-xs font-semibold rounded-full">
-                                {job.jobType}
-                              </span>
-                            )}
-                          </div>
-                          <h3 className="text-base font-bold font-display mb-1 group-hover:text-primary transition-colors line-clamp-1" data-testid={`text-job-title-${job.id}`}>{job.title}</h3>
-                          {job.companyName && (
-                            <p className="text-sm text-muted-foreground mb-2">{job.companyName}</p>
+                            <div className="flex items-center text-muted-foreground text-xs mb-3">
+                              <MapPin size={14} className="mr-1 shrink-0" />
+                              <span className="line-clamp-1">{formatJobLocation(job)}</span>
+                            </div>
+                            <div className="flex items-center gap-2 mt-auto">
+                              {job.salary && (
+                                <span className="text-sm font-semibold text-green-600 dark:text-green-400" data-testid={`text-job-salary-${job.id}`}>
+                                  {job.salary}
+                                </span>
+                              )}
+                              {job.expiresAt && (
+                                <span className="ml-auto px-2 py-0.5 bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300 text-[10px] font-semibold rounded-full whitespace-nowrap" data-testid={`badge-actively-interviewing-${job.id}`}>
+                                  Actively Interviewing: Apply Soon
+                                </span>
+                              )}
+                            </div>
+                          </Link>
+                          {extraCount > 0 && (job as any).employerHasProfile && (
+                            <Link
+                              href={`/employers/${employerId}`}
+                              className="mx-5 mb-4 flex items-center gap-1.5 text-xs font-semibold text-primary hover:underline"
+                              data-testid={`link-more-jobs-${job.id}`}
+                            >
+                              <Building2 size={12} />
+                              See {extraCount} more {extraCount === 1 ? "job" : "jobs"} from {job.companyName} →
+                            </Link>
                           )}
-                          <div className="flex items-center text-muted-foreground text-xs mb-3">
-                            <MapPin size={14} className="mr-1 shrink-0" />
-                            <span className="line-clamp-1">{formatJobLocation(job)}</span>
-                          </div>
-                          <div className="flex items-center gap-2 mt-auto">
-                            {job.salary && (
-                              <span className="text-sm font-semibold text-green-600 dark:text-green-400" data-testid={`text-job-salary-${job.id}`}>
-                                {job.salary}
-                              </span>
-                            )}
-                            {job.expiresAt && (
-                              <span className="ml-auto px-2 py-0.5 bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300 text-[10px] font-semibold rounded-full whitespace-nowrap" data-testid={`badge-actively-interviewing-${job.id}`}>
-                                Actively Interviewing: Apply Soon
-                              </span>
-                            )}
-                          </div>
                         </div>
-                      </Link>
-                    ))
+                      );
+                    })
                   ) : (
                     <div className="col-span-full text-center py-12 bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-dashed border-border">
                       <Briefcase className="mx-auto mb-3 text-muted-foreground" size={32} />
@@ -231,7 +260,7 @@ export default function Home() {
                   )}
                 </div>
 
-                {!isLoading && filtered.length > visibleJobCount && (
+                {!isLoading && grouped.length > visibleJobCount && (
                   <div className="mt-8 text-center">
                     <Button
                       variant="outline"

@@ -647,6 +647,7 @@ export async function registerRoutes(
     const enriched = visibleJobs.map(job => ({
       ...job,
       employerLogo: employerMap.get(job.employerId)?.companyLogo || null,
+      employerHasProfile: employerMap.has(job.employerId),
     }));
     res.json(enriched);
   });
