@@ -1,12 +1,32 @@
 import { DashboardLayout } from "./DashboardLayout";
 import { useAuth } from "@/hooks/use-auth";
+import { useQuery } from "@tanstack/react-query";
 import { Card } from "@/components/ui/card";
 import { Briefcase, FileText, Activity } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Link } from "wouter";
+import { Skeleton } from "@/components/ui/skeleton";
+import type { Application, Job } from "@shared/schema";
 
 export default function Overview() {
   const { user } = useAuth();
+
+  const { data: applications, isLoading: appsLoading } = useQuery<Application[]>({
+    queryKey: ["/api/applications"],
+    enabled: user?.role === "job_seeker",
+  });
+
+  const { data: jobs, isLoading: jobsLoading } = useQuery<Job[]>({
+    queryKey: ["/api/jobs"],
+    enabled: user?.role === "employer",
+  });
+
+  const appliedCount = (applications || []).filter((a) => a.jobSeekerId === user?.id).length;
+  const activeJobCount = (jobs || []).filter((j) => j.employerId === user?.id).length;
+
+  const statLoading = user?.role === "job_seeker" ? appsLoading : jobsLoading;
+  const statValue = user?.role === "employer" ? activeJobCount : appliedCount;
+  const statLabel = user?.role === "employer" ? "Active Jobs" : "Applied Jobs";
 
   return (
     <DashboardLayout>
@@ -17,17 +37,20 @@ export default function Overview() {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <Card className="p-6 border-border shadow-sm hover:shadow-md transition-shadow">
+          <Card className="p-6 border-border shadow-sm hover:shadow-md transition-shadow" data-testid="card-stat-applications">
             <div className="flex items-center justify-between mb-4">
               <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-primary">
                 <Briefcase size={20} />
               </div>
             </div>
-            <h3 className="text-2xl font-bold font-display">0</h3>
-            <p className="text-sm text-muted-foreground font-medium mt-1">
-              {user?.role === 'employer' ? 'Active Jobs' : 'Applied Jobs'}
-            </p>
+            {statLoading ? (
+              <Skeleton className="h-8 w-12 mb-1" />
+            ) : (
+              <h3 className="text-2xl font-bold font-display" data-testid="text-applied-count">{statValue}</h3>
+            )}
+            <p className="text-sm text-muted-foreground font-medium mt-1">{statLabel}</p>
           </Card>
+
           <Card className="p-6 border-border shadow-sm hover:shadow-md transition-shadow">
             <div className="flex items-center justify-between mb-4">
               <div className="w-10 h-10 rounded-full bg-accent/10 flex items-center justify-center text-accent">
@@ -39,6 +62,7 @@ export default function Overview() {
               {user?.role === 'employer' ? 'Profile Complete' : 'Resume Updated'}
             </p>
           </Card>
+
           <Card className="p-6 border-border shadow-sm hover:shadow-md transition-shadow">
             <div className="flex items-center justify-between mb-4">
               <div className="w-10 h-10 rounded-full bg-green-500/10 flex items-center justify-center text-green-500">
