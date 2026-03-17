@@ -762,6 +762,15 @@ export async function registerRoutes(
     res.json(apps);
   });
 
+  // Enriched applicants for the logged-in employer
+  app.get("/api/employer/applicants", async (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+    const user = req.user as any;
+    if (user.role !== "employer" && user.role !== "admin") return res.status(403).json({ message: "Forbidden" });
+    const apps = await storage.getEmployerApplicationsEnriched(user.id);
+    res.json(apps);
+  });
+
   app.post(api.applications.create.path, async (req, res) => {
     try {
       if (!req.isAuthenticated()) {

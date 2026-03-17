@@ -227,6 +227,9 @@ export interface IStorage {
   markConversationRead(conversationId: number, userId: number): Promise<void>;
   getUnreadMessageCount(userId: number): Promise<number>;
   getConversation(conversationId: number): Promise<Conversation | undefined>;
+
+  // Employer enriched applicants
+  getEmployerApplicationsEnriched(employerId: number): Promise<(Application & { seekerName: string; seekerEmail: string })[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -1241,6 +1244,34 @@ export class DatabaseStorage implements IStorage {
   async getConversation(conversationId: number): Promise<Conversation | undefined> {
     const [conv] = await db.select().from(conversations).where(eq(conversations.id, conversationId)).limit(1);
     return conv;
+  }
+
+  async getEmployerApplicationsEnriched(employerId: number): Promise<(Application & { seekerName: string; seekerEmail: string })[]> {
+    const myJobs = await db.select({ id: jobs.id }).from(jobs).where(eq(jobs.employerId, employerId));
+    const jobIds = myJobs.map((j) => j.id);
+    if (jobIds.length === 0) return [];
+
+    const apps = await db.select().from(applications).where(inArray(applications.jobId, jobIds));
+    const seekerIds = [...new Set(apps.map((a) => a.jobSeekerId))];
+    const seekers =
+      seekerIds.length > 0
+        ? await db
+            .select({ id: users.id, email: users.email, firstName: users.firstName, lastName: users.lastName })
+            .from(users)
+            .where(inArray(users.id, seekerIds))
+        : [];
+
+    const seekerMap = new Map(seekers.map((s) => [s.id, s]));
+    return apps.map((a) => {
+      const seeker = seekerMap.get(a.jobSeekerId);
+      const seekerName =
+        seeker
+          ? seeker.firstName && seeker.lastName
+            ? `${seeker.firstName} ${seeker.lastName}`
+            : seeker.email
+          : `Applicant #${a.jobSeekerId}`;
+      return { ...a, seekerName, seekerEmail: seeker?.email ?? "" };
+    });
   }
 }
 

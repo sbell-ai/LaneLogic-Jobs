@@ -10,6 +10,7 @@ import { useToast } from "@/hooks/use-toast";
 import { MessageSquare, Send, ArrowLeft, Inbox as InboxIcon } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import type { Message } from "@shared/schema";
+import { useSearch } from "wouter";
 
 type ConversationWithMeta = {
   id: number;
@@ -186,7 +187,7 @@ function InboxList({
         <InboxIcon size={40} className="mb-4 text-muted-foreground" />
         <h3 className="font-bold font-display text-lg mb-2">No messages yet</h3>
         <p className="text-sm text-muted-foreground text-center max-w-xs">
-          Start a conversation from a job listing or the applicants list.
+          Start a conversation by clicking the Message button on an applicant's card.
         </p>
       </div>
     );
@@ -232,23 +233,25 @@ export default function InboxPage() {
   const { user } = useAuth();
   const [selectedConv, setSelectedConv] = useState<ConversationWithMeta | null>(null);
   const queryClient = useQueryClient();
+  const searchString = useSearch();
 
   const { data: conversations = [], isLoading } = useQuery<ConversationWithMeta[]>({
     queryKey: ["/api/conversations"],
     refetchInterval: 30000,
+    staleTime: 0,
   });
 
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
+    const params = new URLSearchParams(searchString);
     const convId = params.get("conv");
-    if (convId && conversations.length > 0) {
-      const found = conversations.find((c) => c.id === Number(convId));
-      if (found) {
-        setSelectedConv(found);
-        window.history.replaceState({}, "", window.location.pathname);
-      }
+    if (!convId) return;
+    if (conversations.length === 0) return;
+    const found = conversations.find((c) => c.id === Number(convId));
+    if (found) {
+      setSelectedConv(found);
+      window.history.replaceState({}, "", window.location.pathname);
     }
-  }, [conversations]);
+  }, [conversations, searchString]);
 
   if (!user) return null;
 

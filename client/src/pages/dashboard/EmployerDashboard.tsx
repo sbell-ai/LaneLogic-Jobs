@@ -16,7 +16,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Briefcase, Plus, Trash2, Users, Upload, CreditCard, CheckCircle2, MapPin, Eye, Building2, Phone, Mail, User, MessageSquare } from "lucide-react";
+import { Briefcase, Plus, Trash2, Users, Upload, CreditCard, CheckCircle2, MapPin, Eye, Building2, Phone, Mail, User, MessageSquare, Pencil, ExternalLink } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ImageUpload } from "@/components/ui/image-upload";
 import type { Job, Application, Category } from "@shared/schema";
@@ -236,6 +236,232 @@ function PostJobTab({ userId }: { userId: number }) {
   );
 }
 
+function EditJobDialog({ job }: { job: Job }) {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  const [open, setOpen] = useState(false);
+  const { data: categories } = useQuery<Category[]>({ queryKey: ["/api/categories"] });
+  const industries = (categories || []).filter((c) => c.type === "industry");
+  const taxonomyCats = getCategories();
+
+  const form = useForm<JobFormValues>({
+    resolver: zodResolver(jobFormSchema),
+    defaultValues: {
+      title: job.title,
+      companyName: job.companyName || "",
+      jobType: job.jobType || "Full-time",
+      description: job.description,
+      requirements: job.requirements,
+      benefits: job.benefits || "",
+      locationCity: job.locationCity || "",
+      locationState: job.locationState || "",
+      locationCountry: job.locationCountry || "USA",
+      salary: job.salary || "",
+      applyUrl: job.applyUrl || "",
+      isExternalApply: job.isExternalApply || false,
+      category: job.category || "",
+      subcategory: job.subcategory || "",
+      industry: job.industry || "",
+      expiresAt: job.expiresAt ? new Date(job.expiresAt).toISOString().split("T")[0] : "",
+    },
+  });
+
+  useEffect(() => {
+    if (open) {
+      form.reset({
+        title: job.title,
+        companyName: job.companyName || "",
+        jobType: job.jobType || "Full-time",
+        description: job.description,
+        requirements: job.requirements,
+        benefits: job.benefits || "",
+        locationCity: job.locationCity || "",
+        locationState: job.locationState || "",
+        locationCountry: job.locationCountry || "USA",
+        salary: job.salary || "",
+        applyUrl: job.applyUrl || "",
+        isExternalApply: job.isExternalApply || false,
+        category: job.category || "",
+        subcategory: job.subcategory || "",
+        industry: job.industry || "",
+        expiresAt: job.expiresAt ? new Date(job.expiresAt).toISOString().split("T")[0] : "",
+      });
+    }
+  }, [open]);
+
+  const editMutation = useMutation({
+    mutationFn: (values: JobFormValues) => {
+      const payload = { ...values, expiresAt: values.expiresAt ? new Date(values.expiresAt).toISOString() : null };
+      return apiRequest("PUT", `/api/jobs/${job.id}`, payload);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/jobs"] });
+      toast({ title: "Job updated!", description: "Your changes have been saved." });
+      setOpen(false);
+    },
+    onError: () => toast({ title: "Error", description: "Could not update job.", variant: "destructive" }),
+  });
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button variant="ghost" size="icon" className="shrink-0" data-testid={`button-edit-job-${job.id}`} title="Edit listing">
+          <Pencil size={16} />
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>Edit Job Listing</DialogTitle>
+        </DialogHeader>
+        <Form {...form}>
+          <form onSubmit={form.handleSubmit((v) => {
+            const pairCheck = validateCategoryPair(v.category || null, v.subcategory || null);
+            if (!pairCheck.valid) { toast({ title: "Validation Error", description: pairCheck.error, variant: "destructive" }); return; }
+            editMutation.mutate(v);
+          })} className="space-y-5">
+            <FormField control={form.control} name="title" render={({ field }) => (
+              <FormItem>
+                <FormLabel>Job Title *</FormLabel>
+                <FormControl><Input placeholder="e.g. CDL Class A Driver" data-testid="input-edit-job-title" {...field} /></FormControl>
+                <FormMessage />
+              </FormItem>
+            )} />
+            <div className="grid grid-cols-2 gap-4">
+              <FormField control={form.control} name="companyName" render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Company Name</FormLabel>
+                  <FormControl><Input placeholder="Acme Trucking" data-testid="input-edit-company-name" {...field} value={field.value ?? ""} /></FormControl>
+                </FormItem>
+              )} />
+              <FormField control={form.control} name="jobType" render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Job Type</FormLabel>
+                  <Select onValueChange={field.onChange} value={field.value ?? "Full-time"}>
+                    <FormControl><SelectTrigger data-testid="select-edit-job-type"><SelectValue /></SelectTrigger></FormControl>
+                    <SelectContent>{JOB_TYPES.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent>
+                  </Select>
+                </FormItem>
+              )} />
+            </div>
+            <div className="grid grid-cols-3 gap-3">
+              <FormField control={form.control} name="locationCity" render={({ field }) => (
+                <FormItem>
+                  <FormLabel>City</FormLabel>
+                  <FormControl><Input placeholder="Chicago" data-testid="input-edit-location-city" {...field} value={field.value ?? ""} /></FormControl>
+                </FormItem>
+              )} />
+              <FormField control={form.control} name="locationState" render={({ field }) => (
+                <FormItem>
+                  <FormLabel>State</FormLabel>
+                  <FormControl><Input placeholder="IL" data-testid="input-edit-location-state" {...field} value={field.value ?? ""} /></FormControl>
+                </FormItem>
+              )} />
+              <FormField control={form.control} name="locationCountry" render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Country</FormLabel>
+                  <FormControl><Input placeholder="USA" data-testid="input-edit-location-country" {...field} value={field.value ?? ""} /></FormControl>
+                </FormItem>
+              )} />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <FormField control={form.control} name="category" render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Category</FormLabel>
+                  <Select onValueChange={(v) => { field.onChange(v === "__none__" ? "" : v); form.setValue("subcategory", ""); }} value={field.value || "__none__"}>
+                    <FormControl><SelectTrigger data-testid="select-edit-category"><SelectValue placeholder="Select category" /></SelectTrigger></FormControl>
+                    <SelectContent>
+                      <SelectItem value="__none__">None</SelectItem>
+                      {taxonomyCats.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </FormItem>
+              )} />
+              <FormField control={form.control} name="subcategory" render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Subcategory</FormLabel>
+                  <Select onValueChange={(v) => field.onChange(v === "__none__" ? "" : v)} value={field.value || "__none__"} disabled={!form.watch("category")}>
+                    <FormControl><SelectTrigger data-testid="select-edit-subcategory"><SelectValue placeholder="Select subcategory" /></SelectTrigger></FormControl>
+                    <SelectContent>
+                      <SelectItem value="__none__">None</SelectItem>
+                      {form.watch("category") && getSubcategories(form.watch("category")).map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )} />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <FormField control={form.control} name="industry" render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Industry</FormLabel>
+                  <Select onValueChange={(v) => field.onChange(v === "__none__" ? "" : v)} value={field.value || "__none__"}>
+                    <FormControl><SelectTrigger data-testid="select-edit-industry"><SelectValue placeholder="Select industry" /></SelectTrigger></FormControl>
+                    <SelectContent>
+                      <SelectItem value="__none__">None</SelectItem>
+                      {industries.map(c => <SelectItem key={c.id} value={c.name}>{c.name}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </FormItem>
+              )} />
+              <FormField control={form.control} name="salary" render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Salary (optional)</FormLabel>
+                  <FormControl><Input placeholder="$70,000 – $90,000/yr" data-testid="input-edit-salary" {...field} value={field.value ?? ""} /></FormControl>
+                </FormItem>
+              )} />
+            </div>
+            <FormField control={form.control} name="expiresAt" render={({ field }) => (
+              <FormItem>
+                <FormLabel>Expiration Date (optional)</FormLabel>
+                <FormControl><Input type="date" data-testid="input-edit-expires" {...field} value={field.value ?? ""} /></FormControl>
+              </FormItem>
+            )} />
+            <FormField control={form.control} name="description" render={({ field }) => (
+              <FormItem>
+                <FormLabel>Job Description *</FormLabel>
+                <FormControl><Textarea placeholder="Describe the role, responsibilities, and company culture..." className="min-h-[120px]" data-testid="textarea-edit-description" {...field} /></FormControl>
+                <FormMessage />
+              </FormItem>
+            )} />
+            <FormField control={form.control} name="requirements" render={({ field }) => (
+              <FormItem>
+                <FormLabel>Requirements *</FormLabel>
+                <FormControl><Textarea placeholder="CDL Class A required, 3+ years experience..." className="min-h-[100px]" data-testid="textarea-edit-requirements" {...field} /></FormControl>
+                <FormMessage />
+              </FormItem>
+            )} />
+            <FormField control={form.control} name="benefits" render={({ field }) => (
+              <FormItem>
+                <FormLabel>Benefits (optional)</FormLabel>
+                <FormControl><Textarea placeholder="Health insurance, 401k, paid time off..." className="min-h-[80px]" data-testid="textarea-edit-benefits" {...field} value={field.value ?? ""} /></FormControl>
+              </FormItem>
+            )} />
+            <FormField control={form.control} name="isExternalApply" render={({ field }) => (
+              <FormItem className="flex items-center gap-3 space-y-0">
+                <FormControl>
+                  <Switch checked={field.value ?? false} onCheckedChange={field.onChange} data-testid="switch-edit-external-apply" />
+                </FormControl>
+                <FormLabel className="cursor-pointer">Link to external application URL</FormLabel>
+              </FormItem>
+            )} />
+            {form.watch("isExternalApply") && (
+              <FormField control={form.control} name="applyUrl" render={({ field }) => (
+                <FormItem>
+                  <FormLabel>External Application URL</FormLabel>
+                  <FormControl><Input placeholder="https://yourcompany.com/apply" data-testid="input-edit-apply-url" {...field} value={field.value ?? ""} /></FormControl>
+                </FormItem>
+              )} />
+            )}
+            <Button type="submit" disabled={editMutation.isPending} className="w-full" data-testid="button-save-job-edit">
+              {editMutation.isPending ? "Saving..." : "Save Changes"}
+            </Button>
+          </form>
+        </Form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 function MyJobsTab({ userId }: { userId: number }) {
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -272,7 +498,7 @@ function MyJobsTab({ userId }: { userId: number }) {
             return (
               <div key={job.id} data-testid={`card-my-job-${job.id}`} className="bg-white dark:bg-slate-900 rounded-xl border border-border p-5">
                 <div className="flex items-start justify-between gap-4">
-                  <div>
+                  <div className="flex-1 min-w-0">
                     <h3 className="font-bold font-display text-lg mb-1">{job.title}</h3>
                     <p className="text-sm text-muted-foreground">{fmtLoc(job)}{job.salary ? ` · ${job.salary}` : ""}</p>
                     <div className="flex items-center gap-2 mt-3">
@@ -282,15 +508,30 @@ function MyJobsTab({ userId }: { userId: number }) {
                       {job.isExternalApply && <Badge variant="outline" className="text-xs">External</Badge>}
                     </div>
                   </div>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="text-destructive hover:text-destructive shrink-0"
-                    onClick={() => deleteMutation.mutate(job.id)}
-                    data-testid={`button-delete-job-${job.id}`}
-                  >
-                    <Trash2 size={16} />
-                  </Button>
+                  <div className="flex items-center gap-1 shrink-0">
+                    <a
+                      href={`/jobs/${job.id}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      data-testid={`link-view-job-${job.id}`}
+                      title="View listing"
+                    >
+                      <Button variant="ghost" size="icon" asChild>
+                        <span><ExternalLink size={16} /></span>
+                      </Button>
+                    </a>
+                    <EditJobDialog job={job} />
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="text-destructive hover:text-destructive"
+                      onClick={() => deleteMutation.mutate(job.id)}
+                      data-testid={`button-delete-job-${job.id}`}
+                      title="Delete listing"
+                    >
+                      <Trash2 size={16} />
+                    </Button>
+                  </div>
                 </div>
               </div>
             );
@@ -301,20 +542,21 @@ function MyJobsTab({ userId }: { userId: number }) {
   );
 }
 
+type EnrichedApplication = Application & { seekerName: string; seekerEmail: string };
+
 function ApplicantsTab({ userId }: { userId: number }) {
   const [, setLocation] = useLocation();
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const { data: jobs } = useQuery<Job[]>({ queryKey: ["/api/jobs"] });
-  const { data: applications, isLoading } = useQuery<Application[]>({ queryKey: ["/api/applications"] });
-
-  const myJobIds = new Set((jobs || []).filter((j) => j.employerId === userId).map((j) => j.id));
-  const myApps = (applications || []).filter((a) => myJobIds.has(a.jobId));
+  const { data: myApps = [], isLoading } = useQuery<EnrichedApplication[]>({
+    queryKey: ["/api/employer/applicants"],
+  });
 
   const [messagingAppId, setMessagingAppId] = useState<number | null>(null);
 
   const messageMutation = useMutation({
-    mutationFn: (app: Application) =>
+    mutationFn: (app: EnrichedApplication) =>
       apiRequest("POST", "/api/conversations", {
         seekerId: app.jobSeekerId,
         employerId: userId,
@@ -322,6 +564,7 @@ function ApplicantsTab({ userId }: { userId: number }) {
       }).then((r) => r.json()),
     onSuccess: (conv: any) => {
       setMessagingAppId(null);
+      queryClient.invalidateQueries({ queryKey: ["/api/conversations"] });
       setLocation(`/dashboard/messages?conv=${conv.id}`);
     },
     onError: () => {
@@ -329,6 +572,8 @@ function ApplicantsTab({ userId }: { userId: number }) {
       toast({ title: "Error", description: "Could not open conversation.", variant: "destructive" });
     },
   });
+
+  const jobMap = new Map((jobs || []).map((j) => [j.id, j]));
 
   if (isLoading) return <div className="animate-pulse h-32 bg-slate-100 dark:bg-slate-800 rounded-xl" />;
 
@@ -343,35 +588,43 @@ function ApplicantsTab({ userId }: { userId: number }) {
         </div>
       ) : (
         <div className="space-y-4">
-          {myApps.map((app) => (
-            <div key={app.id} data-testid={`card-applicant-${app.id}`} className="bg-white dark:bg-slate-900 rounded-xl border border-border p-5 flex items-center justify-between gap-4">
-              <div>
-                <p className="font-semibold">Applicant #{app.jobSeekerId}</p>
-                <p className="text-sm text-muted-foreground">For Job #{app.jobId}</p>
+          {myApps.map((app) => {
+            const job = jobMap.get(app.jobId);
+            return (
+              <div key={app.id} data-testid={`card-applicant-${app.id}`} className="bg-white dark:bg-slate-900 rounded-xl border border-border p-5 flex items-center justify-between gap-4">
+                <div className="flex-1 min-w-0">
+                  <p className="font-semibold truncate" data-testid={`text-seeker-name-${app.id}`}>{app.seekerName}</p>
+                  {app.seekerEmail && app.seekerEmail !== app.seekerName && (
+                    <p className="text-xs text-muted-foreground truncate">{app.seekerEmail}</p>
+                  )}
+                  <p className="text-sm text-muted-foreground mt-0.5 truncate">
+                    {job ? job.title : `Job #${app.jobId}`}
+                  </p>
+                </div>
+                <div className="flex items-center gap-3 shrink-0">
+                  <Badge className={`capitalize border ${
+                    app.status === "accepted" ? "bg-green-100 text-green-700 border-green-200" :
+                    app.status === "rejected" ? "bg-red-100 text-red-700 border-red-200" :
+                    app.status === "reviewed" ? "bg-blue-100 text-blue-700 border-blue-200" :
+                    "bg-yellow-100 text-yellow-700 border-yellow-200"
+                  }`}>
+                    {app.status}
+                  </Badge>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="gap-1.5"
+                    data-testid={`button-message-applicant-${app.id}`}
+                    disabled={messagingAppId === app.id}
+                    onClick={() => { setMessagingAppId(app.id); messageMutation.mutate(app); }}
+                  >
+                    <MessageSquare size={14} />
+                    {messagingAppId === app.id ? "Opening..." : "Message"}
+                  </Button>
+                </div>
               </div>
-              <div className="flex items-center gap-3">
-                <Badge className={`capitalize border ${
-                  app.status === "accepted" ? "bg-green-100 text-green-700 border-green-200" :
-                  app.status === "rejected" ? "bg-red-100 text-red-700 border-red-200" :
-                  app.status === "reviewed" ? "bg-blue-100 text-blue-700 border-blue-200" :
-                  "bg-yellow-100 text-yellow-700 border-yellow-200"
-                }`}>
-                  {app.status}
-                </Badge>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="gap-1.5"
-                  data-testid={`button-message-applicant-${app.id}`}
-                  disabled={messagingAppId === app.id}
-                  onClick={() => { setMessagingAppId(app.id); messageMutation.mutate(app); }}
-                >
-                  <MessageSquare size={14} />
-                  {messagingAppId === app.id ? "Opening..." : "Message"}
-                </Button>
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>
