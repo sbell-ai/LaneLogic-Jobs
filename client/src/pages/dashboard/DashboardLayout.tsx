@@ -1,7 +1,7 @@
 import { SidebarProvider, SidebarTrigger, Sidebar, SidebarContent, SidebarGroup, SidebarGroupLabel, SidebarGroupContent, SidebarMenu, SidebarMenuItem, SidebarMenuButton } from "@/components/ui/sidebar";
 import { useAuth } from "@/hooks/use-auth";
 import { Link, useLocation } from "wouter";
-import { Briefcase, LayoutDashboard, FileText, LogOut, Users, BookOpen, Upload, CreditCard, UserPlus, PlusCircle, Palette, FileEdit, Tag, Ticket, UserCircle, FilePlus2, Share2, Database, Package, Gauge, ArrowDownToLine, ShieldCheck, MessageSquare } from "lucide-react";
+import { Briefcase, LayoutDashboard, FileText, LogOut, Users, BookOpen, Upload, CreditCard, UserPlus, PlusCircle, Palette, FileEdit, Tag, Ticket, UserCircle, FilePlus2, Share2, Database, Package, Gauge, ArrowDownToLine, ShieldCheck, MessageSquare, Mail } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useQuery } from "@tanstack/react-query";
 
@@ -57,6 +57,7 @@ function AppSidebar({ role }: { role: string }) {
     { title: "Employer Registry", path: "/dashboard/admin/employer-registry", icon: ShieldCheck },
     { title: "Employer Verification", path: "/dashboard/admin/verification", icon: ShieldCheck },
     { title: "Seeker Verification", path: "/dashboard/admin/seeker-verification", icon: ShieldCheck },
+    { title: "Email Templates", path: "/dashboard/admin/email-templates", icon: Mail },
   ];
 
   const pagesResourcesPaths = ["/dashboard/admin/pages-resources", "/dashboard/admin/site-pages", "/dashboard/admin/custom-pages", "/dashboard/admin/resources"];

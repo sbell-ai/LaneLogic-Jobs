@@ -747,6 +747,22 @@ export const siteSettings = pgTable("site_settings", {
 
 export type SiteSettingsRow = typeof siteSettings.$inferSelect;
 
+// ── Email Templates ──────────────────────────────────────────────────────────
+export const emailTemplates = pgTable("email_templates", {
+  id: serial("id").primaryKey(),
+  slug: text("slug").unique().notNull(),
+  name: text("name").notNull(),
+  subject: text("subject").notNull(),
+  body: text("body").notNull(),
+  variables: jsonb("variables").notNull().$type<{ key: string; description: string }[]>(),
+  isActive: boolean("is_active").notNull().default(true),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const insertEmailTemplateSchema = createInsertSchema(emailTemplates).omit({ id: true, updatedAt: true });
+export type EmailTemplate = typeof emailTemplates.$inferSelect;
+export type InsertEmailTemplate = z.infer<typeof insertEmailTemplateSchema>;
+
 // Auth requests
 export const loginSchema = z.object({
   email: z.string().email(),

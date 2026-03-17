@@ -162,6 +162,7 @@ async function startServer() {
   await seedSeekerCredentials();
   await runParagraphizeMigration();
   await runResourceContentBackfill();
+  await seedEmailTemplates();
   httpServer.listen(
     { port, host: "0.0.0.0", reusePort: true },
     () => {
@@ -331,6 +332,29 @@ async function runResourceContentBackfill() {
     log("Resource content backfill migration complete");
   } catch (err) {
     console.error("Resource content backfill migration error:", err);
+  }
+}
+
+async function seedEmailTemplates() {
+  try {
+    const { DEFAULT_TEMPLATES } = await import("./email/templateSeeds.ts");
+    const { storage } = await import("./storage");
+    for (const t of DEFAULT_TEMPLATES) {
+      const existing = await storage.getEmailTemplateBySlug(t.slug);
+      if (!existing) {
+        await storage.upsertEmailTemplate(t.slug, {
+          slug: t.slug,
+          name: t.name,
+          subject: t.subject,
+          body: t.body,
+          variables: t.variables,
+          isActive: true,
+        });
+        log(`[email] Seeded template: ${t.slug}`);
+      }
+    }
+  } catch (err) {
+    console.error("[email] Failed to seed email templates:", err);
   }
 }
 

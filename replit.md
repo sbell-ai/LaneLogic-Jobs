@@ -52,6 +52,20 @@ The front end utilizes React, TypeScript, Wouter for routing, and Tailwind CSS w
 - **Zapier Webhooks**: Used for automating social media posts.
 - **Apify**: Web scraping platform used for automated Workday job imports. Requires `APIFY_TOKEN` env var.
 
+## Email Templates System (Task #44)
+The admin dashboard includes a full email template management system for transactional emails.
+
+### Architecture
+- **Database table**: `email_templates` (slug PK, name, subject, body, variables jsonb, isActive bool, timestamps).
+- **Server utilities** (`server/email/`): `templateEngine.ts` (renders `{{token}}` substitution), `sendTemplatedEmail.ts` (fire-and-forget Mailgun sender with isActive guard), `templateSeeds.ts` (6 default templates with testVars and hasActiveTrigger metadata).
+- **On-startup seeding** (`server/index.ts`): Seeds all 6 templates on first run (INSERT only if slug not present).
+- **Admin CRUD routes** (`server/routes.ts`): `GET/PUT /api/admin/email-templates/:slug`, `GET /api/admin/email-templates`, `POST /api/admin/email-templates/:slug/test` (30s per-admin in-memory rate limit).
+- **Email triggers**: welcome_seeker/welcome_employer on registration, application_received on seeker apply, application_status_changed on employer status update, new_message on conversation message (replaces hardcoded Mailgun block).
+- **Admin UI** (`client/src/pages/dashboard/AdminDashboard.tsx` — `EmailTemplatesTab`): Two-panel layout at `/dashboard/admin/email-templates`. Left: template list with active indicator + ⚠ badge for account_expiring (no active trigger). Right: subject input, plain-text TipTap editor (StarterKit, no toolbar), clickable variable chips, Save + Send Test buttons with 30s cooldown.
+
+### Template Slugs
+`welcome_seeker`, `welcome_employer`, `application_received`, `application_status_changed`, `new_message`, `account_expiring` (⚠ no trigger — admin UI warns).
+
 ## Apify Job Import Pipeline (Task #21)
 The import pipeline automates scraping Workday job listings via Apify for transportation companies:
 

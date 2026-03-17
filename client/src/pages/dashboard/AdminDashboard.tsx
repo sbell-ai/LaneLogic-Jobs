@@ -24,8 +24,10 @@ import {
   AlertCircle, Download, Pencil, X, Tag, Ticket, ExternalLink,
   FilePlus2, Globe, Search as SearchIcon, Share2, PlusCircle, ArrowLeft,
   FileEdit, LayoutList, UserCircle, ChevronDown, ChevronRight, Info,
-  Building2, ImageIcon
+  Building2, ImageIcon, Mail, Save, Send, AlertTriangle, ToggleLeft, ToggleRight
 } from "lucide-react";
+import { useEditor, EditorContent } from "@tiptap/react";
+import StarterKit from "@tiptap/starter-kit";
 import { ImageUpload } from "@/components/ui/image-upload";
 import { RichTextEditor } from "@/components/ui/rich-text-editor";
 import type { User, Job, Resource, BlogPost, Category, Coupon, SiteSettingsData, Page } from "@shared/schema";
@@ -3147,6 +3149,265 @@ function FilteredUsersTab({ role }: { role: "job_seeker" | "employer" }) {
   );
 }
 
+// ─── EMAIL TEMPLATES TAB ─────────────────────────────────────────────────────
+
+type EmailTemplate = {
+  id: number;
+  slug: string;
+  name: string;
+  subject: string;
+  body: string;
+  variables: string[];
+  isActive: boolean;
+  hasActiveTrigger?: boolean;
+};
+
+function EmailBodyEditor({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const editor = useEditor({
+    extensions: [StarterKit],
+    content: value,
+    editorProps: {
+      attributes: {
+        class: "min-h-[240px] p-3 text-sm font-mono leading-relaxed focus:outline-none whitespace-pre-wrap",
+      },
+    },
+    onUpdate({ editor }) {
+      onChange(editor.getText({ blockSeparator: "\n" }));
+    },
+  });
+
+  useEffect(() => {
+    if (editor && value !== editor.getText({ blockSeparator: "\n" })) {
+      editor.commands.setContent(value, false);
+    }
+  }, [value]);
+
+  return (
+    <div className="border border-border rounded-lg overflow-hidden bg-white dark:bg-slate-900">
+      <EditorContent editor={editor} />
+    </div>
+  );
+}
+
+function EmailTemplatesTab() {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const [selectedSlug, setSelectedSlug] = useState<string | null>(null);
+  const [subject, setSubject] = useState("");
+  const [body, setBody] = useState("");
+  const [testCooldown, setTestCooldown] = useState(0);
+
+  const { data: templates = [], isLoading } = useQuery<EmailTemplate[]>({
+    queryKey: ["/api/admin/email-templates"],
+  });
+
+  const selected = templates.find(t => t.slug === selectedSlug);
+
+  useEffect(() => {
+    if (selected) {
+      setSubject(selected.subject);
+      setBody(selected.body);
+    }
+  }, [selected?.slug]);
+
+  useEffect(() => {
+    if (testCooldown <= 0) return;
+    const id = window.setInterval(() => setTestCooldown(c => Math.max(0, c - 1)), 1000);
+    return () => clearInterval(id);
+  }, [testCooldown]);
+
+  const saveMutation = useMutation({
+    mutationFn: async ({ slug, isActive }: { slug: string; isActive?: boolean }) => {
+      const res = await apiRequest("PUT", `/api/admin/email-templates/${slug}`, {
+        subject,
+        body,
+        ...(isActive !== undefined ? { isActive } : {}),
+      });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/email-templates"] });
+      toast({ title: "Saved", description: "Template saved successfully." });
+    },
+    onError: (e: any) => toast({ title: "Save failed", description: e.message, variant: "destructive" }),
+  });
+
+  const toggleMutation = useMutation({
+    mutationFn: async ({ slug, isActive }: { slug: string; isActive: boolean }) => {
+      const res = await apiRequest("PUT", `/api/admin/email-templates/${slug}`, { isActive });
+      return res.json();
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["/api/admin/email-templates"] }),
+    onError: (e: any) => toast({ title: "Update failed", description: e.message, variant: "destructive" }),
+  });
+
+  const testMutation = useMutation({
+    mutationFn: async (slug: string) => {
+      const res = await apiRequest("POST", `/api/admin/email-templates/${slug}/test`, {});
+      if (!res.ok) {
+        const json = await res.json();
+        throw new Error(json.message || "Send failed");
+      }
+      return res.json();
+    },
+    onSuccess: (data) => {
+      toast({ title: "Test email sent", description: data.message });
+      setTestCooldown(30);
+    },
+    onError: (e: any) => toast({ title: "Test failed", description: e.message, variant: "destructive" }),
+  });
+
+  const insertVariable = (v: string) => {
+    setBody(b => b + `{{${v}}}`);
+  };
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-48 text-muted-foreground">
+        Loading email templates…
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <div className="flex items-center gap-3 mb-6">
+        <div className="w-10 h-10 rounded-xl bg-blue-50 dark:bg-blue-900/20 flex items-center justify-center">
+          <Mail size={20} className="text-blue-600" />
+        </div>
+        <div>
+          <h2 className="text-2xl font-bold font-display" data-testid="heading-email-templates">Email Templates</h2>
+          <p className="text-sm text-muted-foreground">Manage transactional emails sent by LaneLogic Jobs.</p>
+        </div>
+      </div>
+
+      <div className="flex gap-6 min-h-[600px]">
+        {/* Left: template list */}
+        <div className="w-64 shrink-0 space-y-1">
+          {templates.map(t => (
+            <button
+              key={t.slug}
+              data-testid={`template-item-${t.slug}`}
+              onClick={() => setSelectedSlug(t.slug)}
+              className={`w-full text-left px-3 py-3 rounded-lg border transition-all ${
+                selectedSlug === t.slug
+                  ? "border-primary bg-primary/5 dark:bg-primary/10"
+                  : "border-transparent hover:border-border hover:bg-muted/40"
+              }`}
+            >
+              <div className="flex items-center justify-between gap-2">
+                <span className="font-medium text-sm truncate">{t.name}</span>
+                {!t.hasActiveTrigger && (
+                  <AlertTriangle size={14} className="text-amber-500 shrink-0" title="No active trigger" />
+                )}
+              </div>
+              <div className="flex items-center gap-1.5 mt-1">
+                <span className={`w-1.5 h-1.5 rounded-full ${t.isActive ? "bg-green-500" : "bg-slate-300"}`} />
+                <span className="text-xs text-muted-foreground">{t.isActive ? "Active" : "Inactive"}</span>
+              </div>
+            </button>
+          ))}
+        </div>
+
+        {/* Right: editor */}
+        {selected ? (
+          <div className="flex-1 bg-white dark:bg-slate-900 border border-border rounded-2xl p-6 space-y-5">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="font-semibold text-lg" data-testid="text-template-name">{selected.name}</h3>
+                <p className="text-xs text-muted-foreground font-mono">slug: {selected.slug}</p>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-muted-foreground">{selected.isActive ? "Active" : "Inactive"}</span>
+                <button
+                  data-testid={`toggle-active-${selected.slug}`}
+                  onClick={() => toggleMutation.mutate({ slug: selected.slug, isActive: !selected.isActive })}
+                  className="focus:outline-none"
+                  aria-label="Toggle active"
+                >
+                  {selected.isActive
+                    ? <ToggleRight size={28} className="text-green-500" />
+                    : <ToggleLeft size={28} className="text-slate-400" />}
+                </button>
+              </div>
+            </div>
+
+            {!selected.hasActiveTrigger && (
+              <div className="flex items-center gap-2 px-3 py-2 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-lg text-sm text-amber-700 dark:text-amber-300">
+                <AlertTriangle size={15} />
+                <span>This template has no active trigger — it will not send automatically.</span>
+              </div>
+            )}
+
+            <div className="space-y-2">
+              <Label htmlFor="email-subject">Subject Line</Label>
+              <Input
+                id="email-subject"
+                data-testid="input-email-subject"
+                value={subject}
+                onChange={e => setSubject(e.target.value)}
+                placeholder="Email subject…"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label>Body (plain text)</Label>
+              <p className="text-xs text-muted-foreground">Use <code className="bg-muted px-1 rounded">{"{{variable}}"}</code> tokens. Click a chip below to insert.</p>
+              <EmailBodyEditor key={selected.slug} value={body} onChange={setBody} />
+            </div>
+
+            {selected.variables.length > 0 && (
+              <div className="space-y-2">
+                <Label className="text-xs text-muted-foreground">Available variables</Label>
+                <div className="flex flex-wrap gap-1.5">
+                  {selected.variables.map((v, i) => (
+                    <button
+                      key={`${v}-${i}`}
+                      data-testid={`chip-var-${v}`}
+                      onClick={() => insertVariable(v)}
+                      className="inline-flex items-center px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-xs font-mono text-slate-700 dark:text-slate-300 hover:bg-primary/10 hover:text-primary transition-colors"
+                    >
+                      {`{{${v}}}`}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div className="flex items-center gap-3 pt-2 border-t border-border">
+              <Button
+                data-testid="button-save-template"
+                onClick={() => saveMutation.mutate({ slug: selected.slug })}
+                disabled={saveMutation.isPending}
+              >
+                <Save size={15} className="mr-1.5" />
+                {saveMutation.isPending ? "Saving…" : "Save"}
+              </Button>
+              <Button
+                variant="outline"
+                data-testid="button-test-send"
+                onClick={() => testMutation.mutate(selected.slug)}
+                disabled={testMutation.isPending || testCooldown > 0}
+              >
+                <Send size={15} className="mr-1.5" />
+                {testCooldown > 0 ? `Wait ${testCooldown}s` : testMutation.isPending ? "Sending…" : "Send Test"}
+              </Button>
+              <p className="text-xs text-muted-foreground ml-auto">Test sends to your admin email.</p>
+            </div>
+          </div>
+        ) : (
+          <div className="flex-1 flex items-center justify-center text-muted-foreground border border-dashed border-border rounded-2xl">
+            <div className="text-center space-y-2">
+              <Mail size={32} className="mx-auto opacity-30" />
+              <p className="text-sm">Select a template to edit</p>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ─── PAGES & RESOURCES LANDING ───────────────────────────────────────────────
 
 function PagesResourcesTab() {
@@ -3285,6 +3546,7 @@ export default function AdminDashboard({ section, subsection }: { section?: stri
       case "employer-registry": return <EmployerRegistry />;
       case "verification": return <VerificationInbox />;
       case "seeker-verification": return <SeekerVerificationInbox />;
+      case "email-templates": return <EmailTemplatesTab />;
       default: return <UsersLandingTab />;
     }
   };

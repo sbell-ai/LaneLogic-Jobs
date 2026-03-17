@@ -8,7 +8,7 @@ import {
   employerVerificationRequests, employerEvidenceItems,
   seekerCredentialRequirements, seekerRequirementRules,
   seekerVerificationRequests, seekerCredentialEvidenceItems,
-  conversations, messages,
+  conversations, messages, emailTemplates,
   type User, type InsertUser, type Job, type InsertJob,
   type Application, type InsertApplication,
   type Resource, type InsertResource,
@@ -40,6 +40,7 @@ import {
   type SeekerCredentialEvidenceItem, type InsertSeekerCredentialEvidenceItem,
   type Conversation, type InsertConversation,
   type Message, type InsertMessage,
+  emailTemplates, type EmailTemplate, type InsertEmailTemplate,
 } from "@shared/schema";
 import { eq, and, sql, desc, asc, isNotNull, gte, lte, gt, ne, notInArray, inArray, count } from "drizzle-orm";
 
@@ -125,6 +126,11 @@ export interface IStorage {
   // Site Settings
   getSiteSettings(): Promise<SiteSettingsData>;
   updateSiteSettings(settings: SiteSettingsData): Promise<SiteSettingsData>;
+
+  // Email Templates
+  getEmailTemplates(): Promise<EmailTemplate[]>;
+  getEmailTemplateBySlug(slug: string): Promise<EmailTemplate | undefined>;
+  upsertEmailTemplate(slug: string, data: Partial<InsertEmailTemplate>): Promise<EmailTemplate>;
 
   // Admin Products
   getAdminProducts(): Promise<AdminProduct[]>;
@@ -1272,6 +1278,34 @@ export class DatabaseStorage implements IStorage {
           : `Applicant #${a.jobSeekerId}`;
       return { ...a, seekerName, seekerEmail: seeker?.email ?? "" };
     });
+  }
+
+  // ── Email Templates ────────────────────────────────────────────────────────
+  async getEmailTemplates(): Promise<EmailTemplate[]> {
+    return await db.select().from(emailTemplates).orderBy(asc(emailTemplates.slug));
+  }
+
+  async getEmailTemplateBySlug(slug: string): Promise<EmailTemplate | undefined> {
+    const [t] = await db.select().from(emailTemplates).where(eq(emailTemplates.slug, slug));
+    return t;
+  }
+
+  async upsertEmailTemplate(slug: string, data: Partial<InsertEmailTemplate>): Promise<EmailTemplate> {
+    const now = new Date();
+    const existing = await this.getEmailTemplateBySlug(slug);
+    if (existing) {
+      const [updated] = await db
+        .update(emailTemplates)
+        .set({ ...data, updatedAt: now })
+        .where(eq(emailTemplates.slug, slug))
+        .returning();
+      return updated;
+    }
+    const [created] = await db
+      .insert(emailTemplates)
+      .values({ slug, name: data.name ?? slug, subject: data.subject ?? "", body: data.body ?? "", variables: data.variables ?? [], isActive: data.isActive ?? true, ...data })
+      .returning();
+    return created;
   }
 }
 

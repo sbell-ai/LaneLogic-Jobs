@@ -368,6 +368,26 @@ export async function registerRoutes(
         return res.status(400).json({ message: "Email already exists" });
       }
       const user = await storage.createUser(input);
+      // Fire-and-forget welcome email
+      (async () => {
+        try {
+          const { sendTemplatedEmail } = await import("./email/sendTemplatedEmail.ts");
+          const siteUrl = process.env.CANONICAL_HOST || "https://lanelogicjobs.com";
+          await sendTemplatedEmail(
+            (user as any).role === "employer" ? "welcome_employer" : "welcome_seeker",
+            (user as any).email,
+            {
+              first_name: (user as any).firstName || (user as any).email,
+              last_name: (user as any).lastName || "",
+              email: (user as any).email,
+              company_name: (user as any).companyName || "",
+              site_name: "LaneLogic Jobs",
+              site_url: siteUrl,
+              dashboard_url: `${siteUrl}/dashboard`,
+            }
+          );
+        } catch {}
+      })();
       req.login(user, (err) => {
         if (err) throw err;
         res.status(201).json(user);
@@ -827,6 +847,26 @@ export async function registerRoutes(
         const responseData = verificationWarning
           ? { ...txResult.appData, verificationWarning }
           : txResult.appData;
+        // Fire-and-forget application received email
+        (async () => {
+          try {
+            const { sendTemplatedEmail } = await import("./email/sendTemplatedEmail.ts");
+            const seekerUser = await storage.getUser(user.id);
+            const appJob = await storage.getJob((txResult.appData as any).jobId);
+            if (seekerUser && appJob) {
+              const siteUrl = process.env.CANONICAL_HOST || "https://lanelogicjobs.com";
+              const employer = await storage.getUser(appJob.employerId);
+              await sendTemplatedEmail("application_received", (seekerUser as any).email, {
+                first_name: (seekerUser as any).firstName || (seekerUser as any).email,
+                job_title: appJob.title,
+                company_name: employer ? ((employer as any).companyName || [(employer as any).firstName, (employer as any).lastName].filter(Boolean).join(" ")) : "the company",
+                application_id: String((txResult.appData as any).id),
+                site_url: siteUrl,
+                dashboard_url: `${siteUrl}/dashboard`,
+              });
+            }
+          } catch {}
+        })();
         return res.status(201).json(responseData);
       }
 
@@ -868,6 +908,32 @@ export async function registerRoutes(
       const appData = await storage.updateApplication(appId, input);
       const { seekerNotes: _s, ...employerView } = appData as any;
       res.json(employerView);
+      // Fire-and-forget status change email
+      if (input.status) {
+        (async () => {
+          try {
+            const { sendTemplatedEmail } = await import("./email/sendTemplatedEmail.ts");
+            const updatedApp = await db.query.applications.findFirst({ where: (a, { eq }) => eq(a.id, appId) });
+            if (!updatedApp) return;
+            const [seekerUser, appJob] = await Promise.all([
+              storage.getUser(updatedApp.seekerId),
+              storage.getJob(updatedApp.jobId),
+            ]);
+            if (!seekerUser || !appJob) return;
+            const employer = await storage.getUser(appJob.employerId);
+            const siteUrl = process.env.CANONICAL_HOST || "https://lanelogicjobs.com";
+            await sendTemplatedEmail("application_status_changed", (seekerUser as any).email, {
+              first_name: (seekerUser as any).firstName || (seekerUser as any).email,
+              job_title: appJob.title,
+              company_name: employer ? ((employer as any).companyName || [(employer as any).firstName, (employer as any).lastName].filter(Boolean).join(" ")) : "the company",
+              new_status: input.status,
+              application_id: String(appId),
+              site_url: siteUrl,
+              dashboard_url: `${siteUrl}/dashboard`,
+            });
+          } catch {}
+        })();
+      }
     } catch (err) {
       if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
       res.status(500).json({ message: "Internal server error" });
@@ -1496,6 +1562,98 @@ export async function registerRoutes(
     }
   });
 
+  // ── Email Template Admin Routes ──────────────────────────────────────────────
+  const adminOnly = (req: any, res: any, next: any) => {
+    if (!req.isAuthenticated() || !req.user || (req.user as any).role !== "admin") {
+      return res.status(403).json({ message: "Admin access required" });
+    }
+    next();
+  };
+
+  app.get("/api/admin/email-templates", adminOnly, async (_req, res) => {
+    try {
+      const templates = await storage.getEmailTemplates();
+      // Attach hasActiveTrigger from seeds for UI badge
+      const { DEFAULT_TEMPLATES } = await import("./email/templateSeeds.ts");
+      const seedMap = new Map(DEFAULT_TEMPLATES.map(s => [s.slug, s.hasActiveTrigger]));
+      const enriched = templates.map(t => ({ ...t, hasActiveTrigger: seedMap.get(t.slug) ?? true }));
+      res.json(enriched);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.get("/api/admin/email-templates/:slug", adminOnly, async (req, res) => {
+    try {
+      const t = await storage.getEmailTemplateBySlug(req.params.slug);
+      if (!t) return res.status(404).json({ message: "Template not found" });
+      const { DEFAULT_TEMPLATES } = await import("./email/templateSeeds.ts");
+      const seed = DEFAULT_TEMPLATES.find(s => s.slug === req.params.slug);
+      res.json({ ...t, hasActiveTrigger: seed?.hasActiveTrigger ?? true });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.put("/api/admin/email-templates/:slug", adminOnly, async (req, res) => {
+    try {
+      const { subject, body, isActive } = req.body;
+      const updated = await storage.upsertEmailTemplate(req.params.slug, {
+        subject: subject ?? undefined,
+        body: body ?? undefined,
+        isActive: isActive ?? undefined,
+      });
+      res.json(updated);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  // Rate-limit map: adminId → last test send timestamp
+  const testEmailRateLimit = new Map<number, number>();
+
+  app.post("/api/admin/email-templates/:slug/test", adminOnly, async (req, res) => {
+    const adminId = (req.user as any).id;
+    const last = testEmailRateLimit.get(adminId);
+    if (last && Date.now() - last < 30_000) {
+      return res.status(429).json({ message: "Please wait 30 seconds between test sends." });
+    }
+    try {
+      const template = await storage.getEmailTemplateBySlug(req.params.slug);
+      if (!template) return res.status(404).json({ message: "Template not found" });
+
+      const { DEFAULT_TEMPLATES } = await import("./email/templateSeeds.ts");
+      const seed = DEFAULT_TEMPLATES.find(s => s.slug === req.params.slug);
+      const testVars = seed?.testVars ?? {};
+
+      const { renderEmailTemplate } = await import("./email/templateEngine.ts");
+      const rendered = renderEmailTemplate(template.subject, template.body, testVars);
+
+      const apiKey = process.env.MAILGUN_API_KEY;
+      const domain = process.env.MAILGUN_DOMAIN;
+      if (!apiKey || !domain) {
+        return res.status(500).json({ message: "Mailgun is not configured. Set MAILGUN_API_KEY and MAILGUN_DOMAIN." });
+      }
+      const FormData = (await import("form-data")).default;
+      const Mailgun = (await import("mailgun.js")).default;
+      const mg = new Mailgun(FormData).client({ username: "api", key: apiKey });
+      const fromName = process.env.MAILGUN_FROM_NAME || "LaneLogic Jobs";
+      const fromEmail = process.env.MAILGUN_FROM_EMAIL || `no-reply@${domain}`;
+      await mg.messages.create(domain, {
+        from: `${fromName} <${fromEmail}>`,
+        to: [(req.user as any).email],
+        subject: `[TEST] ${rendered.subject}`,
+        text: rendered.body,
+      });
+
+      testEmailRateLimit.set(adminId, Date.now());
+      res.json({ message: `Test email sent to ${(req.user as any).email}` });
+    } catch (err: any) {
+      console.error("[email] Test send error:", err);
+      res.status(500).json({ message: err.message || "Test send failed" });
+    }
+  });
+
   app.post("/api/admin/jobs/migrate-paragraphize", async (req, res) => {
     if (!req.isAuthenticated() || !req.user || (req.user as any).role !== "admin") {
       return res.status(403).json({ message: "Admin access required" });
@@ -2114,37 +2272,30 @@ export async function registerRoutes(
     if (conv.seekerId !== userId && conv.employerId !== userId) return res.status(403).json({ error: "Forbidden" });
     const msg = await storage.createMessage(convId, userId, content.trim());
 
-    // Email notification to recipient (fire-and-forget)
+    // Email notification to recipient via template (fire-and-forget)
     const recipientId = conv.seekerId === userId ? conv.employerId : conv.seekerId;
     const [sender, recipient] = await Promise.all([
       storage.getUser(userId),
       storage.getUser(recipientId),
     ]);
     if (sender && recipient) {
-      const apiKey = process.env.MAILGUN_API_KEY;
-      const domain = process.env.MAILGUN_DOMAIN;
-      if (apiKey && domain) {
-        (async () => {
-          try {
-            const FormData = (await import("form-data")).default;
-            const Mailgun = (await import("mailgun.js")).default;
-            const mailgun = new Mailgun(FormData);
-            const mg = mailgun.client({ username: "api", key: apiKey });
-            const senderName = [sender.firstName, sender.lastName].filter(Boolean).join(" ") || sender.companyName || sender.email;
-            const preview = content.trim().slice(0, 200);
-            const inboxUrl = `${process.env.CANONICAL_HOST || "https://lanelogicjobs.com"}/dashboard/messages`;
-            await mg.messages.create(domain, {
-              from: `LaneLogic Jobs <noreply@${domain}>`,
-              to: [recipient.email],
-              subject: "New message on LaneLogic Jobs",
-              text: `You have a new message from ${senderName}.\n\n"${preview}"\n\nReply at: ${inboxUrl}`,
-              html: `<p>You have a new message from <strong>${escapeHtml(senderName)}</strong>.</p><blockquote>${escapeHtml(preview)}</blockquote><p><a href="${inboxUrl}">View your inbox on LaneLogic Jobs</a></p>`,
-            });
-          } catch (e: any) {
-            console.error("Messaging email notification failed:", e?.message);
-          }
-        })();
-      }
+      (async () => {
+        try {
+          const { sendTemplatedEmail } = await import("./email/sendTemplatedEmail.ts");
+          const senderName = [(sender as any).firstName, (sender as any).lastName].filter(Boolean).join(" ") || (sender as any).companyName || (sender as any).email;
+          const preview = content.trim().slice(0, 200);
+          const siteUrl = process.env.CANONICAL_HOST || "https://lanelogicjobs.com";
+          await sendTemplatedEmail("new_message", (recipient as any).email, {
+            first_name: (recipient as any).firstName || (recipient as any).email,
+            sender_name: senderName,
+            message_preview: preview,
+            inbox_url: `${siteUrl}/dashboard/messages`,
+            site_url: siteUrl,
+          });
+        } catch (e: any) {
+          console.error("Messaging email notification failed:", e?.message);
+        }
+      })();
     }
 
     res.json(msg);
