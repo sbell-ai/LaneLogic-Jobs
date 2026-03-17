@@ -90,7 +90,8 @@ export const applications = pgTable("applications", {
   jobId: integer("job_id").notNull(),
   jobSeekerId: integer("job_seeker_id").notNull(),
   resumeUrl: text("resume_url"),
-  status: text("status").notNull().default("pending"), // pending, reviewed, accepted, rejected
+  status: text("status").notNull().default("new"), // new, shortlisted, hired, on_hold, not_a_fit (legacy: pending, reviewed, accepted, rejected)
+  employerNotes: text("employer_notes"),
   createdAt: timestamp("created_at").defaultNow(),
 });
 

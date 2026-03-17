@@ -229,7 +229,7 @@ export interface IStorage {
   getConversation(conversationId: number): Promise<Conversation | undefined>;
 
   // Employer enriched applicants
-  getEmployerApplicationsEnriched(employerId: number): Promise<(Application & { seekerName: string; seekerEmail: string })[]>;
+  getEmployerApplicationsEnriched(employerId: number): Promise<(Application & { seekerName: string; seekerEmail: string; employerNotes?: string | null })[]>;
 }
 
 export class DatabaseStorage implements IStorage {

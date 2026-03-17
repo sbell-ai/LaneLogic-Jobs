@@ -16,7 +16,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Briefcase, Plus, Trash2, Users, Upload, CreditCard, CheckCircle2, MapPin, Eye, Building2, Phone, Mail, User, MessageSquare, Pencil, ExternalLink } from "lucide-react";
+import { Briefcase, Plus, Trash2, Users, Upload, CreditCard, CheckCircle2, MapPin, Eye, Building2, Phone, Mail, User, MessageSquare, Pencil, ExternalLink, ChevronDown, ChevronRight, StickyNote, Check, Save } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ImageUpload } from "@/components/ui/image-upload";
 import type { Job, Application, Category } from "@shared/schema";
@@ -542,14 +542,121 @@ function MyJobsTab({ userId }: { userId: number }) {
   );
 }
 
-type EnrichedApplication = Application & { seekerName: string; seekerEmail: string };
+type EnrichedApplication = Application & { seekerName: string; seekerEmail: string; employerNotes?: string | null };
 
-const APPLICATION_STATUSES = [
-  { value: "pending",  label: "Pending",  color: "bg-yellow-100 text-yellow-700 border-yellow-200" },
-  { value: "reviewed", label: "Reviewed", color: "bg-blue-100 text-blue-700 border-blue-200" },
-  { value: "accepted", label: "Accepted", color: "bg-green-100 text-green-700 border-green-200" },
-  { value: "rejected", label: "Rejected", color: "bg-red-100 text-red-700 border-red-200" },
+const PIPELINE_STATUSES = [
+  { value: "new",         label: "New Application", color: "bg-yellow-100 text-yellow-700 border-yellow-200 ring-yellow-400" },
+  { value: "shortlisted", label: "Shortlisted",     color: "bg-blue-100 text-blue-700 border-blue-200 ring-blue-400" },
 ] as const;
+
+const DECISION_STATUSES = [
+  { value: "hired",      label: "Hired",       color: "bg-green-100 text-green-700 border-green-200 ring-green-400" },
+  { value: "on_hold",    label: "On Hold",     color: "bg-orange-100 text-orange-700 border-orange-200 ring-orange-400" },
+  { value: "not_a_fit",  label: "Not a Fit",   color: "bg-red-100 text-red-700 border-red-200 ring-red-400" },
+] as const;
+
+const ALL_STATUSES = [...PIPELINE_STATUSES, ...DECISION_STATUSES];
+
+function normalizeStatus(status: string): string {
+  const legacyMap: Record<string, string> = { pending: "new", reviewed: "shortlisted", accepted: "hired", rejected: "not_a_fit" };
+  return legacyMap[status] ?? status;
+}
+
+function statusMeta(status: string) {
+  const norm = normalizeStatus(status);
+  return ALL_STATUSES.find((s) => s.value === norm) ?? PIPELINE_STATUSES[0];
+}
+
+function appGroup(status: string): "active" | "hired" | "on_hold" | "not_a_fit" {
+  const norm = normalizeStatus(status);
+  if (norm === "hired") return "hired";
+  if (norm === "on_hold") return "on_hold";
+  if (norm === "not_a_fit") return "not_a_fit";
+  return "active";
+}
+
+function ApplicantNotes({ app, onSaved }: { app: EnrichedApplication; onSaved: (notes: string) => void }) {
+  const { toast } = useToast();
+  const [draft, setDraft] = useState(app.employerNotes ?? "");
+  const saved = app.employerNotes ?? "";
+  const isDirty = draft !== saved;
+
+  const noteMutation = useMutation({
+    mutationFn: (notes: string) =>
+      apiRequest("PUT", `/api/applications/${app.id}`, { employerNotes: notes }).then((r) => r.json()),
+    onSuccess: (updated: any) => {
+      onSaved(updated.employerNotes ?? "");
+      toast({ title: "Note saved" });
+    },
+    onError: () => toast({ title: "Error", description: "Could not save note.", variant: "destructive" }),
+  });
+
+  return (
+    <div className="mt-4 pt-4 border-t border-border">
+      <div className="flex items-center gap-1.5 mb-2">
+        <StickyNote size={13} className="text-muted-foreground" />
+        <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Private Notes</span>
+        {isDirty && <span className="text-xs text-orange-500 ml-1">● unsaved</span>}
+      </div>
+      <div className="flex gap-2">
+        <textarea
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          placeholder="Add private notes about this candidate — only you can see these…"
+          rows={2}
+          data-testid={`textarea-notes-${app.id}`}
+          className="flex-1 text-sm rounded-lg border border-border bg-slate-50 dark:bg-slate-800 px-3 py-2 resize-none focus:outline-none focus:ring-2 focus:ring-primary/30 placeholder:text-muted-foreground/50"
+        />
+        <Button
+          size="sm"
+          variant={isDirty ? "default" : "ghost"}
+          disabled={!isDirty || noteMutation.isPending}
+          onClick={() => noteMutation.mutate(draft)}
+          data-testid={`button-save-notes-${app.id}`}
+          className="self-end gap-1.5 shrink-0"
+        >
+          {noteMutation.isPending ? <Check size={14} /> : <Save size={14} />}
+          {noteMutation.isPending ? "Saving…" : "Save"}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+const GROUP_CONFIG = [
+  {
+    key: "active" as const,
+    label: "Active Pipeline",
+    icon: Users,
+    defaultOpen: true,
+    headerColor: "text-foreground",
+    emptyText: "No active candidates. Move applicants here by setting them to New Application or Shortlisted.",
+  },
+  {
+    key: "hired" as const,
+    label: "Hired",
+    icon: CheckCircle2,
+    defaultOpen: true,
+    headerColor: "text-green-600",
+    emptyText: null,
+  },
+  {
+    key: "on_hold" as const,
+    label: "On Hold",
+    icon: Eye,
+    defaultOpen: true,
+    headerColor: "text-orange-600",
+    emptyText: null,
+  },
+  {
+    key: "not_a_fit" as const,
+    label: "Not a Fit",
+    icon: Trash2,
+    defaultOpen: false,
+    headerColor: "text-red-500",
+    emptyText: null,
+  },
+];
 
 function ApplicantsTab({ userId }: { userId: number }) {
   const [, setLocation] = useLocation();
@@ -562,6 +669,9 @@ function ApplicantsTab({ userId }: { userId: number }) {
 
   const [messagingAppId, setMessagingAppId] = useState<number | null>(null);
   const [updatingStatusId, setUpdatingStatusId] = useState<number | null>(null);
+  const [openGroups, setOpenGroups] = useState<Record<string, boolean>>(() =>
+    Object.fromEntries(GROUP_CONFIG.map((g) => [g.key, g.defaultOpen]))
+  );
 
   const statusMutation = useMutation({
     mutationFn: ({ id, status }: { id: number; status: string }) =>
@@ -571,7 +681,8 @@ function ApplicantsTab({ userId }: { userId: number }) {
       queryClient.setQueryData<EnrichedApplication[]>(["/api/employer/applicants"], (prev) =>
         (prev || []).map((a) => (a.id === updated.id ? { ...a, status: updated.status } : a))
       );
-      toast({ title: "Status updated", description: `Applicant marked as ${updated.status}.` });
+      const label = statusMeta(updated.status).label;
+      toast({ title: "Status updated", description: `Candidate moved to ${label}.` });
     },
     onError: () => {
       setUpdatingStatusId(null);
@@ -601,79 +712,144 @@ function ApplicantsTab({ userId }: { userId: number }) {
 
   if (isLoading) return <div className="animate-pulse h-32 bg-slate-100 dark:bg-slate-800 rounded-xl" />;
 
-  return (
-    <div>
-      <h2 className="text-2xl font-bold font-display mb-2">Applicants ({myApps.length})</h2>
-      <p className="text-sm text-muted-foreground mb-6">
-        Use the status dropdown on each card to move candidates through your hiring pipeline.
-      </p>
-      {myApps.length === 0 ? (
+  if (myApps.length === 0) {
+    return (
+      <div>
+        <h2 className="text-2xl font-bold font-display mb-6">Applicants</h2>
         <div className="text-center py-16 bg-white dark:bg-slate-900 rounded-2xl border border-dashed border-border">
           <Users className="mx-auto mb-4 text-muted-foreground" size={40} />
           <h3 className="font-bold font-display text-lg mb-2">No applicants yet</h3>
           <p className="text-muted-foreground">Applications will appear here when candidates apply to your jobs.</p>
         </div>
-      ) : (
-        <div className="space-y-4">
-          {myApps.map((app) => {
-            const job = jobMap.get(app.jobId);
-            return (
-              <div key={app.id} data-testid={`card-applicant-${app.id}`} className="bg-white dark:bg-slate-900 rounded-xl border border-border p-5">
-                <div className="flex items-start justify-between gap-4">
-                  <div className="flex-1 min-w-0">
-                    <p className="font-semibold truncate" data-testid={`text-seeker-name-${app.id}`}>{app.seekerName}</p>
-                    {app.seekerEmail && app.seekerEmail !== app.seekerName && (
-                      <p className="text-xs text-muted-foreground truncate">{app.seekerEmail}</p>
-                    )}
-                    <p className="text-sm text-muted-foreground mt-0.5 truncate">
-                      {job ? job.title : `Job #${app.jobId}`}
-                    </p>
-                  </div>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="gap-1.5 shrink-0"
-                    data-testid={`button-message-applicant-${app.id}`}
-                    disabled={messagingAppId === app.id}
-                    onClick={() => { setMessagingAppId(app.id); messageMutation.mutate(app); }}
-                  >
-                    <MessageSquare size={14} />
-                    {messagingAppId === app.id ? "Opening..." : "Message"}
-                  </Button>
-                </div>
+      </div>
+    );
+  }
 
-                <div className="mt-4 pt-4 border-t border-border flex items-center gap-3">
-                  <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Status</span>
-                  <div className="flex flex-wrap gap-2">
-                    {APPLICATION_STATUSES.map((s) => (
-                      <button
-                        key={s.value}
-                        data-testid={`status-option-${s.value}-${app.id}`}
-                        disabled={updatingStatusId === app.id}
-                        onClick={() => {
-                          if (app.status === s.value) return;
-                          setUpdatingStatusId(app.id);
-                          statusMutation.mutate({ id: app.id, status: s.value });
-                        }}
-                        className={`
-                          px-3 py-1 rounded-full text-xs font-medium border transition-all
-                          ${app.status === s.value
-                            ? `${s.color} ring-2 ring-offset-1 ring-current cursor-default`
-                            : "bg-transparent text-muted-foreground border-border hover:border-foreground/40 cursor-pointer"
-                          }
-                          ${updatingStatusId === app.id ? "opacity-50 pointer-events-none" : ""}
-                        `}
-                      >
-                        {s.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            );
-          })}
+  const grouped = Object.fromEntries(GROUP_CONFIG.map((g) => [g.key, [] as EnrichedApplication[]])) as Record<string, EnrichedApplication[]>;
+  myApps.forEach((app) => grouped[appGroup(app.status)].push(app));
+
+  const renderCard = (app: EnrichedApplication) => {
+    const job = jobMap.get(app.jobId);
+    const norm = normalizeStatus(app.status);
+    const isUpdating = updatingStatusId === app.id;
+    const isMessaging = messagingAppId === app.id;
+
+    return (
+      <div key={app.id} data-testid={`card-applicant-${app.id}`} className="bg-white dark:bg-slate-900 rounded-xl border border-border p-5">
+        <div className="flex items-start justify-between gap-4">
+          <div className="flex-1 min-w-0">
+            <p className="font-semibold truncate" data-testid={`text-seeker-name-${app.id}`}>{app.seekerName}</p>
+            {app.seekerEmail && app.seekerEmail !== app.seekerName && (
+              <p className="text-xs text-muted-foreground truncate">{app.seekerEmail}</p>
+            )}
+            <p className="text-sm text-muted-foreground mt-0.5 truncate">{job ? job.title : `Job #${app.jobId}`}</p>
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-1.5 shrink-0"
+            data-testid={`button-message-applicant-${app.id}`}
+            disabled={isMessaging}
+            onClick={() => { setMessagingAppId(app.id); messageMutation.mutate(app); }}
+          >
+            <MessageSquare size={14} />
+            {isMessaging ? "Opening…" : "Message"}
+          </Button>
         </div>
-      )}
+
+        <div className="mt-4 pt-4 border-t border-border space-y-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide mr-1 shrink-0">Pipeline</span>
+            {PIPELINE_STATUSES.map((s) => (
+              <button
+                key={s.value}
+                data-testid={`status-option-${s.value}-${app.id}`}
+                disabled={isUpdating}
+                onClick={() => {
+                  if (norm === s.value) return;
+                  setUpdatingStatusId(app.id);
+                  statusMutation.mutate({ id: app.id, status: s.value });
+                }}
+                className={`px-3 py-1 rounded-full text-xs font-medium border transition-all
+                  ${norm === s.value
+                    ? `${s.color} ring-2 ring-offset-1 cursor-default`
+                    : "bg-transparent text-muted-foreground border-border hover:border-foreground/40 cursor-pointer"}
+                  ${isUpdating ? "opacity-50 pointer-events-none" : ""}`}
+              >
+                {s.label}
+              </button>
+            ))}
+            <span className="text-muted-foreground/30 text-xs mx-1">│</span>
+            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide mr-1 shrink-0">Decision</span>
+            {DECISION_STATUSES.map((s) => (
+              <button
+                key={s.value}
+                data-testid={`status-option-${s.value}-${app.id}`}
+                disabled={isUpdating}
+                onClick={() => {
+                  if (norm === s.value) return;
+                  setUpdatingStatusId(app.id);
+                  statusMutation.mutate({ id: app.id, status: s.value });
+                }}
+                className={`px-3 py-1 rounded-full text-xs font-medium border transition-all
+                  ${norm === s.value
+                    ? `${s.color} ring-2 ring-offset-1 cursor-default`
+                    : "bg-transparent text-muted-foreground border-border hover:border-foreground/40 cursor-pointer"}
+                  ${isUpdating ? "opacity-50 pointer-events-none" : ""}`}
+              >
+                {s.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <ApplicantNotes
+          app={app}
+          onSaved={(notes) => {
+            queryClient.setQueryData<EnrichedApplication[]>(["/api/employer/applicants"], (prev) =>
+              (prev || []).map((a) => (a.id === app.id ? { ...a, employerNotes: notes } : a))
+            );
+          }}
+        />
+      </div>
+    );
+  };
+
+  return (
+    <div>
+      <h2 className="text-2xl font-bold font-display mb-6">Applicants ({myApps.length})</h2>
+      <div className="space-y-6">
+        {GROUP_CONFIG.map((group) => {
+          const cards = grouped[group.key] || [];
+          if (cards.length === 0 && !group.emptyText) return null;
+          const isOpen = openGroups[group.key];
+          const Icon = group.icon;
+          return (
+            <div key={group.key} data-testid={`group-${group.key}`}>
+              <button
+                className="w-full flex items-center gap-2 mb-3 group"
+                onClick={() => setOpenGroups((p) => ({ ...p, [group.key]: !p[group.key] }))}
+                data-testid={`group-toggle-${group.key}`}
+              >
+                <Icon size={16} className={group.headerColor} />
+                <span className={`font-bold font-display ${group.headerColor}`}>{group.label}</span>
+                <Badge variant="outline" className="text-xs px-1.5 py-0 font-normal">{cards.length}</Badge>
+                <div className="flex-1 h-px bg-border mx-2" />
+                {isOpen ? <ChevronDown size={15} className="text-muted-foreground" /> : <ChevronRight size={15} className="text-muted-foreground" />}
+              </button>
+              {isOpen && (
+                <div className="space-y-4">
+                  {cards.length === 0 && group.emptyText ? (
+                    <p className="text-sm text-muted-foreground py-4 text-center">{group.emptyText}</p>
+                  ) : (
+                    cards.map(renderCard)
+                  )}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
