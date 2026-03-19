@@ -13,7 +13,7 @@ import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Briefcase, Plus, Trash2, Users, Upload, CreditCard, CheckCircle2, MapPin, Eye, Building2, Phone, Mail, User, MessageSquare, Pencil, ExternalLink, ChevronDown, ChevronRight, StickyNote, Check, Save, Loader2 } from "lucide-react";
@@ -178,12 +178,17 @@ function PostJobTab({ userId }: { userId: number }) {
                   <FormControl><Input placeholder="$70,000 – $90,000/yr" data-testid="input-job-salary" {...field} value={field.value ?? ""} /></FormControl>
                 </FormItem>
               )} />
-              <FormField control={form.control} name="expiresAt" render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Expiration Date (optional)</FormLabel>
-                  <FormControl><Input type="date" data-testid="input-job-expires" {...field} value={field.value ?? ""} /></FormControl>
-                </FormItem>
-              )} />
+              <FormField control={form.control} name="expiresAt" render={({ field }) => {
+                const todayStr = new Date().toISOString().split("T")[0];
+                const maxStr = new Date(Date.now() + 31 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
+                return (
+                  <FormItem>
+                    <FormLabel>Expiration Date (optional)</FormLabel>
+                    <FormControl><Input type="date" min={todayStr} max={maxStr} data-testid="input-job-expires" {...field} value={field.value ?? ""} /></FormControl>
+                    <FormDescription>Defaults to 30 days. Max 31 days from today.</FormDescription>
+                  </FormItem>
+                );
+              }} />
             </div>
 
             <FormField control={form.control} name="description" render={({ field }) => (
@@ -411,12 +416,17 @@ function EditJobDialog({ job }: { job: Job }) {
                 </FormItem>
               )} />
             </div>
-            <FormField control={form.control} name="expiresAt" render={({ field }) => (
-              <FormItem>
-                <FormLabel>Expiration Date (optional)</FormLabel>
-                <FormControl><Input type="date" data-testid="input-edit-expires" {...field} value={field.value ?? ""} /></FormControl>
-              </FormItem>
-            )} />
+            <FormField control={form.control} name="expiresAt" render={({ field }) => {
+              const todayStr = new Date().toISOString().split("T")[0];
+              const maxStr = new Date(Date.now() + 31 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
+              return (
+                <FormItem>
+                  <FormLabel>Expiration Date (optional)</FormLabel>
+                  <FormControl><Input type="date" min={todayStr} max={maxStr} data-testid="input-edit-expires" {...field} value={field.value ?? ""} /></FormControl>
+                  <FormDescription>Max 31 days from today. Leave unchanged to keep current date.</FormDescription>
+                </FormItem>
+              );
+            }} />
             <FormField control={form.control} name="description" render={({ field }) => (
               <FormItem>
                 <FormLabel>Job Description *</FormLabel>

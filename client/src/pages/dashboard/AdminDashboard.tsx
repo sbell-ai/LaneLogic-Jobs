@@ -551,7 +551,10 @@ function AllJobsTab() {
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div><Label>Salary</Label><Input value={editForm.salary || ""} onChange={e => setEditForm(f => ({ ...f, salary: e.target.value }))} /></div>
-              <div><Label>Expiration Date</Label><Input type="date" value={editForm.expiresAt || ""} onChange={e => setEditForm(f => ({ ...f, expiresAt: e.target.value }))} data-testid="input-edit-job-expires" /></div>
+              <div>
+                <Label>Expiration</Label>
+                <p className="text-sm text-muted-foreground mt-1.5">Resets to 30 days on save</p>
+              </div>
             </div>
             <div><Label>Description</Label><Textarea value={editForm.description || ""} onChange={e => setEditForm(f => ({ ...f, description: e.target.value }))} className="min-h-[100px]" /></div>
             <div><Label>Requirements</Label><Textarea value={editForm.requirements || ""} onChange={e => setEditForm(f => ({ ...f, requirements: e.target.value }))} className="min-h-[80px]" /></div>
@@ -829,12 +832,10 @@ function PostJobTab({ userId }: { userId: number }) {
                   <FormControl><Input placeholder="$70,000 – $90,000" data-testid="input-job-salary" {...field} value={field.value ?? ""} /></FormControl>
                 </FormItem>
               )} />
-              <FormField control={form.control} name="expiresAt" render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Expiration Date (optional)</FormLabel>
-                  <FormControl><Input type="date" data-testid="input-job-expires" {...field} value={field.value ?? ""} /></FormControl>
-                </FormItem>
-              )} />
+              <div>
+                <p className="text-sm font-medium leading-none mb-2">Expiration</p>
+                <p className="text-sm text-muted-foreground mt-2.5">Auto-expires 30 days after posting</p>
+              </div>
             </div>
 
             <FormField control={form.control} name="description" render={({ field }) => (

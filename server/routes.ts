@@ -92,6 +92,13 @@ function paragraphize(text: string): string {
   return text.replace(/([.?!])\s+/g, "$1\n\n");
 }
 
+function daysFromNow(days: number): Date {
+  const d = new Date();
+  d.setDate(d.getDate() + days);
+  d.setHours(23, 59, 59, 999);
+  return d;
+}
+
 function validateAndMapCsvRow(
   record: Record<string, string>,
   rowNumber: number,
@@ -244,6 +251,7 @@ function validateAndMapCsvRow(
     isExternalApply,
     isPublished: true,
     publishedAt: new Date(),
+    expiresAt: daysFromNow(30),
     jobMetadata: Object.keys(jobMetadata).length > 0 ? jobMetadata : null,
   };
 
@@ -687,6 +695,21 @@ export async function registerRoutes(
       if (body.category === "") body.category = null;
       if (body.subcategory === "") body.subcategory = null;
       if (!body.workLocationType || body.workLocationType === "none") body.workLocationType = null;
+
+      // Expiration rules
+      const postingUser = req.isAuthenticated() ? (req.user as any) : null;
+      if (postingUser?.role === "admin") {
+        body.expiresAt = daysFromNow(30);
+      } else if (postingUser?.role === "employer") {
+        if (!body.expiresAt) {
+          body.expiresAt = daysFromNow(30);
+        } else {
+          if (new Date(body.expiresAt) > daysFromNow(31)) {
+            return res.status(400).json({ message: "Expiration date cannot be more than 31 days from today." });
+          }
+        }
+      }
+
       const catCheck = validateCategoryPair(body.category ?? null, body.subcategory ?? null);
       if (!catCheck.valid) return res.status(400).json({ message: catCheck.error });
       const input = api.jobs.create.input.parse(body);
@@ -714,6 +737,21 @@ export async function registerRoutes(
       if (body.category === "") body.category = null;
       if (body.subcategory === "") body.subcategory = null;
       if (body.workLocationType === "" || body.workLocationType === "none") body.workLocationType = null;
+
+      // Expiration rules on update
+      if (user.role === "admin") {
+        body.expiresAt = daysFromNow(30);
+      } else {
+        // employer: if no new date provided, preserve existing expiration; otherwise validate cap
+        if (!body.expiresAt) {
+          delete body.expiresAt;
+        } else {
+          if (new Date(body.expiresAt) > daysFromNow(31)) {
+            return res.status(400).json({ message: "Expiration date cannot be more than 31 days from today." });
+          }
+        }
+      }
+
       const mergedCat = body.category !== undefined ? body.category : existingJob.category;
       const mergedSub = body.subcategory !== undefined ? body.subcategory : existingJob.subcategory;
       const catCheck = validateCategoryPair(mergedCat ?? null, mergedSub ?? null);
