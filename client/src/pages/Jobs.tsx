@@ -161,10 +161,10 @@ export default function Jobs() {
                               )}
                             </div>
 
-                            <div className="flex items-center gap-2 mt-auto pt-3">
+                            <div className="flex flex-col gap-2 mt-auto pt-3">
                               {job.isExternalApply && (
-                                <Badge variant="outline" className="text-[10px]">
-                                  <ExternalLink size={10} className="mr-1" /> External
+                                <Badge variant="outline" className="text-[10px] self-start">
+                                  <ExternalLink size={10} className="mr-1" /> External Apply
                                 </Badge>
                               )}
                               <Button size="sm" className="hover-elevate w-full" data-testid={`button-apply-${job.id}`}>
