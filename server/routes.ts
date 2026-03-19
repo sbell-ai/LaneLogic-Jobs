@@ -189,6 +189,30 @@ function validateAndMapCsvRow(
     }
   }
 
+  const employerUrlRaw = get("employerUrl") || null;
+  let employerUrl: string | null = null;
+  if (employerUrlRaw) {
+    try {
+      new URL(employerUrlRaw);
+      employerUrl = employerUrlRaw;
+    } catch {
+      errors.push({ rowNumber, field: "employerUrl", errorCode: "INVALID_URL", errorMessage: `employerUrl "${employerUrlRaw}" is not a valid URL` });
+    }
+  }
+
+  const expiresAtRaw = get("expiresAt") || null;
+  let parsedExpiresAt: Date = daysFromNow(30);
+  if (expiresAtRaw) {
+    const d = new Date(expiresAtRaw);
+    if (isNaN(d.getTime())) {
+      errors.push({ rowNumber, field: "expiresAt", errorCode: "INVALID_DATE", errorMessage: `expiresAt "${expiresAtRaw}" is not a valid date` });
+    } else if (d <= new Date()) {
+      errors.push({ rowNumber, field: "expiresAt", errorCode: "PAST_DATE", errorMessage: `expiresAt "${expiresAtRaw}" must be a future date` });
+    } else {
+      parsedExpiresAt = d;
+    }
+  }
+
   const coreResponsibilities = get("coreResponsibilities") || null;
   const ALLOWED_EXPERIENCE_BANDS = new Set(["0-2", "2-5", "5-10", "10+"]);
   const experienceLevelYears = get("experienceLevelYears") || get("experienceLevel") || null;
@@ -248,10 +272,11 @@ function validateAndMapCsvRow(
     workLocationType: rawWorkLocationType && ALLOWED_WORK_LOCATION_TYPES.has(rawWorkLocationType) ? rawWorkLocationType : null,
     salary,
     applyUrl,
+    employerUrl,
     isExternalApply,
     isPublished: true,
     publishedAt: new Date(),
-    expiresAt: daysFromNow(30),
+    expiresAt: parsedExpiresAt,
     jobMetadata: Object.keys(jobMetadata).length > 0 ? jobMetadata : null,
   };
 

@@ -54,6 +54,7 @@ export const jobs = pgTable("jobs", {
   locationCountry: text("location_country"),
   salary: text("salary"),
   applyUrl: text("apply_url"),
+  employerUrl: text("employer_url"),
   isExternalApply: boolean("is_external_apply").default(false),
   jobMetadata: jsonb("job_metadata"),
   isPublished: boolean("is_published").notNull().default(false),
