@@ -24,7 +24,7 @@ import {
   AlertCircle, Download, Pencil, X, Tag, Ticket, ExternalLink,
   FilePlus2, Globe, Search as SearchIcon, Share2, PlusCircle, ArrowLeft,
   FileEdit, LayoutList, UserCircle, ChevronDown, ChevronRight, Info,
-  Building2, ImageIcon, Mail, Save, Send, AlertTriangle, ToggleLeft, ToggleRight, Loader2
+  Building2, ImageIcon, Mail, Save, Send, AlertTriangle, ToggleLeft, ToggleRight, Loader2, Check
 } from "lucide-react";
 import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
@@ -1923,6 +1923,10 @@ function CategoriesTab() {
   const [expandedCats, setExpandedCats] = useState<Set<string>>(new Set());
   const [newCatName, setNewCatName] = useState("");
   const [newSubInputs, setNewSubInputs] = useState<Record<string, string>>({});
+  const [editingCat, setEditingCat] = useState<string | null>(null);
+  const [editingCatValue, setEditingCatValue] = useState("");
+  const [editingSub, setEditingSub] = useState<{ cat: string; sub: string } | null>(null);
+  const [editingSubValue, setEditingSubValue] = useState("");
 
   useEffect(() => {
     if (liveTaxonomy && Object.keys(liveTaxonomy).length > 0 && !isDirty) {
@@ -1970,6 +1974,27 @@ function CategoriesTab() {
   const deleteSubcategory = (cat: string, sub: string) => {
     setLocalTaxonomy(prev => ({ ...prev, [cat]: prev[cat].filter(s => s !== sub) }));
     setIsDirty(true);
+  };
+
+  const renameCategory = (oldName: string, newName: string) => {
+    const trimmed = newName.trim();
+    if (!trimmed || (trimmed !== oldName && trimmed in localTaxonomy)) { setEditingCat(null); return; }
+    if (trimmed !== oldName) {
+      setLocalTaxonomy(prev => Object.fromEntries(Object.entries(prev).map(([k, v]) => k === oldName ? [trimmed, v] : [k, v])));
+      setExpandedCats(prev => { const next = new Set(prev); if (next.has(oldName)) { next.delete(oldName); next.add(trimmed); } return next; });
+      setIsDirty(true);
+    }
+    setEditingCat(null);
+  };
+
+  const renameSubcategory = (cat: string, oldSub: string, newSub: string) => {
+    const trimmed = newSub.trim();
+    if (!trimmed) { setEditingSub(null); return; }
+    if (trimmed !== oldSub) {
+      setLocalTaxonomy(prev => ({ ...prev, [cat]: prev[cat].map(s => s === oldSub ? trimmed : s) }));
+      setIsDirty(true);
+    }
+    setEditingSub(null);
   };
 
   // ── industry / blog categories (DB-backed) ─────────────────────────────────
@@ -2122,35 +2147,85 @@ function CategoriesTab() {
               return (
                 <div key={cat} className="border border-border rounded-lg overflow-hidden">
                   <div className="flex items-center gap-2 px-4 py-2.5">
-                    <button
-                      onClick={() => toggleCat(cat)}
-                      className="flex items-center gap-2 flex-1 text-left text-sm font-medium"
-                      data-testid={`taxonomy-cat-${cat.replace(/[^a-zA-Z0-9]/g, "-").toLowerCase()}`}
-                    >
-                      {isOpen ? <ChevronDown size={14} className="text-muted-foreground shrink-0" /> : <ChevronRight size={14} className="text-muted-foreground shrink-0" />}
-                      <span>{cat}</span>
-                      <Badge variant="outline" className="ml-1 text-xs">{subs.length}</Badge>
-                    </button>
-                    <button
-                      onClick={() => deleteCategory(cat)}
-                      className="text-muted-foreground hover:text-destructive transition-colors p-1"
-                      title={`Delete category "${cat}"`}
-                      data-testid={`button-delete-taxonomy-cat-${cat.replace(/[^a-zA-Z0-9]/g, "-").toLowerCase()}`}
-                    >
-                      <Trash2 size={14} />
-                    </button>
+                    {editingCat === cat ? (
+                      <>
+                        <Input
+                          autoFocus
+                          className="h-7 text-sm flex-1"
+                          value={editingCatValue}
+                          onChange={e => setEditingCatValue(e.target.value)}
+                          onKeyDown={e => {
+                            if (e.key === "Enter") { e.preventDefault(); renameCategory(cat, editingCatValue); }
+                            if (e.key === "Escape") setEditingCat(null);
+                          }}
+                          data-testid={`input-rename-cat-${cat.replace(/[^a-zA-Z0-9]/g, "-").toLowerCase()}`}
+                        />
+                        <button onClick={() => renameCategory(cat, editingCatValue)} className="text-green-600 hover:text-green-700 p-1" title="Confirm rename" data-testid={`button-confirm-rename-cat-${cat.replace(/[^a-zA-Z0-9]/g, "-").toLowerCase()}`}><Check size={14} /></button>
+                        <button onClick={() => setEditingCat(null)} className="text-muted-foreground hover:text-destructive p-1" title="Cancel"><X size={14} /></button>
+                      </>
+                    ) : (
+                      <>
+                        <button
+                          onClick={() => toggleCat(cat)}
+                          className="flex items-center gap-2 flex-1 text-left text-sm font-medium"
+                          data-testid={`taxonomy-cat-${cat.replace(/[^a-zA-Z0-9]/g, "-").toLowerCase()}`}
+                        >
+                          {isOpen ? <ChevronDown size={14} className="text-muted-foreground shrink-0" /> : <ChevronRight size={14} className="text-muted-foreground shrink-0" />}
+                          <span>{cat}</span>
+                          <Badge variant="outline" className="ml-1 text-xs">{subs.length}</Badge>
+                        </button>
+                        <button
+                          onClick={() => { setEditingCat(cat); setEditingCatValue(cat); }}
+                          className="text-muted-foreground hover:text-foreground transition-colors p-1"
+                          title={`Rename category "${cat}"`}
+                          data-testid={`button-rename-taxonomy-cat-${cat.replace(/[^a-zA-Z0-9]/g, "-").toLowerCase()}`}
+                        >
+                          <Pencil size={13} />
+                        </button>
+                        <button
+                          onClick={() => deleteCategory(cat)}
+                          className="text-muted-foreground hover:text-destructive transition-colors p-1"
+                          title={`Delete category "${cat}"`}
+                          data-testid={`button-delete-taxonomy-cat-${cat.replace(/[^a-zA-Z0-9]/g, "-").toLowerCase()}`}
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </>
+                    )}
                   </div>
                   {isOpen && (
                     <div className="px-4 pb-3 pt-2 border-t border-border bg-muted/30">
                       <div className="flex flex-wrap gap-1.5 mb-3">
-                        {subs.map(sub => (
-                          <Badge key={sub} variant="secondary" className="text-xs py-1 px-2.5 gap-1.5" data-testid={`taxonomy-sub-${sub.replace(/[^a-zA-Z0-9]/g, "-").toLowerCase()}`}>
-                            {sub}
-                            <button onClick={() => deleteSubcategory(cat, sub)} className="hover:text-destructive" data-testid={`button-delete-sub-${sub.replace(/[^a-zA-Z0-9]/g, "-").toLowerCase()}`}>
-                              <X size={11} />
-                            </button>
-                          </Badge>
-                        ))}
+                        {subs.map(sub => {
+                          const isEditingThis = editingSub?.cat === cat && editingSub?.sub === sub;
+                          return isEditingThis ? (
+                            <div key={sub} className="flex items-center gap-1">
+                              <Input
+                                autoFocus
+                                className="h-7 text-xs w-44"
+                                value={editingSubValue}
+                                onChange={e => setEditingSubValue(e.target.value)}
+                                onKeyDown={e => {
+                                  if (e.key === "Enter") { e.preventDefault(); renameSubcategory(cat, sub, editingSubValue); }
+                                  if (e.key === "Escape") setEditingSub(null);
+                                }}
+                                data-testid={`input-rename-sub-${sub.replace(/[^a-zA-Z0-9]/g, "-").toLowerCase()}`}
+                              />
+                              <button onClick={() => renameSubcategory(cat, sub, editingSubValue)} className="text-green-600 hover:text-green-700 p-0.5" title="Confirm"><Check size={12} /></button>
+                              <button onClick={() => setEditingSub(null)} className="text-muted-foreground hover:text-destructive p-0.5" title="Cancel"><X size={12} /></button>
+                            </div>
+                          ) : (
+                            <Badge key={sub} variant="secondary" className="text-xs py-1 px-2.5 gap-1.5" data-testid={`taxonomy-sub-${sub.replace(/[^a-zA-Z0-9]/g, "-").toLowerCase()}`}>
+                              {sub}
+                              <button onClick={() => { setEditingSub({ cat, sub }); setEditingSubValue(sub); }} className="hover:text-foreground opacity-50 hover:opacity-100 transition-opacity" title="Rename" data-testid={`button-rename-sub-${sub.replace(/[^a-zA-Z0-9]/g, "-").toLowerCase()}`}>
+                                <Pencil size={9} />
+                              </button>
+                              <button onClick={() => deleteSubcategory(cat, sub)} className="hover:text-destructive" data-testid={`button-delete-sub-${sub.replace(/[^a-zA-Z0-9]/g, "-").toLowerCase()}`}>
+                                <X size={11} />
+                              </button>
+                            </Badge>
+                          );
+                        })}
                         {subs.length === 0 && <p className="text-xs text-muted-foreground">No subcategories yet.</p>}
                       </div>
                       <div className="flex gap-2">
