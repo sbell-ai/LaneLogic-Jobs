@@ -9,11 +9,10 @@ import { Search, MapPin, Briefcase, ArrowRight, ShieldCheck, Users, ChevronDown,
 import { motion } from "framer-motion";
 import { useJobs } from "@/hooks/use-jobs";
 import { useSiteSettings } from "@/hooks/use-settings";
-import { useQuery } from "@tanstack/react-query";
-import type { Category } from "@shared/schema";
 import {
   JobFilterSidebar, MobileFilterButton, useJobFilters, filterJobs, getActiveFilterCount, clearAllFilters, formatJobLocation,
 } from "@/components/JobFilterSidebar";
+import { useTaxonomy } from "@/hooks/use-taxonomy";
 
 export default function Home() {
   const [, setLocation] = useLocation();
@@ -24,12 +23,7 @@ export default function Home() {
   const settings = useSiteSettings();
   const { data: jobs, isLoading } = useJobs();
   const filters = useJobFilters();
-
-  const { data: categories } = useQuery<Category[]>({
-    queryKey: ["/api/categories"],
-  });
-
-  const industries = (categories || []).filter((c) => c.type === "industry");
+  const { industries } = useTaxonomy();
   const filtered = filterJobs(jobs || [], filters);
   const activeFilterCount = getActiveFilterCount(filters);
 

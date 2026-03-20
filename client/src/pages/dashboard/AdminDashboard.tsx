@@ -254,7 +254,6 @@ function UsersTab() {
 
 function AllJobsTab() {
   const { data: jobs, isLoading } = useQuery<Job[]>({ queryKey: ["/api/jobs"] });
-  const { data: categories } = useQuery<Category[]>({ queryKey: ["/api/categories"] });
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const [search, setSearch] = useState("");
@@ -268,7 +267,8 @@ function AllJobsTab() {
   const [bulkEditOpen, setBulkEditOpen] = useState(false);
   const [bulkForm, setBulkForm] = useState<{ jobType: string; category: string; subcategory: string; industry: string }>({ jobType: "", category: "", subcategory: "", industry: "" });
   const [shareJob, setShareJob] = useState<Job | null>(null);
-  const { categories: taxonomyCategories, getSubcategories } = useTaxonomy();
+  const { getAllCategories, getSubcategories, getCategories, getLabels, industries: taxonomyIndustries } = useTaxonomy();
+  const taxonomyCategories = getAllCategories();
 
   const deleteMutation = useMutation({
     mutationFn: (id: number) => apiRequest("DELETE", `/api/jobs/${id}`),
@@ -355,8 +355,6 @@ function AllJobsTab() {
     setEditJob(j);
   };
 
-  const industries = (categories || []).filter(c => c.type === "industry");
-
   const fmtLoc = (j: Job) => formatJobLocation(j);
   const filtered = (jobs || []).filter(j => {
     if (catFilter === "__missing__") { if (j.category) return false; }
@@ -404,12 +402,12 @@ function AllJobsTab() {
               </SelectContent>
             </Select>
           )}
-          {industries.length > 0 && (
+          {taxonomyIndustries.length > 0 && (
             <Select value={indFilter} onValueChange={setIndFilter}>
               <SelectTrigger className="w-36"><SelectValue placeholder="Industry" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Industries</SelectItem>
-                {industries.map(c => <SelectItem key={c.id} value={c.name}>{c.name}</SelectItem>)}
+                {taxonomyIndustries.map(ind => <SelectItem key={ind} value={ind}>{ind}</SelectItem>)}
               </SelectContent>
             </Select>
           )}
@@ -508,25 +506,23 @@ function AllJobsTab() {
                 </Select>
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div><Label>Category</Label>
-                <Select value={editForm.category || "none"} onValueChange={v => setEditForm(f => ({ ...f, category: v === "none" ? "" : v, subcategory: "" }))}>
-                  <SelectTrigger data-testid="select-edit-category"><SelectValue /></SelectTrigger>
-                  <SelectContent><SelectItem value="none">None</SelectItem>{taxonomyCategories.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
+            <div className="grid grid-cols-3 gap-3">
+              <div><Label>Industry</Label>
+                <Select value={editForm.industry || "none"} onValueChange={v => setEditForm(f => ({ ...f, industry: v === "none" ? "" : v, category: "", subcategory: "" }))}>
+                  <SelectTrigger data-testid="select-edit-industry"><SelectValue /></SelectTrigger>
+                  <SelectContent><SelectItem value="none">None</SelectItem>{taxonomyIndustries.map(ind => <SelectItem key={ind} value={ind}>{ind}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
-              <div><Label>Subcategory</Label>
+              <div><Label>Category</Label>
+                <Select value={editForm.category || "none"} onValueChange={v => setEditForm(f => ({ ...f, category: v === "none" ? "" : v, subcategory: "" }))} disabled={!editForm.industry}>
+                  <SelectTrigger data-testid="select-edit-category"><SelectValue /></SelectTrigger>
+                  <SelectContent><SelectItem value="none">None</SelectItem>{editForm.industry && getCategories(editForm.industry).map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
+                </Select>
+              </div>
+              <div><Label>Label</Label>
                 <Select value={editForm.subcategory || "none"} onValueChange={v => setEditForm(f => ({ ...f, subcategory: v === "none" ? "" : v }))} disabled={!editForm.category}>
                   <SelectTrigger data-testid="select-edit-subcategory"><SelectValue /></SelectTrigger>
-                  <SelectContent><SelectItem value="none">None</SelectItem>{editForm.category && getSubcategories(editForm.category).map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
-                </Select>
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div><Label>Industry</Label>
-                <Select value={editForm.industry || "none"} onValueChange={v => setEditForm(f => ({ ...f, industry: v === "none" ? "" : v }))}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent><SelectItem value="none">None</SelectItem>{industries.map(c => <SelectItem key={c.id} value={c.name}>{c.name}</SelectItem>)}</SelectContent>
+                  <SelectContent><SelectItem value="none">None</SelectItem>{editForm.industry && editForm.category && getLabels(editForm.industry, editForm.category).map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
             </div>
@@ -621,40 +617,42 @@ function AllJobsTab() {
               </Select>
             </div>
             <div>
-              <Label className="text-sm font-semibold mb-1.5 block">Category</Label>
-              <Select value={bulkForm.category} onValueChange={v => setBulkForm(f => ({ ...f, category: v, subcategory: v === "__clear__" ? "__clear__" : "" }))}>
-                <SelectTrigger data-testid="select-bulk-category"><SelectValue placeholder="— No change —" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="__unchanged__">— No change —</SelectItem>
-                  <SelectItem value="__clear__">Clear category</SelectItem>
-                  {taxonomyCategories.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-            {bulkForm.category && bulkForm.category !== "__unchanged__" && bulkForm.category !== "__clear__" && (
-              <div>
-                <Label className="text-sm font-semibold mb-1.5 block">Subcategory</Label>
-                <Select value={bulkForm.subcategory} onValueChange={v => setBulkForm(f => ({ ...f, subcategory: v }))}>
-                  <SelectTrigger data-testid="select-bulk-subcategory"><SelectValue placeholder="— No change —" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="__unchanged__">— No change —</SelectItem>
-                    <SelectItem value="__clear__">Clear subcategory</SelectItem>
-                    {getSubcategories(bulkForm.category).map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
-            <div>
               <Label className="text-sm font-semibold mb-1.5 block">Industry</Label>
-              <Select value={bulkForm.industry} onValueChange={v => setBulkForm(f => ({ ...f, industry: v }))}>
+              <Select value={bulkForm.industry} onValueChange={v => setBulkForm(f => ({ ...f, industry: v, category: v === "__clear__" ? "__clear__" : "", subcategory: "" }))}>
                 <SelectTrigger data-testid="select-bulk-industry"><SelectValue placeholder="— No change —" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="__unchanged__">— No change —</SelectItem>
                   <SelectItem value="__clear__">Clear industry</SelectItem>
-                  {industries.map(c => <SelectItem key={c.id} value={c.name}>{c.name}</SelectItem>)}
+                  {taxonomyIndustries.map(ind => <SelectItem key={ind} value={ind}>{ind}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
+            {bulkForm.industry && bulkForm.industry !== "__unchanged__" && bulkForm.industry !== "__clear__" && (
+              <div>
+                <Label className="text-sm font-semibold mb-1.5 block">Category</Label>
+                <Select value={bulkForm.category} onValueChange={v => setBulkForm(f => ({ ...f, category: v, subcategory: v === "__clear__" ? "__clear__" : "" }))}>
+                  <SelectTrigger data-testid="select-bulk-category"><SelectValue placeholder="— No change —" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__unchanged__">— No change —</SelectItem>
+                    <SelectItem value="__clear__">Clear category</SelectItem>
+                    {getCategories(bulkForm.industry).map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+            {bulkForm.industry && bulkForm.industry !== "__unchanged__" && bulkForm.industry !== "__clear__" && bulkForm.category && bulkForm.category !== "__unchanged__" && bulkForm.category !== "__clear__" && (
+              <div>
+                <Label className="text-sm font-semibold mb-1.5 block">Label</Label>
+                <Select value={bulkForm.subcategory} onValueChange={v => setBulkForm(f => ({ ...f, subcategory: v }))}>
+                  <SelectTrigger data-testid="select-bulk-subcategory"><SelectValue placeholder="— No change —" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__unchanged__">— No change —</SelectItem>
+                    <SelectItem value="__clear__">Clear label</SelectItem>
+                    {getLabels(bulkForm.industry, bulkForm.category).map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
             <Button className="w-full" disabled={bulkUpdateMutation.isPending} onClick={handleBulkSave} data-testid="button-save-bulk-edit">
               {bulkUpdateMutation.isPending ? "Updating..." : `Update ${selectedIds.size} Job${selectedIds.size !== 1 ? "s" : ""}`}
             </Button>
@@ -678,9 +676,7 @@ const jobFormSchema = insertJobSchema.omit({ employerId: true }).extend({
 function PostJobTab({ userId }: { userId: number }) {
   const queryClient = useQueryClient();
   const { toast } = useToast();
-  const { data: categories } = useQuery<Category[]>({ queryKey: ["/api/categories"] });
-  const industries = (categories || []).filter(c => c.type === "industry");
-  const { categories: taxonomyCats, getSubcategories } = useTaxonomy();
+  const { industries: taxonomyInds, getCategories, getLabels } = useTaxonomy();
 
   const form = useForm<z.infer<typeof jobFormSchema>>({
     resolver: zodResolver(jobFormSchema),
@@ -783,44 +779,42 @@ function PostJobTab({ userId }: { userId: number }) {
               </FormItem>
             )} />
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-3 gap-4">
+              <FormField control={form.control} name="industry" render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Industry</FormLabel>
+                  <Select onValueChange={v => { field.onChange(v === "none" ? "" : v); form.setValue("category", ""); form.setValue("subcategory", ""); }} value={field.value || "none"}>
+                    <FormControl><SelectTrigger data-testid="select-job-industry"><SelectValue placeholder="Select industry" /></SelectTrigger></FormControl>
+                    <SelectContent>
+                      <SelectItem value="none">None</SelectItem>
+                      {taxonomyInds.map(ind => <SelectItem key={ind} value={ind}>{ind}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </FormItem>
+              )} />
               <FormField control={form.control} name="category" render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Job Category</FormLabel>
-                  <Select onValueChange={v => { field.onChange(v === "none" ? "" : v); form.setValue("subcategory", ""); }} value={field.value || "none"}>
+                  <FormLabel>Category</FormLabel>
+                  <Select onValueChange={v => { field.onChange(v === "none" ? "" : v); form.setValue("subcategory", ""); }} value={field.value || "none"} disabled={!form.watch("industry")}>
                     <FormControl><SelectTrigger data-testid="select-job-category"><SelectValue placeholder="Select category" /></SelectTrigger></FormControl>
                     <SelectContent>
                       <SelectItem value="none">None</SelectItem>
-                      {taxonomyCats.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                      {form.watch("industry") && getCategories(form.watch("industry")).map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
                     </SelectContent>
                   </Select>
                 </FormItem>
               )} />
               <FormField control={form.control} name="subcategory" render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Subcategory</FormLabel>
+                  <FormLabel>Label</FormLabel>
                   <Select onValueChange={v => field.onChange(v === "none" ? "" : v)} value={field.value || "none"} disabled={!form.watch("category")}>
-                    <FormControl><SelectTrigger data-testid="select-job-subcategory"><SelectValue placeholder="Select subcategory" /></SelectTrigger></FormControl>
+                    <FormControl><SelectTrigger data-testid="select-job-subcategory"><SelectValue placeholder="Select label" /></SelectTrigger></FormControl>
                     <SelectContent>
                       <SelectItem value="none">None</SelectItem>
-                      {form.watch("category") && getSubcategories(form.watch("category")).map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                      {form.watch("industry") && form.watch("category") && getLabels(form.watch("industry"), form.watch("category")).map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
                     </SelectContent>
                   </Select>
                   <FormMessage />
-                </FormItem>
-              )} />
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <FormField control={form.control} name="industry" render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Industry</FormLabel>
-                  <Select onValueChange={v => field.onChange(v === "none" ? "" : v)} value={field.value || "none"}>
-                    <FormControl><SelectTrigger data-testid="select-job-industry"><SelectValue placeholder="Select industry" /></SelectTrigger></FormControl>
-                    <SelectContent>
-                      <SelectItem value="none">None</SelectItem>
-                      {industries.map(c => <SelectItem key={c.id} value={c.name}>{c.name}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
                 </FormItem>
               )} />
             </div>
@@ -1917,22 +1911,39 @@ function CategoriesTab() {
   const { data: categoriesData, isLoading: categoriesLoading } = useQuery<Category[]>({ queryKey: ["/api/categories"] });
   const { taxonomy: liveTaxonomy, isLoading: taxonomyLoading } = useTaxonomy();
 
-  // ── editable taxonomy state ────────────────────────────────────────────────
+  // ── editable 3-level taxonomy state ────────────────────────────────────────
   const [localTaxonomy, setLocalTaxonomy] = useState<TaxonomyData>({});
   const [isDirty, setIsDirty] = useState(false);
+
+  // expand/collapse: industries and categories (key = `ind::cat`)
+  const [expandedInds, setExpandedInds] = useState<Set<string>>(new Set());
   const [expandedCats, setExpandedCats] = useState<Set<string>>(new Set());
-  const [newCatName, setNewCatName] = useState("");
-  const [newSubInputs, setNewSubInputs] = useState<Record<string, string>>({});
-  const [editingCat, setEditingCat] = useState<string | null>(null);
+
+  // "add" inputs
+  const [newIndName, setNewIndName] = useState("");
+  const [newCatInputs, setNewCatInputs] = useState<Record<string, string>>({});
+  const [newLabelInputs, setNewLabelInputs] = useState<Record<string, string>>({});
+
+  // inline rename state
+  const [editingInd, setEditingInd] = useState<string | null>(null);
+  const [editingIndValue, setEditingIndValue] = useState("");
+  const [editingCat, setEditingCat] = useState<{ ind: string; cat: string } | null>(null);
   const [editingCatValue, setEditingCatValue] = useState("");
-  const [editingSub, setEditingSub] = useState<{ cat: string; sub: string } | null>(null);
-  const [editingSubValue, setEditingSubValue] = useState("");
+  const [editingLabel, setEditingLabel] = useState<{ ind: string; cat: string; label: string } | null>(null);
+  const [editingLabelValue, setEditingLabelValue] = useState("");
 
   useEffect(() => {
     if (liveTaxonomy && Object.keys(liveTaxonomy).length > 0 && !isDirty) {
-      setLocalTaxonomy(Object.fromEntries(Object.entries(liveTaxonomy).map(([k, v]) => [k, [...v]])));
+      setLocalTaxonomy(
+        Object.fromEntries(
+          Object.entries(liveTaxonomy).map(([ind, cats]) => [
+            ind,
+            Object.fromEntries(Object.entries(cats).map(([cat, labels]) => [cat, [...labels]])),
+          ])
+        )
+      );
     }
-  }, [liveTaxonomy]);
+  }, [liveTaxonomy, isDirty]);
 
   const saveMutation = useMutation({
     mutationFn: () => apiRequest("PUT", "/api/admin/taxonomy", { taxonomy: localTaxonomy }),
@@ -1944,303 +1955,257 @@ function CategoriesTab() {
     onError: () => toast({ title: "Save failed", variant: "destructive" }),
   });
 
-  const toggleCat = (cat: string) => setExpandedCats(prev => {
-    const next = new Set(prev); if (next.has(cat)) next.delete(cat); else next.add(cat); return next;
+  const toggleInd = (ind: string) => setExpandedInds(prev => {
+    const next = new Set(prev); if (next.has(ind)) next.delete(ind); else next.add(ind); return next;
   });
-  const expandAll = () => setExpandedCats(new Set(Object.keys(localTaxonomy)));
-  const collapseAll = () => setExpandedCats(new Set());
+  const toggleCat = (key: string) => setExpandedCats(prev => {
+    const next = new Set(prev); if (next.has(key)) next.delete(key); else next.add(key); return next;
+  });
+  const expandAll = () => {
+    setExpandedInds(new Set(Object.keys(localTaxonomy)));
+    const catKeys = new Set<string>();
+    for (const [ind, cats] of Object.entries(localTaxonomy)) for (const cat of Object.keys(cats)) catKeys.add(`${ind}::${cat}`);
+    setExpandedCats(catKeys);
+  };
+  const collapseAll = () => { setExpandedInds(new Set()); setExpandedCats(new Set()); };
 
-  const addCategory = () => {
-    const name = newCatName.trim();
+  // ── industry actions ──────────────────────────────────────────────────────
+  const addIndustry = () => {
+    const name = newIndName.trim();
     if (!name || name in localTaxonomy) return;
-    setLocalTaxonomy(prev => ({ ...prev, [name]: [] }));
-    setNewCatName("");
+    setLocalTaxonomy(prev => ({ ...prev, [name]: {} }));
+    setNewIndName("");
     setIsDirty(true);
   };
-
-  const deleteCategory = (cat: string) => {
-    setLocalTaxonomy(prev => { const next = { ...prev }; delete next[cat]; return next; });
+  const deleteIndustry = (ind: string) => {
+    setLocalTaxonomy(prev => { const next = { ...prev }; delete next[ind]; return next; });
     setIsDirty(true);
   };
-
-  const addSubcategory = (cat: string) => {
-    const sub = (newSubInputs[cat] || "").trim();
-    if (!sub || (localTaxonomy[cat] || []).includes(sub)) return;
-    setLocalTaxonomy(prev => ({ ...prev, [cat]: [...(prev[cat] || []), sub] }));
-    setNewSubInputs(prev => ({ ...prev, [cat]: "" }));
-    setIsDirty(true);
+  const renameIndustry = (oldInd: string, newInd: string) => {
+    const trimmed = newInd.trim();
+    if (!trimmed || (trimmed !== oldInd && trimmed in localTaxonomy)) { setEditingInd(null); return; }
+    if (trimmed !== oldInd) {
+      setLocalTaxonomy(prev => Object.fromEntries(Object.entries(prev).map(([k, v]) => k === oldInd ? [trimmed, v] : [k, v])));
+      setExpandedInds(prev => { const next = new Set(prev); if (next.has(oldInd)) { next.delete(oldInd); next.add(trimmed); } return next; });
+      setIsDirty(true);
+    }
+    setEditingInd(null);
   };
 
-  const deleteSubcategory = (cat: string, sub: string) => {
-    setLocalTaxonomy(prev => ({ ...prev, [cat]: prev[cat].filter(s => s !== sub) }));
+  // ── category actions ──────────────────────────────────────────────────────
+  const addCategory = (ind: string) => {
+    const name = (newCatInputs[ind] || "").trim();
+    if (!name || name in (localTaxonomy[ind] ?? {})) return;
+    setLocalTaxonomy(prev => ({ ...prev, [ind]: { ...prev[ind], [name]: [] } }));
+    setNewCatInputs(prev => ({ ...prev, [ind]: "" }));
     setIsDirty(true);
   };
-
-  const renameCategory = (oldName: string, newName: string) => {
-    const trimmed = newName.trim();
-    if (!trimmed || (trimmed !== oldName && trimmed in localTaxonomy)) { setEditingCat(null); return; }
-    if (trimmed !== oldName) {
-      setLocalTaxonomy(prev => Object.fromEntries(Object.entries(prev).map(([k, v]) => k === oldName ? [trimmed, v] : [k, v])));
-      setExpandedCats(prev => { const next = new Set(prev); if (next.has(oldName)) { next.delete(oldName); next.add(trimmed); } return next; });
+  const deleteCategory = (ind: string, cat: string) => {
+    setLocalTaxonomy(prev => {
+      const cats = { ...prev[ind] }; delete cats[cat];
+      return { ...prev, [ind]: cats };
+    });
+    setIsDirty(true);
+  };
+  const renameCategory = (ind: string, oldCat: string, newCat: string) => {
+    const trimmed = newCat.trim();
+    if (!trimmed || (trimmed !== oldCat && trimmed in (localTaxonomy[ind] ?? {}))) { setEditingCat(null); return; }
+    if (trimmed !== oldCat) {
+      setLocalTaxonomy(prev => ({
+        ...prev,
+        [ind]: Object.fromEntries(Object.entries(prev[ind] ?? {}).map(([k, v]) => k === oldCat ? [trimmed, v] : [k, v])),
+      }));
+      setExpandedCats(prev => {
+        const oldKey = `${ind}::${oldCat}`; const newKey = `${ind}::${trimmed}`;
+        const next = new Set(prev); if (next.has(oldKey)) { next.delete(oldKey); next.add(newKey); } return next;
+      });
       setIsDirty(true);
     }
     setEditingCat(null);
   };
 
-  const renameSubcategory = (cat: string, oldSub: string, newSub: string) => {
-    const trimmed = newSub.trim();
-    if (!trimmed) { setEditingSub(null); return; }
-    if (trimmed !== oldSub) {
-      setLocalTaxonomy(prev => ({ ...prev, [cat]: prev[cat].map(s => s === oldSub ? trimmed : s) }));
+  // ── label actions ─────────────────────────────────────────────────────────
+  const addLabel = (ind: string, cat: string) => {
+    const key = `${ind}::${cat}`;
+    const name = (newLabelInputs[key] || "").trim();
+    if (!name || (localTaxonomy[ind]?.[cat] ?? []).includes(name)) return;
+    setLocalTaxonomy(prev => ({ ...prev, [ind]: { ...prev[ind], [cat]: [...(prev[ind]?.[cat] ?? []), name] } }));
+    setNewLabelInputs(prev => ({ ...prev, [key]: "" }));
+    setIsDirty(true);
+  };
+  const deleteLabel = (ind: string, cat: string, label: string) => {
+    setLocalTaxonomy(prev => ({ ...prev, [ind]: { ...prev[ind], [cat]: prev[ind][cat].filter(l => l !== label) } }));
+    setIsDirty(true);
+  };
+  const renameLabel = (ind: string, cat: string, oldLabel: string, newLabel: string) => {
+    const trimmed = newLabel.trim();
+    if (!trimmed) { setEditingLabel(null); return; }
+    if (trimmed !== oldLabel) {
+      setLocalTaxonomy(prev => ({ ...prev, [ind]: { ...prev[ind], [cat]: prev[ind][cat].map(l => l === oldLabel ? trimmed : l) } }));
       setIsDirty(true);
     }
-    setEditingSub(null);
+    setEditingLabel(null);
   };
 
-  // ── industry / blog categories (DB-backed) ─────────────────────────────────
-  const [newName, setNewName] = useState("");
-  const [newType, setNewType] = useState<"industry" | "blog">("industry");
-  const [csvUploading, setCsvUploading] = useState(false);
-
-  const createMutation = useMutation({
+  // ── blog categories (DB-backed) ───────────────────────────────────────────
+  const [newBlogName, setNewBlogName] = useState("");
+  const createBlogMutation = useMutation({
     mutationFn: (data: { name: string; type: string }) => apiRequest("POST", "/api/categories", data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/categories"] });
-      setNewName("");
-      toast({ title: "Category added" });
-    },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["/api/categories"] }); setNewBlogName(""); toast({ title: "Blog category added" }); },
     onError: () => toast({ title: "Error", description: "Could not add category.", variant: "destructive" }),
   });
-
-  const deleteMutation = useMutation({
+  const deleteBlogMutation = useMutation({
     mutationFn: (id: number) => apiRequest("DELETE", `/api/categories/${id}`),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/categories"] });
-      toast({ title: "Category removed" });
-    },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["/api/categories"] }); toast({ title: "Category removed" }); },
   });
-
-  const handleCsvUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setCsvUploading(true);
-    try {
-      const text = await file.text();
-      const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
-      const existing = new Set((categoriesData || []).map(c => `${c.type}:${c.name.toLowerCase()}`));
-      let added = 0; let skipped = 0;
-      for (const line of lines) {
-        const parts = line.split(",").map(p => p.trim().replace(/^["']|["']$/g, ""));
-        if (parts.length < 2) continue;
-        const [name, type] = parts;
-        if (!name || !["industry", "blog"].includes(type.toLowerCase())) continue;
-        const normalizedType = type.toLowerCase() as "industry" | "blog";
-        if (existing.has(`${normalizedType}:${name.toLowerCase()}`)) { skipped++; continue; }
-        existing.add(`${normalizedType}:${name.toLowerCase()}`);
-        await apiRequest("POST", "/api/categories", { name, type: normalizedType });
-        added++;
-      }
-      queryClient.invalidateQueries({ queryKey: ["/api/categories"] });
-      toast({ title: `Upload complete`, description: `${added} added, ${skipped} duplicates skipped.` });
-    } catch {
-      toast({ title: "Upload failed", variant: "destructive" });
-    } finally {
-      setCsvUploading(false);
-      e.target.value = "";
-    }
-  };
-
-  const handleAdd = () => {
-    if (!newName.trim()) return;
-    createMutation.mutate({ name: newName.trim(), type: newType });
-  };
 
   if (categoriesLoading || taxonomyLoading) return <div className="animate-pulse h-40 bg-slate-100 dark:bg-slate-800 rounded-xl" />;
 
-  const industries = (categoriesData || []).filter(c => c.type === "industry");
   const blogCats = (categoriesData || []).filter(c => c.type === "blog");
-
-  const renderEditableSection = (title: string, type: "industry" | "blog", items: Category[]) => (
-    <div className="bg-white dark:bg-slate-900 rounded-2xl border border-border p-6">
-      <h3 className="font-bold font-display text-lg mb-4">{title}</h3>
-      <div className="flex flex-wrap gap-2 mb-4">
-        {items.map(c => (
-          <Badge key={c.id} variant="secondary" className="text-sm py-1.5 px-3 gap-2" data-testid={`badge-category-${c.id}`}>
-            {c.name}
-            <button onClick={() => deleteMutation.mutate(c.id)} className="hover:text-destructive"><X size={14} /></button>
-          </Badge>
-        ))}
-        {items.length === 0 && <p className="text-sm text-muted-foreground">No {title.toLowerCase()} yet.</p>}
-      </div>
-      <div className="flex gap-2">
-        <Input
-          placeholder={`Add ${title.toLowerCase().replace(/ies$/, "y").replace(/s$/, "")}...`}
-          value={newType === type ? newName : ""}
-          onChange={e => { setNewType(type); setNewName(e.target.value); }}
-          onKeyDown={e => { if (e.key === "Enter" && newType === type) { e.preventDefault(); handleAdd(); } }}
-          className="max-w-xs"
-          data-testid={`input-add-${type}-category`}
-        />
-        <Button size="sm" disabled={createMutation.isPending || !newName.trim() || newType !== type}
-          onClick={() => { setNewType(type); handleAdd(); }} data-testid={`button-add-${type}-category`}>
-          <Plus size={16} />
-        </Button>
-      </div>
-    </div>
-  );
+  const slug = (s: string) => s.replace(/[^a-zA-Z0-9]/g, "-").toLowerCase();
 
   return (
     <div>
       <div className="flex flex-wrap items-end justify-between gap-4 mb-6">
         <div>
-          <h2 className="text-2xl font-bold font-display">Categories & Labels</h2>
-          <p className="text-muted-foreground text-sm mt-1">Edit job taxonomy live — changes propagate to job forms and filters instantly after saving.</p>
+          <h2 className="text-2xl font-bold font-display">Industries, Categories & Labels</h2>
+          <p className="text-muted-foreground text-sm mt-1">Three-level taxonomy: Industries → Categories → Labels. Changes propagate to all job forms after saving.</p>
         </div>
-        <div className="bg-white dark:bg-slate-900 rounded-xl border border-border p-4 flex flex-col gap-2 max-w-sm">
-          <p className="text-sm font-semibold">Bulk Upload via CSV</p>
-          <p className="text-xs text-muted-foreground">CSV format: <code className="bg-muted px-1 rounded">name,type</code> — one per line. Type must be <code className="bg-muted px-1 rounded">industry</code> or <code className="bg-muted px-1 rounded">blog</code>. Duplicates are skipped.</p>
-          <label className="cursor-pointer">
-            <input type="file" accept=".csv,.txt" onChange={handleCsvUpload} className="hidden" data-testid="input-csv-categories" />
-            <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-lg border border-border hover:bg-accent transition-colors ${csvUploading ? "opacity-50 pointer-events-none" : ""}`}>
-              {csvUploading ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} />} {csvUploading ? "Uploading..." : "Choose CSV File"}
-            </span>
-          </label>
+        <div className="flex items-center gap-2">
+          <Button variant="ghost" size="sm" onClick={expandAll} data-testid="button-expand-all-taxonomy">Expand All</Button>
+          <Button variant="ghost" size="sm" onClick={collapseAll} data-testid="button-collapse-all-taxonomy">Collapse All</Button>
+          {isDirty && (
+            <Button size="sm" onClick={() => saveMutation.mutate()} disabled={saveMutation.isPending} data-testid="button-save-taxonomy">
+              {saveMutation.isPending ? "Saving…" : "Save Changes"}
+            </Button>
+          )}
         </div>
       </div>
-      <div className="space-y-6">
-        {/* ── Editable Job Taxonomy ── */}
-        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-border p-6" data-testid="section-job-taxonomy">
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <h3 className="font-bold font-display text-lg">Job Categories</h3>
-              <p className="text-xs text-muted-foreground mt-0.5">{Object.keys(localTaxonomy).length} categories</p>
-            </div>
-            <div className="flex items-center gap-2">
-              <Button variant="ghost" size="sm" onClick={expandAll} data-testid="button-expand-all-taxonomy">Expand All</Button>
-              <Button variant="ghost" size="sm" onClick={collapseAll} data-testid="button-collapse-all-taxonomy">Collapse All</Button>
-              {isDirty && (
-                <Button size="sm" onClick={() => saveMutation.mutate()} disabled={saveMutation.isPending} data-testid="button-save-taxonomy">
-                  {saveMutation.isPending ? "Saving…" : "Save Changes"}
-                </Button>
-              )}
-            </div>
-          </div>
 
-          {/* Add new category */}
+      <div className="space-y-6">
+        {/* ── 3-level taxonomy ── */}
+        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-border p-6" data-testid="section-job-taxonomy">
+
+          {/* add industry */}
           <div className="flex gap-2 mb-4">
-            <Input
-              placeholder="New category name…"
-              value={newCatName}
-              onChange={e => setNewCatName(e.target.value)}
-              onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); addCategory(); } }}
-              className="max-w-xs"
-              data-testid="input-add-taxonomy-category"
-            />
-            <Button size="sm" onClick={addCategory} disabled={!newCatName.trim()} data-testid="button-add-taxonomy-category">
-              <Plus size={16} /> Add Category
+            <Input placeholder="New industry name…" value={newIndName} onChange={e => setNewIndName(e.target.value)}
+              onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); addIndustry(); } }}
+              className="max-w-xs" data-testid="input-add-taxonomy-industry" />
+            <Button size="sm" onClick={addIndustry} disabled={!newIndName.trim()} data-testid="button-add-taxonomy-industry">
+              <Plus size={16} /> Add Industry
             </Button>
           </div>
 
-          <div className="space-y-1">
-            {Object.entries(localTaxonomy).map(([cat, subs]) => {
-              const isOpen = expandedCats.has(cat);
+          <div className="space-y-2">
+            {Object.entries(localTaxonomy).map(([ind, cats]) => {
+              const indOpen = expandedInds.has(ind);
+              const catCount = Object.keys(cats).length;
+              const labelCount = Object.values(cats).reduce((n, ls) => n + (ls as string[]).length, 0);
               return (
-                <div key={cat} className="border border-border rounded-lg overflow-hidden">
-                  <div className="flex items-center gap-2 px-4 py-2.5">
-                    {editingCat === cat ? (
+                <div key={ind} className="border border-border rounded-xl overflow-hidden">
+                  {/* ── INDUSTRY ROW ── */}
+                  <div className="flex items-center gap-2 px-4 py-3 bg-muted/20">
+                    {editingInd === ind ? (
                       <>
-                        <Input
-                          autoFocus
-                          className="h-7 text-sm flex-1"
-                          value={editingCatValue}
-                          onChange={e => setEditingCatValue(e.target.value)}
-                          onKeyDown={e => {
-                            if (e.key === "Enter") { e.preventDefault(); renameCategory(cat, editingCatValue); }
-                            if (e.key === "Escape") setEditingCat(null);
-                          }}
-                          data-testid={`input-rename-cat-${cat.replace(/[^a-zA-Z0-9]/g, "-").toLowerCase()}`}
-                        />
-                        <button onClick={() => renameCategory(cat, editingCatValue)} className="text-green-600 hover:text-green-700 p-1" title="Confirm rename" data-testid={`button-confirm-rename-cat-${cat.replace(/[^a-zA-Z0-9]/g, "-").toLowerCase()}`}><Check size={14} /></button>
-                        <button onClick={() => setEditingCat(null)} className="text-muted-foreground hover:text-destructive p-1" title="Cancel"><X size={14} /></button>
+                        <Input autoFocus className="h-7 text-sm font-semibold flex-1" value={editingIndValue}
+                          onChange={e => setEditingIndValue(e.target.value)}
+                          onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); renameIndustry(ind, editingIndValue); } if (e.key === "Escape") setEditingInd(null); }}
+                          data-testid={`input-rename-industry-${slug(ind)}`} />
+                        <button onClick={() => renameIndustry(ind, editingIndValue)} className="text-green-600 hover:text-green-700 p-1"><Check size={14} /></button>
+                        <button onClick={() => setEditingInd(null)} className="text-muted-foreground hover:text-destructive p-1"><X size={14} /></button>
                       </>
                     ) : (
                       <>
-                        <button
-                          onClick={() => toggleCat(cat)}
-                          className="flex items-center gap-2 flex-1 text-left text-sm font-medium"
-                          data-testid={`taxonomy-cat-${cat.replace(/[^a-zA-Z0-9]/g, "-").toLowerCase()}`}
-                        >
-                          {isOpen ? <ChevronDown size={14} className="text-muted-foreground shrink-0" /> : <ChevronRight size={14} className="text-muted-foreground shrink-0" />}
-                          <span>{cat}</span>
-                          <Badge variant="outline" className="ml-1 text-xs">{subs.length}</Badge>
+                        <button onClick={() => toggleInd(ind)} className="flex items-center gap-2 flex-1 text-left text-sm font-semibold" data-testid={`taxonomy-ind-${slug(ind)}`}>
+                          {indOpen ? <ChevronDown size={14} className="text-muted-foreground shrink-0" /> : <ChevronRight size={14} className="text-muted-foreground shrink-0" />}
+                          <span>{ind}</span>
+                          <Badge variant="outline" className="ml-1 text-xs">{catCount} {catCount === 1 ? "category" : "categories"}</Badge>
+                          <Badge variant="outline" className="text-xs">{labelCount} labels</Badge>
                         </button>
-                        <button
-                          onClick={() => { setEditingCat(cat); setEditingCatValue(cat); }}
-                          className="text-muted-foreground hover:text-foreground transition-colors p-1"
-                          title={`Rename category "${cat}"`}
-                          data-testid={`button-rename-taxonomy-cat-${cat.replace(/[^a-zA-Z0-9]/g, "-").toLowerCase()}`}
-                        >
-                          <Pencil size={13} />
-                        </button>
-                        <button
-                          onClick={() => deleteCategory(cat)}
-                          className="text-muted-foreground hover:text-destructive transition-colors p-1"
-                          title={`Delete category "${cat}"`}
-                          data-testid={`button-delete-taxonomy-cat-${cat.replace(/[^a-zA-Z0-9]/g, "-").toLowerCase()}`}
-                        >
-                          <Trash2 size={14} />
-                        </button>
+                        <button onClick={() => { setEditingInd(ind); setEditingIndValue(ind); }} className="text-muted-foreground hover:text-foreground p-1" title={`Rename industry "${ind}"`} data-testid={`button-rename-ind-${slug(ind)}`}><Pencil size={13} /></button>
+                        <button onClick={() => deleteIndustry(ind)} className="text-muted-foreground hover:text-destructive p-1" title={`Delete industry "${ind}"`} data-testid={`button-delete-ind-${slug(ind)}`}><Trash2 size={14} /></button>
                       </>
                     )}
                   </div>
-                  {isOpen && (
-                    <div className="px-4 pb-3 pt-2 border-t border-border bg-muted/30">
-                      <div className="flex flex-wrap gap-1.5 mb-3">
-                        {subs.map(sub => {
-                          const isEditingThis = editingSub?.cat === cat && editingSub?.sub === sub;
-                          return isEditingThis ? (
-                            <div key={sub} className="flex items-center gap-1">
-                              <Input
-                                autoFocus
-                                className="h-7 text-xs w-44"
-                                value={editingSubValue}
-                                onChange={e => setEditingSubValue(e.target.value)}
-                                onKeyDown={e => {
-                                  if (e.key === "Enter") { e.preventDefault(); renameSubcategory(cat, sub, editingSubValue); }
-                                  if (e.key === "Escape") setEditingSub(null);
-                                }}
-                                data-testid={`input-rename-sub-${sub.replace(/[^a-zA-Z0-9]/g, "-").toLowerCase()}`}
-                              />
-                              <button onClick={() => renameSubcategory(cat, sub, editingSubValue)} className="text-green-600 hover:text-green-700 p-0.5" title="Confirm"><Check size={12} /></button>
-                              <button onClick={() => setEditingSub(null)} className="text-muted-foreground hover:text-destructive p-0.5" title="Cancel"><X size={12} /></button>
+
+                  {indOpen && (
+                    <div className="px-4 pb-3 pt-2 border-t border-border space-y-1">
+                      {/* ── CATEGORIES ── */}
+                      {Object.entries(cats).map(([cat, labels]) => {
+                        const catKey = `${ind}::${cat}`;
+                        const catOpen = expandedCats.has(catKey);
+                        return (
+                          <div key={cat} className="border border-border rounded-lg overflow-hidden ml-2">
+                            {/* category row */}
+                            <div className="flex items-center gap-2 px-3 py-2">
+                              {editingCat?.ind === ind && editingCat?.cat === cat ? (
+                                <>
+                                  <Input autoFocus className="h-7 text-sm flex-1" value={editingCatValue}
+                                    onChange={e => setEditingCatValue(e.target.value)}
+                                    onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); renameCategory(ind, cat, editingCatValue); } if (e.key === "Escape") setEditingCat(null); }}
+                                    data-testid={`input-rename-cat-${slug(cat)}`} />
+                                  <button onClick={() => renameCategory(ind, cat, editingCatValue)} className="text-green-600 hover:text-green-700 p-1"><Check size={13} /></button>
+                                  <button onClick={() => setEditingCat(null)} className="text-muted-foreground hover:text-destructive p-1"><X size={13} /></button>
+                                </>
+                              ) : (
+                                <>
+                                  <button onClick={() => toggleCat(catKey)} className="flex items-center gap-2 flex-1 text-left text-sm font-medium" data-testid={`taxonomy-cat-${slug(cat)}`}>
+                                    {catOpen ? <ChevronDown size={13} className="text-muted-foreground shrink-0" /> : <ChevronRight size={13} className="text-muted-foreground shrink-0" />}
+                                    <span>{cat}</span>
+                                    <Badge variant="outline" className="ml-1 text-xs">{(labels as string[]).length}</Badge>
+                                  </button>
+                                  <button onClick={() => { setEditingCat({ ind, cat }); setEditingCatValue(cat); }} className="text-muted-foreground hover:text-foreground p-1" title={`Rename "${cat}"`} data-testid={`button-rename-cat-${slug(cat)}`}><Pencil size={12} /></button>
+                                  <button onClick={() => deleteCategory(ind, cat)} className="text-muted-foreground hover:text-destructive p-1" title={`Delete "${cat}"`} data-testid={`button-delete-cat-${slug(cat)}`}><Trash2 size={13} /></button>
+                                </>
+                              )}
                             </div>
-                          ) : (
-                            <Badge key={sub} variant="secondary" className="text-xs py-1 px-2.5 gap-1.5" data-testid={`taxonomy-sub-${sub.replace(/[^a-zA-Z0-9]/g, "-").toLowerCase()}`}>
-                              {sub}
-                              <button onClick={() => { setEditingSub({ cat, sub }); setEditingSubValue(sub); }} className="hover:text-foreground opacity-50 hover:opacity-100 transition-opacity" title="Rename" data-testid={`button-rename-sub-${sub.replace(/[^a-zA-Z0-9]/g, "-").toLowerCase()}`}>
-                                <Pencil size={9} />
-                              </button>
-                              <button onClick={() => deleteSubcategory(cat, sub)} className="hover:text-destructive" data-testid={`button-delete-sub-${sub.replace(/[^a-zA-Z0-9]/g, "-").toLowerCase()}`}>
-                                <X size={11} />
-                              </button>
-                            </Badge>
-                          );
-                        })}
-                        {subs.length === 0 && <p className="text-xs text-muted-foreground">No subcategories yet.</p>}
-                      </div>
-                      <div className="flex gap-2">
-                        <Input
-                          placeholder="Add subcategory…"
-                          value={newSubInputs[cat] || ""}
-                          onChange={e => setNewSubInputs(prev => ({ ...prev, [cat]: e.target.value }))}
-                          onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); addSubcategory(cat); } }}
-                          className="h-8 text-xs max-w-xs"
-                          data-testid={`input-add-sub-${cat.replace(/[^a-zA-Z0-9]/g, "-").toLowerCase()}`}
-                        />
-                        <Button size="sm" className="h-8 px-2" onClick={() => addSubcategory(cat)} disabled={!(newSubInputs[cat] || "").trim()}
-                          data-testid={`button-add-sub-${cat.replace(/[^a-zA-Z0-9]/g, "-").toLowerCase()}`}>
-                          <Plus size={13} />
-                        </Button>
+
+                            {catOpen && (
+                              <div className="px-3 pb-2 pt-1 border-t border-border bg-muted/30">
+                                {/* labels */}
+                                <div className="flex flex-wrap gap-1.5 mb-2">
+                                  {(labels as string[]).map(label => {
+                                    const isEditingThis = editingLabel?.ind === ind && editingLabel?.cat === cat && editingLabel?.label === label;
+                                    return isEditingThis ? (
+                                      <div key={label} className="flex items-center gap-1">
+                                        <Input autoFocus className="h-7 text-xs w-44" value={editingLabelValue}
+                                          onChange={e => setEditingLabelValue(e.target.value)}
+                                          onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); renameLabel(ind, cat, label, editingLabelValue); } if (e.key === "Escape") setEditingLabel(null); }}
+                                          data-testid={`input-rename-label-${slug(label)}`} />
+                                        <button onClick={() => renameLabel(ind, cat, label, editingLabelValue)} className="text-green-600 hover:text-green-700 p-0.5"><Check size={12} /></button>
+                                        <button onClick={() => setEditingLabel(null)} className="text-muted-foreground hover:text-destructive p-0.5"><X size={12} /></button>
+                                      </div>
+                                    ) : (
+                                      <Badge key={label} variant="secondary" className="text-xs py-1 px-2.5 gap-1.5" data-testid={`taxonomy-label-${slug(label)}`}>
+                                        {label}
+                                        <button onClick={() => { setEditingLabel({ ind, cat, label }); setEditingLabelValue(label); }} className="hover:text-foreground opacity-50 hover:opacity-100 transition-opacity" title="Rename" data-testid={`button-rename-label-${slug(label)}`}><Pencil size={9} /></button>
+                                        <button onClick={() => deleteLabel(ind, cat, label)} className="hover:text-destructive" data-testid={`button-delete-label-${slug(label)}`}><X size={11} /></button>
+                                      </Badge>
+                                    );
+                                  })}
+                                  {(labels as string[]).length === 0 && <p className="text-xs text-muted-foreground">No labels yet.</p>}
+                                </div>
+                                {/* add label */}
+                                <div className="flex gap-2">
+                                  <Input placeholder="Add label…" value={newLabelInputs[`${ind}::${cat}`] || ""}
+                                    onChange={e => setNewLabelInputs(prev => ({ ...prev, [`${ind}::${cat}`]: e.target.value }))}
+                                    onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); addLabel(ind, cat); } }}
+                                    className="h-7 text-xs max-w-xs" data-testid={`input-add-label-${slug(cat)}`} />
+                                  <Button size="sm" className="h-7 px-2" onClick={() => addLabel(ind, cat)} disabled={!(newLabelInputs[`${ind}::${cat}`] || "").trim()} data-testid={`button-add-label-${slug(cat)}`}><Plus size={12} /></Button>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+
+                      {/* add category under this industry */}
+                      <div className="flex gap-2 ml-2 mt-2">
+                        <Input placeholder="New category name…" value={newCatInputs[ind] || ""}
+                          onChange={e => setNewCatInputs(prev => ({ ...prev, [ind]: e.target.value }))}
+                          onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); addCategory(ind); } }}
+                          className="h-7 text-xs max-w-xs" data-testid={`input-add-cat-${slug(ind)}`} />
+                        <Button size="sm" className="h-7 px-2" onClick={() => addCategory(ind)} disabled={!(newCatInputs[ind] || "").trim()} data-testid={`button-add-cat-${slug(ind)}`}><Plus size={12} /> Category</Button>
                       </div>
                     </div>
                   )}
@@ -2252,14 +2217,35 @@ function CategoriesTab() {
           {isDirty && (
             <div className="mt-4 flex justify-end">
               <Button onClick={() => saveMutation.mutate()} disabled={saveMutation.isPending} data-testid="button-save-taxonomy-bottom">
-                {saveMutation.isPending ? "Saving…" : "Save Taxonomy Changes"}
+                {saveMutation.isPending ? "Saving…" : "Save Changes"}
               </Button>
             </div>
           )}
         </div>
 
-        {renderEditableSection("Industries", "industry", industries)}
-        {renderEditableSection("Blog Categories", "blog", blogCats)}
+        {/* ── Blog Categories (DB-backed) ── */}
+        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-border p-6">
+          <h3 className="font-bold font-display text-lg mb-4">Blog Categories</h3>
+          <div className="flex flex-wrap gap-2 mb-4">
+            {blogCats.map(c => (
+              <Badge key={c.id} variant="secondary" className="text-sm py-1.5 px-3 gap-2" data-testid={`badge-blog-cat-${c.id}`}>
+                {c.name}
+                <button onClick={() => deleteBlogMutation.mutate(c.id)} className="hover:text-destructive"><X size={14} /></button>
+              </Badge>
+            ))}
+            {blogCats.length === 0 && <p className="text-sm text-muted-foreground">No blog categories yet.</p>}
+          </div>
+          <div className="flex gap-2">
+            <Input placeholder="Add blog category…" value={newBlogName}
+              onChange={e => setNewBlogName(e.target.value)}
+              onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); if (newBlogName.trim()) createBlogMutation.mutate({ name: newBlogName.trim(), type: "blog" }); } }}
+              className="max-w-xs" data-testid="input-add-blog-category" />
+            <Button size="sm" disabled={createBlogMutation.isPending || !newBlogName.trim()}
+              onClick={() => createBlogMutation.mutate({ name: newBlogName.trim(), type: "blog" })} data-testid="button-add-blog-category">
+              <Plus size={16} />
+            </Button>
+          </div>
+        </div>
       </div>
     </div>
   );

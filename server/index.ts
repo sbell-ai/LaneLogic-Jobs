@@ -342,9 +342,14 @@ async function loadTaxonomyFromDB() {
     const { setLiveTaxonomy } = await import("../shared/jobTaxonomy.ts");
     const settings = await storage.getSiteSettings();
     const saved = (settings as any).job_taxonomy;
+    const { isLegacyTaxonomy } = await import("../shared/jobTaxonomy.ts");
     if (saved && typeof saved === "object" && !Array.isArray(saved) && Object.keys(saved).length > 0) {
-      setLiveTaxonomy(saved);
-      log("[taxonomy] Loaded from database");
+      if (isLegacyTaxonomy(saved)) {
+        log("[taxonomy] Ignoring legacy 2-level taxonomy from database; using new 3-level default");
+      } else {
+        setLiveTaxonomy(saved);
+        log("[taxonomy] Loaded from database");
+      }
     }
   } catch (err) {
     console.error("[taxonomy] Failed to load from database:", err);

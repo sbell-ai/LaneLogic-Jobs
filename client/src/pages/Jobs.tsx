@@ -8,12 +8,13 @@ import {
   MapPin, Briefcase, DollarSign, ExternalLink, Clock, Building2, Truck, RotateCcw,
 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
-import type { Job, Category } from "@shared/schema";
+import type { Job } from "@shared/schema";
 import { formatDistanceToNow } from "date-fns";
 import { motion } from "framer-motion";
 import {
   JobFilterSidebar, MobileFilterButton, useJobFilters, filterJobs, getActiveFilterCount, clearAllFilters, formatJobLocation,
 } from "@/components/JobFilterSidebar";
+import { useTaxonomy } from "@/hooks/use-taxonomy";
 
 export default function Jobs() {
   const searchString = useSearch();
@@ -25,11 +26,7 @@ export default function Jobs() {
     queryKey: ["/api/jobs"],
   });
 
-  const { data: categories } = useQuery<Category[]>({
-    queryKey: ["/api/categories"],
-  });
-
-  const industries = (categories || []).filter((c) => c.type === "industry");
+  const { industries } = useTaxonomy();
   const filtered = filterJobs(jobs || [], filters);
   const activeFilterCount = getActiveFilterCount(filters);
 

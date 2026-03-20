@@ -19,7 +19,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Briefcase, Plus, Trash2, Users, Upload, CreditCard, CheckCircle2, MapPin, Eye, Building2, Phone, Mail, User, MessageSquare, Pencil, ExternalLink, ChevronDown, ChevronRight, StickyNote, Check, Save, Loader2 } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ImageUpload } from "@/components/ui/image-upload";
-import type { Job, Application, Category } from "@shared/schema";
+import type { Job, Application } from "@shared/schema";
 import { insertJobSchema } from "@shared/schema";
 import { z } from "zod";
 import { Link, useLocation } from "wouter";
@@ -43,10 +43,7 @@ type JobFormValues = z.infer<typeof jobFormSchema>;
 function PostJobTab({ userId }: { userId: number }) {
   const queryClient = useQueryClient();
   const { toast } = useToast();
-
-  const { data: categories } = useQuery<Category[]>({ queryKey: ["/api/categories"] });
-  const industries = (categories || []).filter((c) => c.type === "industry");
-  const { categories: taxonomyCats, getSubcategories } = useTaxonomy();
+  const { industries: taxonomyInds, getCategories, getLabels } = useTaxonomy();
 
   const form = useForm<JobFormValues>({
     resolver: zodResolver(jobFormSchema),
@@ -129,44 +126,42 @@ function PostJobTab({ userId }: { userId: number }) {
               )} />
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-3 gap-4">
+              <FormField control={form.control} name="industry" render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Industry</FormLabel>
+                  <Select onValueChange={(v) => { field.onChange(v === "__none__" ? "" : v); form.setValue("category", ""); form.setValue("subcategory", ""); }} value={field.value || "__none__"}>
+                    <FormControl><SelectTrigger data-testid="select-job-industry"><SelectValue placeholder="Select industry" /></SelectTrigger></FormControl>
+                    <SelectContent>
+                      <SelectItem value="__none__">None</SelectItem>
+                      {taxonomyInds.map(ind => <SelectItem key={ind} value={ind}>{ind}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </FormItem>
+              )} />
               <FormField control={form.control} name="category" render={({ field }) => (
                 <FormItem>
                   <FormLabel>Category</FormLabel>
-                  <Select onValueChange={(v) => { field.onChange(v === "__none__" ? "" : v); form.setValue("subcategory", ""); }} value={field.value || "__none__"}>
+                  <Select onValueChange={(v) => { field.onChange(v === "__none__" ? "" : v); form.setValue("subcategory", ""); }} value={field.value || "__none__"} disabled={!form.watch("industry")}>
                     <FormControl><SelectTrigger data-testid="select-job-category"><SelectValue placeholder="Select category" /></SelectTrigger></FormControl>
                     <SelectContent>
                       <SelectItem value="__none__">None</SelectItem>
-                      {taxonomyCats.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                      {form.watch("industry") && getCategories(form.watch("industry")).map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
                     </SelectContent>
                   </Select>
                 </FormItem>
               )} />
               <FormField control={form.control} name="subcategory" render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Subcategory</FormLabel>
+                  <FormLabel>Label</FormLabel>
                   <Select onValueChange={(v) => field.onChange(v === "__none__" ? "" : v)} value={field.value || "__none__"} disabled={!form.watch("category")}>
-                    <FormControl><SelectTrigger data-testid="select-job-subcategory"><SelectValue placeholder="Select subcategory" /></SelectTrigger></FormControl>
+                    <FormControl><SelectTrigger data-testid="select-job-subcategory"><SelectValue placeholder="Select label" /></SelectTrigger></FormControl>
                     <SelectContent>
                       <SelectItem value="__none__">None</SelectItem>
-                      {form.watch("category") && getSubcategories(form.watch("category")).map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                      {form.watch("industry") && form.watch("category") && getLabels(form.watch("industry"), form.watch("category")).map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
                     </SelectContent>
                   </Select>
                   <FormMessage />
-                </FormItem>
-              )} />
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <FormField control={form.control} name="industry" render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Industry</FormLabel>
-                  <Select onValueChange={(v) => field.onChange(v === "__none__" ? "" : v)} value={field.value || "__none__"}>
-                    <FormControl><SelectTrigger data-testid="select-job-industry"><SelectValue placeholder="Select industry" /></SelectTrigger></FormControl>
-                    <SelectContent>
-                      <SelectItem value="__none__">None</SelectItem>
-                      {industries.map(c => <SelectItem key={c.id} value={c.name}>{c.name}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
                 </FormItem>
               )} />
             </div>
@@ -246,9 +241,7 @@ function EditJobDialog({ job }: { job: Job }) {
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const [open, setOpen] = useState(false);
-  const { data: categories } = useQuery<Category[]>({ queryKey: ["/api/categories"] });
-  const industries = (categories || []).filter((c) => c.type === "industry");
-  const { categories: taxonomyCats, getSubcategories } = useTaxonomy();
+  const { industries: taxonomyInds, getCategories, getLabels } = useTaxonomy();
 
   const form = useForm<JobFormValues>({
     resolver: zodResolver(jobFormSchema),
@@ -369,27 +362,39 @@ function EditJobDialog({ job }: { job: Job }) {
                 </FormItem>
               )} />
             </div>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-3 gap-4">
+              <FormField control={form.control} name="industry" render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Industry</FormLabel>
+                  <Select onValueChange={(v) => { field.onChange(v === "__none__" ? "" : v); form.setValue("category", ""); form.setValue("subcategory", ""); }} value={field.value || "__none__"}>
+                    <FormControl><SelectTrigger data-testid="select-edit-industry"><SelectValue placeholder="Select industry" /></SelectTrigger></FormControl>
+                    <SelectContent>
+                      <SelectItem value="__none__">None</SelectItem>
+                      {taxonomyInds.map(ind => <SelectItem key={ind} value={ind}>{ind}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </FormItem>
+              )} />
               <FormField control={form.control} name="category" render={({ field }) => (
                 <FormItem>
                   <FormLabel>Category</FormLabel>
-                  <Select onValueChange={(v) => { field.onChange(v === "__none__" ? "" : v); form.setValue("subcategory", ""); }} value={field.value || "__none__"}>
+                  <Select onValueChange={(v) => { field.onChange(v === "__none__" ? "" : v); form.setValue("subcategory", ""); }} value={field.value || "__none__"} disabled={!form.watch("industry")}>
                     <FormControl><SelectTrigger data-testid="select-edit-category"><SelectValue placeholder="Select category" /></SelectTrigger></FormControl>
                     <SelectContent>
                       <SelectItem value="__none__">None</SelectItem>
-                      {taxonomyCats.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                      {form.watch("industry") && getCategories(form.watch("industry")).map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
                     </SelectContent>
                   </Select>
                 </FormItem>
               )} />
               <FormField control={form.control} name="subcategory" render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Subcategory</FormLabel>
+                  <FormLabel>Label</FormLabel>
                   <Select onValueChange={(v) => field.onChange(v === "__none__" ? "" : v)} value={field.value || "__none__"} disabled={!form.watch("category")}>
-                    <FormControl><SelectTrigger data-testid="select-edit-subcategory"><SelectValue placeholder="Select subcategory" /></SelectTrigger></FormControl>
+                    <FormControl><SelectTrigger data-testid="select-edit-subcategory"><SelectValue placeholder="Select label" /></SelectTrigger></FormControl>
                     <SelectContent>
                       <SelectItem value="__none__">None</SelectItem>
-                      {form.watch("category") && getSubcategories(form.watch("category")).map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                      {form.watch("industry") && form.watch("category") && getLabels(form.watch("industry"), form.watch("category")).map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
                     </SelectContent>
                   </Select>
                   <FormMessage />
@@ -397,18 +402,6 @@ function EditJobDialog({ job }: { job: Job }) {
               )} />
             </div>
             <div className="grid grid-cols-2 gap-4">
-              <FormField control={form.control} name="industry" render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Industry</FormLabel>
-                  <Select onValueChange={(v) => field.onChange(v === "__none__" ? "" : v)} value={field.value || "__none__"}>
-                    <FormControl><SelectTrigger data-testid="select-edit-industry"><SelectValue placeholder="Select industry" /></SelectTrigger></FormControl>
-                    <SelectContent>
-                      <SelectItem value="__none__">None</SelectItem>
-                      {industries.map(c => <SelectItem key={c.id} value={c.name}>{c.name}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                </FormItem>
-              )} />
               <FormField control={form.control} name="salary" render={({ field }) => (
                 <FormItem>
                   <FormLabel>Salary (optional)</FormLabel>

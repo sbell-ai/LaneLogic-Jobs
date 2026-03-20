@@ -9,7 +9,7 @@ import {
   Search, MapPin, Filter, X, ChevronDown, ChevronUp, RotateCcw,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
-import type { Job, Category } from "@shared/schema";
+import type { Job } from "@shared/schema";
 import { subDays } from "date-fns";
 import { useTaxonomy } from "@/hooks/use-taxonomy";
 
@@ -278,7 +278,7 @@ type SidebarContentProps = {
   filters: JobFilters;
   activeFilterCount: number;
   onClearAll: () => void;
-  industries?: Category[];
+  industries?: string[];
   sectors: string[];
   getSubcategories: (cat: string) => string[];
 };
@@ -360,7 +360,7 @@ function SidebarContent({ filters: f, activeFilterCount, onClearAll, industries 
 
       {industries.length > 0 && (
         <FilterSection title="Industry" defaultOpen={false}>
-          <CheckboxFilter items={industries.map((i) => i.name)} selected={f.sectors} onChange={f.setSectors} testIdPrefix="checkbox-industry" />
+          <CheckboxFilter items={industries} selected={f.sectors} onChange={f.setSectors} testIdPrefix="checkbox-industry" />
         </FilterSection>
       )}
 
@@ -415,7 +415,7 @@ function SidebarContent({ filters: f, activeFilterCount, onClearAll, industries 
 type JobFilterSidebarProps = {
   filters: JobFilters;
   filteredCount: number;
-  industries?: Category[];
+  industries?: string[];
   mobileOpen: boolean;
   onMobileClose: () => void;
 };
@@ -423,7 +423,7 @@ type JobFilterSidebarProps = {
 export function JobFilterSidebar({ filters, filteredCount, industries = [], mobileOpen, onMobileClose }: JobFilterSidebarProps) {
   const activeFilterCount = getActiveFilterCount(filters);
   const onClearAll = () => clearAllFilters(filters);
-  const { categories, getSubcategories } = useTaxonomy();
+  const { getAllCategories, getSubcategories } = useTaxonomy();
 
   const content = (
     <SidebarContent
@@ -431,7 +431,7 @@ export function JobFilterSidebar({ filters, filteredCount, industries = [], mobi
       activeFilterCount={activeFilterCount}
       onClearAll={onClearAll}
       industries={industries}
-      sectors={categories}
+      sectors={getAllCategories()}
       getSubcategories={getSubcategories}
     />
   );
