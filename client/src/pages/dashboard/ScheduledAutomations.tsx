@@ -269,9 +269,10 @@ export default function ScheduledAutomations() {
     try {
       const res = await apiRequest("POST", `/api/admin/email-cron-configs/${id}/test`, {});
       const data = await res.json();
+      const varKeys = data.variablesUsed ? Object.keys(data.variablesUsed) : [];
       toast({
         title: "Test email sent",
-        description: `Using ${data.source === "live_data" ? "live DB data" : "template sample data"}`,
+        description: `${data.source === "live_data" ? "Live DB data" : "Sample data"} · Variables: ${varKeys.length > 0 ? varKeys.join(", ") : "none"}`,
       });
       setTestCooldown(30);
       const cd = setInterval(() => setTestCooldown(prev => {

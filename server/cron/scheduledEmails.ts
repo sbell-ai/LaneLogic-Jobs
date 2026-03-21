@@ -279,6 +279,26 @@ export function initEmailCronJobs(): void {
   console.log(`[cron-engine] Initialized. Ticking every 15 min, first tick in ${Math.round(msUntilFirstTick / 1000)}s.`);
 }
 
-// ─── Legacy functions (archived) ─────────────────────────────────────────────
-// runFeatureExpiringCron(), runJobExpiringCron(), runProfileIncompleteReminderCron()
-// replaced by the dynamic engine above. See git history for the original implementations.
+// ─── LEGACY CRON BLOCK (preserved for reference) ─────────────────────────────
+// The three functions below were the original hard-coded scheduled jobs before
+// Task #45 replaced them with the database-driven engine above.
+//
+// function runFeatureExpiringCron() {
+//   // Queried users WHERE resume_access_expires_at = CURRENT_DATE + 7
+//   // OR featured_employer_expires_at = CURRENT_DATE + 7
+//   // and sent 'account_expiring' template emails.
+// }
+//
+// function runJobExpiringCron() {
+//   // Queried jobs WHERE expires_at = CURRENT_DATE + 7
+//   // and sent 'job_expiring' template emails.
+// }
+//
+// function runProfileIncompleteReminderCron() {
+//   // Queried users WHERE profile_incomplete conditions
+//   // and sent 'profile_incomplete_reminder' template emails.
+// }
+//
+// All three are now fully replaced by the dynamic engine and the four seeded
+// rows in email_cron_configs. See git history for the original implementations.
+// ─────────────────────────────────────────────────────────────────────────────
