@@ -15,7 +15,7 @@ const mailgun = new Mailgun(FormData);
 function getMailgunClient() {
   const apiKey = process.env.MAILGUN_API_KEY;
   const domain = process.env.MAILGUN_DOMAIN;
-  const fromName = process.env.MAILGUN_FROM_NAME || "WorkBoard";
+  const fromName = process.env.MAILGUN_FROM_NAME || "LaneLogic Jobs";
   const fromEmail = process.env.MAILGUN_FROM_EMAIL || `no-reply@${domain}`;
 
   if (!apiKey || !domain) return null;
