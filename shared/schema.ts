@@ -33,6 +33,10 @@ export const users = pgTable("users", {
   seekerVerificationStatus: text("seeker_verification_status").notNull().default("unverified"),
   cdlIsNonDomiciled: boolean("cdl_is_non_domiciled").notNull().default(false),
   cdlMarkedNonDomiciledIssuingState: boolean("cdl_marked_non_domiciled_issuing_state").notNull().default(false),
+  emailVerified: boolean("email_verified").notNull().default(false),
+  emailVerificationToken: text("email_verification_token"),
+  passwordResetToken: text("password_reset_token"),
+  passwordResetTokenExpiry: timestamp("password_reset_token_expiry"),
   createdAt: timestamp("created_at").defaultNow(),
 });
 

@@ -37,6 +37,8 @@ import DesignSettings from "@/pages/dashboard/DesignSettings";
 import InboxPage from "@/pages/dashboard/Inbox";
 import VerificationPage from "@/pages/employer/VerificationPage";
 import SeekerVerificationPage from "@/pages/seeker/SeekerVerificationPage";
+import ResetPassword from "@/pages/ResetPassword";
+import VerifyEmail from "@/pages/VerifyEmail";
 
 function ThemeInjector() {
   useSettings();
@@ -58,6 +60,50 @@ function RegisterRedirect() {
   return null;
 }
 
+function EmailVerificationBanner() {
+  const { user } = useAuth();
+  const [dismissed, setDismissed] = useState(false);
+  const [resent, setResent] = useState(false);
+
+  if (!user || (user as any).emailVerified || (user as any).role === "admin" || dismissed) return null;
+
+  const handleResend = async () => {
+    try {
+      await fetch("/api/auth/resend-verification", { method: "POST", credentials: "include" });
+      setResent(true);
+    } catch {}
+  };
+
+  return (
+    <div className="bg-amber-50 dark:bg-amber-900/20 border-b border-amber-200 dark:border-amber-800 px-4 py-2.5 flex items-center justify-between gap-4 text-sm">
+      <p className="text-amber-800 dark:text-amber-200">
+        {resent
+          ? "Verification email sent — check your inbox."
+          : "Please verify your email address. Check your inbox for a verification link."}
+      </p>
+      <div className="flex items-center gap-3 shrink-0">
+        {!resent && (
+          <button
+            onClick={handleResend}
+            className="text-amber-700 dark:text-amber-300 font-medium hover:underline"
+            data-testid="button-resend-verification"
+          >
+            Resend
+          </button>
+        )}
+        <button
+          onClick={() => setDismissed(true)}
+          className="text-amber-600 dark:text-amber-400 hover:text-amber-800 dark:hover:text-amber-200"
+          data-testid="button-dismiss-verification-banner"
+          aria-label="Dismiss"
+        >
+          ✕
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function DashboardRouter() {
   const { user, isLoading } = useAuth();
   const { open: openAuth } = useAuthModal();
@@ -65,9 +111,12 @@ function DashboardRouter() {
   if (isLoading) return <div className="h-screen flex items-center justify-center">Loading...</div>;
   if (!user) { openAuth("login"); nav("/", { replace: true }); return null; }
 
-  if (user.role === "admin") return <AdminDashboard section="users" />;
-  if (user.role === "employer") return <EmployerDashboard />;
-  return <Overview />;
+  return (
+    <>
+      <EmailVerificationBanner />
+      {user.role === "admin" ? <AdminDashboard section="users" /> : user.role === "employer" ? <EmployerDashboard /> : <Overview />}
+    </>
+  );
 }
 
 function DashboardSectionRouter({ params }: { params: { section: string } }) {
@@ -77,8 +126,12 @@ function DashboardSectionRouter({ params }: { params: { section: string } }) {
   if (isLoading) return <div className="h-screen flex items-center justify-center">Loading...</div>;
   if (!user) { openAuth("login"); nav("/", { replace: true }); return null; }
 
-  if (user.role === "employer") return <EmployerDashboard section={params.section} />;
-  return <JobSeekerDashboard section={params.section} />;
+  return (
+    <>
+      <EmailVerificationBanner />
+      {user.role === "employer" ? <EmployerDashboard section={params.section} /> : <JobSeekerDashboard section={params.section} />}
+    </>
+  );
 }
 
 function AdminSectionRouter({ params }: { params: { section: string } }) {
@@ -206,6 +259,8 @@ function Router() {
 
       <Route path="/employer/settings/verification" component={VerificationPage} />
       <Route path="/seeker/settings/verification" component={SeekerVerificationPage} />
+      <Route path="/reset-password" component={ResetPassword} />
+      <Route path="/verify-email" component={VerifyEmail} />
 
       <Route path="/dashboard" component={DashboardRouter} />
       <Route path="/dashboard/messages" component={InboxPage} />

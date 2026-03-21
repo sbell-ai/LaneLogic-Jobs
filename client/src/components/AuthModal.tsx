@@ -9,13 +9,16 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { loginSchema, insertUserSchema } from "@shared/schema";
 import { z } from "zod";
-import { X, UserRound, Briefcase } from "lucide-react";
+import { X, UserRound, Briefcase, ArrowLeft } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useSiteSettings } from "@/hooks/use-settings";
 import { motion, AnimatePresence } from "framer-motion";
+import { apiRequest } from "@/lib/queryClient";
+
+type ModalMode = "login" | "signup" | "forgot";
 
 type AuthModalContextType = {
-  open: (mode?: "login" | "signup") => void;
+  open: (mode?: ModalMode) => void;
   close: () => void;
   isOpen: boolean;
 };
@@ -32,32 +35,36 @@ export function useAuthModal() {
 
 export function AuthModalProvider({ children }: { children: React.ReactNode }) {
   const [isOpen, setIsOpen] = useState(false);
-  const [mode, setMode] = useState<"login" | "signup">("login");
+  const [mode, setMode] = useState<ModalMode>("login");
 
-  const open = useCallback((m: "login" | "signup" = "login") => {
+  const open = useCallback((m: ModalMode = "login") => {
     setMode(m);
     setIsOpen(true);
   }, []);
 
-  const close = useCallback(() => setIsOpen(false), []);
+  const close = useCallback(() => {
+    setIsOpen(false);
+  }, []);
 
   return (
     <AuthModalContext.Provider value={{ open, close, isOpen }}>
       {children}
       <AnimatePresence>
-        {isOpen && <AuthModalContent mode={mode} setMode={setMode} onClose={close} />}
+        {isOpen && (
+          <AuthModal mode={mode} setMode={setMode} onClose={close} />
+        )}
       </AnimatePresence>
     </AuthModalContext.Provider>
   );
 }
 
-function AuthModalContent({
+function AuthModal({
   mode,
   setMode,
   onClose,
 }: {
-  mode: "login" | "signup";
-  setMode: (m: "login" | "signup") => void;
+  mode: ModalMode;
+  setMode: (m: ModalMode) => void;
   onClose: () => void;
 }) {
   const settings = useSiteSettings();
@@ -80,9 +87,20 @@ function AuthModalContent({
         data-testid="modal-auth"
       >
         <div className="flex items-center justify-between p-6 pb-0">
-          <h2 className="text-lg font-semibold" data-testid="text-auth-modal-title">
-            Log in or sign up
-          </h2>
+          <div className="flex items-center gap-2">
+            {mode === "forgot" && (
+              <button
+                onClick={() => setMode("login")}
+                className="p-1 rounded-full hover:bg-muted transition-colors"
+                data-testid="button-back-to-login"
+              >
+                <ArrowLeft size={18} />
+              </button>
+            )}
+            <h2 className="text-lg font-semibold" data-testid="text-auth-modal-title">
+              {mode === "forgot" ? "Reset your password" : "Log in or sign up"}
+            </h2>
+          </div>
           <button
             onClick={onClose}
             className="p-1 rounded-full hover:bg-muted transition-colors"
@@ -93,14 +111,20 @@ function AuthModalContent({
         </div>
 
         <div className="p-6">
-          <h3 className="text-2xl font-bold font-display mb-6" data-testid="text-auth-welcome">
-            Welcome to {settings.siteName}
-          </h3>
+          {mode !== "forgot" && (
+            <h3 className="text-2xl font-bold font-display mb-6" data-testid="text-auth-welcome">
+              Welcome to {settings.siteName}
+            </h3>
+          )}
 
-          {mode === "login" ? (
-            <LoginForm onClose={onClose} onSwitch={() => setMode("signup")} />
-          ) : (
+          {mode === "login" && (
+            <LoginForm onClose={onClose} onSwitch={() => setMode("signup")} onForgot={() => setMode("forgot")} />
+          )}
+          {mode === "signup" && (
             <SignupForm onClose={onClose} onSwitch={() => setMode("login")} />
+          )}
+          {mode === "forgot" && (
+            <ForgotPasswordForm onBack={() => setMode("login")} />
           )}
         </div>
       </motion.div>
@@ -108,7 +132,7 @@ function AuthModalContent({
   );
 }
 
-function LoginForm({ onClose, onSwitch }: { onClose: () => void; onSwitch: () => void }) {
+function LoginForm({ onClose, onSwitch, onForgot }: { onClose: () => void; onSwitch: () => void; onForgot: () => void }) {
   const { login, isLoggingIn } = useAuth();
   const { toast } = useToast();
   const [, navigate] = useLocation();
@@ -158,6 +182,14 @@ function LoginForm({ onClose, onSwitch }: { onClose: () => void; onSwitch: () =>
           {form.formState.errors.password && (
             <p className="text-sm text-destructive mt-1">{form.formState.errors.password.message}</p>
           )}
+          <button
+            type="button"
+            onClick={onForgot}
+            className="mt-1.5 text-xs text-muted-foreground hover:text-primary hover:underline"
+            data-testid="button-forgot-password"
+          >
+            Forgot your password?
+          </button>
         </div>
         <Button
           type="submit"
@@ -175,6 +207,68 @@ function LoginForm({ onClose, onSwitch }: { onClose: () => void; onSwitch: () =>
           Sign up
         </button>
       </p>
+    </>
+  );
+}
+
+function ForgotPasswordForm({ onBack }: { onBack: () => void }) {
+  const { toast } = useToast();
+  const [sent, setSent] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [email, setEmail] = useState("");
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!email) return;
+    setLoading(true);
+    try {
+      await apiRequest("POST", "/api/auth/forgot-password", { email });
+      setSent(true);
+    } catch {
+      toast({ title: "Something went wrong", description: "Please try again.", variant: "destructive" });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (sent) {
+    return (
+      <div className="space-y-4 text-center">
+        <div className="text-4xl">📬</div>
+        <p className="text-sm text-muted-foreground">
+          If <span className="font-medium text-foreground">{email}</span> is registered, you'll receive a password reset link shortly. Check your inbox and spam folder.
+        </p>
+        <Button variant="outline" className="w-full rounded-xl" onClick={onBack} data-testid="button-back-to-login-from-sent">
+          Back to log in
+        </Button>
+      </div>
+    );
+  }
+
+  return (
+    <>
+      <p className="text-sm text-muted-foreground mb-5">
+        Enter your email and we'll send you a link to reset your password.
+      </p>
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <Input
+          type="email"
+          placeholder="Email address"
+          className="h-12 rounded-xl text-base"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          required
+          data-testid="input-forgot-email"
+        />
+        <Button
+          type="submit"
+          disabled={loading}
+          className="w-full h-12 rounded-xl text-base font-semibold"
+          data-testid="button-send-reset"
+        >
+          {loading ? "Sending..." : "Send reset link"}
+        </Button>
+      </form>
     </>
   );
 }
@@ -204,6 +298,10 @@ function SignupForm({ onClose, onSwitch }: { onClose: () => void; onSwitch: () =
       await registerUser(data);
       onClose();
       navigate("/dashboard");
+      toast({
+        title: "Account created!",
+        description: "Check your email for a verification link to confirm your address.",
+      });
     } catch (error: any) {
       toast({
         title: "Registration failed",

@@ -400,7 +400,9 @@ export async function registerRoutes(
         return res.status(400).json({ message: "Email already exists" });
       }
       const user = await storage.createUser(input);
-      // Fire-and-forget welcome email
+      // Generate email verification token and fire emails (fire-and-forget)
+      const verificationToken = randomUUID();
+      await storage.updateUser((user as any).id, { emailVerificationToken: verificationToken });
       (async () => {
         try {
           const { sendTemplatedEmailByEvent } = await import("./email/sendTemplatedEmail.ts");
@@ -418,6 +420,13 @@ export async function registerRoutes(
               dashboard_url: `${siteUrl}/dashboard`,
             }
           );
+          await sendTemplatedEmailByEvent("email_verification", (user as any).email, {
+            first_name: (user as any).firstName || (user as any).email,
+            verification_link: `${siteUrl}/verify-email?token=${verificationToken}`,
+            expires_in: "7 days",
+            site_name: "LaneLogic Jobs",
+            site_url: siteUrl,
+          });
         } catch {}
       })();
       req.login(user, (err) => {
@@ -436,6 +445,89 @@ export async function registerRoutes(
     req.logout((err) => {
       res.json({ message: "Logged out" });
     });
+  });
+
+  // POST /api/auth/forgot-password
+  app.post("/api/auth/forgot-password", async (req, res) => {
+    const { email } = req.body;
+    if (!email) return res.status(400).json({ message: "Email is required" });
+    const user = await storage.getUserByEmail(email);
+    // Always respond 200 to prevent email enumeration
+    if (!user) return res.json({ message: "If that email exists you will receive a reset link shortly." });
+    const token = randomUUID();
+    const expiry = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
+    await storage.updateUser((user as any).id, { passwordResetToken: token, passwordResetTokenExpiry: expiry });
+    (async () => {
+      try {
+        const { sendTemplatedEmailByEvent } = await import("./email/sendTemplatedEmail.ts");
+        const siteUrl = process.env.CANONICAL_HOST || "https://lanelogicjobs.com";
+        await sendTemplatedEmailByEvent("password_reset", (user as any).email, {
+          first_name: (user as any).firstName || (user as any).email,
+          reset_link: `${siteUrl}/reset-password?token=${token}`,
+          expires_in: "1 hour",
+          site_name: "LaneLogic Jobs",
+          site_url: siteUrl,
+        });
+      } catch (e: any) {
+        console.error("Password reset email failed:", e?.message);
+      }
+    })();
+    res.json({ message: "If that email exists you will receive a reset link shortly." });
+  });
+
+  // POST /api/auth/reset-password
+  app.post("/api/auth/reset-password", async (req, res) => {
+    const { token, password } = req.body;
+    if (!token || !password) return res.status(400).json({ message: "Token and password are required" });
+    if (password.length < 8) return res.status(400).json({ message: "Password must be at least 8 characters" });
+    const user = await storage.getUserByPasswordResetToken(token);
+    if (!user) return res.status(400).json({ message: "Invalid or expired reset link" });
+    const expiry = (user as any).passwordResetTokenExpiry;
+    if (!expiry || new Date(expiry) < new Date()) return res.status(400).json({ message: "Reset link has expired" });
+    await storage.updateUser((user as any).id, {
+      password,
+      passwordResetToken: null as any,
+      passwordResetTokenExpiry: null as any,
+    });
+    res.json({ message: "Password updated successfully" });
+  });
+
+  // GET /api/auth/verify-email?token=
+  app.get("/api/auth/verify-email", async (req, res) => {
+    const { token } = req.query as { token?: string };
+    if (!token) return res.status(400).json({ message: "Token is required" });
+    const user = await storage.getUserByEmailVerificationToken(token);
+    if (!user) return res.status(400).json({ message: "Invalid or already-used verification link" });
+    await storage.updateUser((user as any).id, {
+      emailVerified: true,
+      emailVerificationToken: null as any,
+    });
+    res.json({ message: "Email verified successfully" });
+  });
+
+  // POST /api/auth/resend-verification — resend verification email for logged-in user
+  app.post("/api/auth/resend-verification", async (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+    const user = req.user as any;
+    if (user.emailVerified) return res.json({ message: "Email already verified" });
+    const token = randomUUID();
+    await storage.updateUser(user.id, { emailVerificationToken: token });
+    (async () => {
+      try {
+        const { sendTemplatedEmailByEvent } = await import("./email/sendTemplatedEmail.ts");
+        const siteUrl = process.env.CANONICAL_HOST || "https://lanelogicjobs.com";
+        await sendTemplatedEmailByEvent("email_verification", user.email, {
+          first_name: user.firstName || user.email,
+          verification_link: `${siteUrl}/verify-email?token=${token}`,
+          expires_in: "7 days",
+          site_name: "LaneLogic Jobs",
+          site_url: siteUrl,
+        });
+      } catch (e: any) {
+        console.error("Resend verification email failed:", e?.message);
+      }
+    })();
+    res.json({ message: "Verification email sent" });
   });
 
   app.get(api.auth.me.path, (req, res) => {
@@ -783,6 +875,29 @@ export async function registerRoutes(
       const input = api.jobs.update.input.parse(body);
       const job = await storage.updateJob(jobId, input);
       res.json(job);
+
+      // Fire job_posted email when isPublished flips false→true
+      if (!existingJob.isPublished && input.isPublished) {
+        (async () => {
+          try {
+            const { sendTemplatedEmailByEvent } = await import("./email/sendTemplatedEmail.ts");
+            const employer = await storage.getUser(job.employerId);
+            if (!employer) return;
+            const siteUrl = process.env.CANONICAL_HOST || "https://lanelogicjobs.com";
+            await sendTemplatedEmailByEvent("job_posted", (employer as any).email, {
+              first_name: (employer as any).firstName || (employer as any).companyName || (employer as any).email,
+              company_name: (employer as any).companyName || "",
+              job_title: job.title,
+              job_url: `${siteUrl}/jobs/${job.id}`,
+              dashboard_url: `${siteUrl}/dashboard`,
+              site_name: "LaneLogic Jobs",
+              site_url: siteUrl,
+            });
+          } catch (e: any) {
+            console.error("job_posted email failed:", e?.message);
+          }
+        })();
+      }
     } catch (err) {
       if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
       res.status(500).json({ message: "Internal server error" });
@@ -1001,6 +1116,44 @@ export async function registerRoutes(
       if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
       res.status(500).json({ message: "Internal server error" });
     }
+  });
+
+  // DELETE /api/applications/:id — seeker withdraws their application
+  app.delete("/api/applications/:id", async (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+    const user = req.user as any;
+    const appId = Number(req.params.id);
+    const existing = await db.query.applications.findFirst({ where: (a, { eq }) => eq(a.id, appId) });
+    if (!existing) return res.status(404).json({ message: "Application not found" });
+    // Only the seeker who owns it (or admin) may withdraw
+    if (user.role !== "admin" && existing.jobSeekerId !== user.id) return res.status(403).json({ message: "Forbidden" });
+    await storage.deleteApplication(appId);
+    res.status(204).end();
+    // Notify employer (fire-and-forget)
+    (async () => {
+      try {
+        const { sendTemplatedEmailByEvent } = await import("./email/sendTemplatedEmail.ts");
+        const [appJob, seeker] = await Promise.all([
+          storage.getJob(existing.jobId),
+          storage.getUser(existing.jobSeekerId),
+        ]);
+        if (!appJob || !seeker) return;
+        const employer = await storage.getUser(appJob.employerId);
+        if (!employer) return;
+        const siteUrl = process.env.CANONICAL_HOST || "https://lanelogicjobs.com";
+        const seekerName = [(seeker as any).firstName, (seeker as any).lastName].filter(Boolean).join(" ") || (seeker as any).email;
+        await sendTemplatedEmailByEvent("application_withdrawn", (employer as any).email, {
+          first_name: (employer as any).firstName || (employer as any).companyName || (employer as any).email,
+          seeker_name: seekerName,
+          job_title: appJob.title,
+          company_name: (employer as any).companyName || "",
+          dashboard_url: `${siteUrl}/dashboard`,
+          site_url: siteUrl,
+        });
+      } catch (e: any) {
+        console.error("application_withdrawn email failed:", e?.message);
+      }
+    })();
   });
 
   // Resources

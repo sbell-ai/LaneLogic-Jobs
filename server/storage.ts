@@ -48,6 +48,8 @@ export interface IStorage {
   // Users
   getUser(id: number): Promise<User | undefined>;
   getUserByEmail(email: string): Promise<User | undefined>;
+  getUserByEmailVerificationToken(token: string): Promise<User | undefined>;
+  getUserByPasswordResetToken(token: string): Promise<User | undefined>;
   getUsers(): Promise<User[]>;
   createUser(user: InsertUser): Promise<User>;
   findOrCreateEmployerByCompanyName(companyName: string): Promise<User>;
@@ -65,6 +67,7 @@ export interface IStorage {
   getApplications(): Promise<Application[]>;
   createApplication(app: InsertApplication): Promise<Application>;
   updateApplication(id: number, updates: Partial<InsertApplication>): Promise<Application>;
+  deleteApplication(id: number): Promise<void>;
 
   // Resources
   getResources(context?: "admin" | "public"): Promise<Resource[]>;
@@ -249,6 +252,14 @@ export class DatabaseStorage implements IStorage {
     const [user] = await db.select().from(users).where(eq(users.email, email));
     return user;
   }
+  async getUserByEmailVerificationToken(token: string): Promise<User | undefined> {
+    const [user] = await db.select().from(users).where(eq(users.emailVerificationToken, token));
+    return user;
+  }
+  async getUserByPasswordResetToken(token: string): Promise<User | undefined> {
+    const [user] = await db.select().from(users).where(eq(users.passwordResetToken, token));
+    return user;
+  }
   async getUsers(): Promise<User[]> {
     return await db.select().from(users);
   }
@@ -318,6 +329,9 @@ export class DatabaseStorage implements IStorage {
   async updateApplication(id: number, updates: Partial<InsertApplication>): Promise<Application> {
     const [app] = await db.update(applications).set(updates).where(eq(applications.id, id)).returning();
     return app;
+  }
+  async deleteApplication(id: number): Promise<void> {
+    await db.delete(applications).where(eq(applications.id, id));
   }
 
   // Resources
