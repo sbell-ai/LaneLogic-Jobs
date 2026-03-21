@@ -12,7 +12,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
-import { Shield, Trash2, ScanLine } from "lucide-react";
+import { Shield, Trash2, ScanLine, Eye, EyeOff } from "lucide-react";
 
 const passwordSchema = z.object({
   currentPassword: z.string().min(1, "Current password is required"),
@@ -37,6 +37,7 @@ export default function SecuritySection() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [scanResult, setScanResult] = useState<{ scannedAt: string; message: string } | null>(null);
+  const [showPasswords, setShowPasswords] = useState({ current: false, newPw: false, confirm: false });
 
   const { data: sessions = [], isLoading: sessionsLoading } = useQuery<Session[]>({
     queryKey: ["/api/admin/sessions"],
@@ -118,7 +119,12 @@ export default function SecuritySection() {
                   <FormItem>
                     <FormLabel>Current Password</FormLabel>
                     <FormControl>
-                      <Input {...field} type="password" data-testid="input-current-password" />
+                      <div className="relative">
+                        <Input {...field} type={showPasswords.current ? "text" : "password"} data-testid="input-current-password" className="pr-10" />
+                        <button type="button" onClick={() => setShowPasswords(s => ({ ...s, current: !s.current }))} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground" data-testid="toggle-current-password" tabIndex={-1}>
+                          {showPasswords.current ? <EyeOff size={16} /> : <Eye size={16} />}
+                        </button>
+                      </div>
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -131,7 +137,12 @@ export default function SecuritySection() {
                   <FormItem>
                     <FormLabel>New Password</FormLabel>
                     <FormControl>
-                      <Input {...field} type="password" data-testid="input-new-password" />
+                      <div className="relative">
+                        <Input {...field} type={showPasswords.newPw ? "text" : "password"} data-testid="input-new-password" className="pr-10" />
+                        <button type="button" onClick={() => setShowPasswords(s => ({ ...s, newPw: !s.newPw }))} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground" data-testid="toggle-new-password" tabIndex={-1}>
+                          {showPasswords.newPw ? <EyeOff size={16} /> : <Eye size={16} />}
+                        </button>
+                      </div>
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -144,7 +155,12 @@ export default function SecuritySection() {
                   <FormItem>
                     <FormLabel>Confirm New Password</FormLabel>
                     <FormControl>
-                      <Input {...field} type="password" data-testid="input-confirm-password" />
+                      <div className="relative">
+                        <Input {...field} type={showPasswords.confirm ? "text" : "password"} data-testid="input-confirm-password" className="pr-10" />
+                        <button type="button" onClick={() => setShowPasswords(s => ({ ...s, confirm: !s.confirm }))} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground" data-testid="toggle-confirm-password" tabIndex={-1}>
+                          {showPasswords.confirm ? <EyeOff size={16} /> : <Eye size={16} />}
+                        </button>
+                      </div>
                     </FormControl>
                     <FormMessage />
                   </FormItem>
