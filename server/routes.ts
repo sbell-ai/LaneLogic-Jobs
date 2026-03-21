@@ -1920,11 +1920,12 @@ export async function registerRoutes(
       const mg = new Mailgun(FormData).client({ username: "api", key: apiKey });
       const fromName = process.env.MAILGUN_FROM_NAME || "LaneLogic Jobs";
       const fromEmail = process.env.MAILGUN_FROM_EMAIL || `no-reply@${domain}`;
+      const isHtml = rendered.body.trimStart().startsWith("<");
       await mg.messages.create(domain, {
         from: `${fromName} <${fromEmail}>`,
         to: [(req.user as any).email],
         subject: `[TEST] ${rendered.subject}`,
-        text: rendered.body,
+        ...(isHtml ? { html: rendered.body } : { text: rendered.body }),
       });
 
       testEmailRateLimit.set(adminId, Date.now());

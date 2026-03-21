@@ -210,7 +210,161 @@ The {{site_name}} Team`,
   },
 
   // ─────────────────────────────────────────────────────────────
-  // SCHEDULED (no active trigger yet — warn admin in UI)
+  // AUTH & ACCOUNT
+  // ─────────────────────────────────────────────────────────────
+  {
+    slug: "password_reset",
+    name: "Password Reset",
+    subject: "Reset your password",
+    body: `Hi {{first_name}},
+
+We received a request to reset the password for your account associated with this email address.
+
+Click the link below to reset your password:
+{{reset_link}}
+
+This link expires in: {{expires_in}}.
+
+If you didn't request a password reset, you can safely ignore this email — your password will not be changed and your account remains secure.
+
+For security purposes, never share this link with anyone.
+
+Thanks for using {{site_name}}!
+
+The {{site_name}} Team
+{{site_url}}`,
+    variables: [
+      { key: "first_name", description: "Recipient's first name" },
+      { key: "reset_link", description: "The one-time password reset URL" },
+      { key: "expires_in", description: "How long the link is valid (e.g. '1 hour')" },
+      { key: "site_name", description: "Your platform name" },
+      { key: "site_url", description: "Your platform URL" },
+    ],
+    testVars: {
+      first_name: "Alex",
+      reset_link: "https://lanelogicjobs.com/reset-password?token=demo-token-123",
+      expires_in: "1 hour",
+      site_name: "LaneLogic Jobs",
+      site_url: "https://lanelogicjobs.com",
+    },
+    triggerType: "event",
+    triggerEvent: "password_reset",
+  },
+
+  {
+    slug: "email_verification",
+    name: "Email Verification",
+    subject: "Verify your email address",
+    body: `Hi {{first_name}},
+
+Thanks for signing up! Please verify your email address by clicking the link below:
+
+{{verification_link}}
+
+This link is valid for {{expires_in}}.
+
+If you didn't create an account, you can safely ignore this email.
+
+The {{site_name}} Team
+{{site_url}}`,
+    variables: [
+      { key: "first_name", description: "Recipient's first name" },
+      { key: "verification_link", description: "The one-time email verification URL" },
+      { key: "expires_in", description: "How long the link is valid (e.g. '7 days')" },
+      { key: "site_name", description: "Your platform name" },
+      { key: "site_url", description: "Your platform URL" },
+    ],
+    testVars: {
+      first_name: "Alex",
+      verification_link: "https://lanelogicjobs.com/verify-email?token=demo-token-456",
+      expires_in: "7 days",
+      site_name: "LaneLogic Jobs",
+      site_url: "https://lanelogicjobs.com",
+    },
+    triggerType: "event",
+    triggerEvent: "email_verification",
+  },
+
+  // ─────────────────────────────────────────────────────────────
+  // JOBS
+  // ─────────────────────────────────────────────────────────────
+  {
+    slug: "job_posted",
+    name: "Job Posted / Published",
+    subject: "Your job listing \"{{job_title}}\" is now live on {{site_name}}",
+    body: `Hi {{first_name}},
+
+Great news — your job listing "{{job_title}}" at {{company_name}} is now live!
+
+View it here:
+{{job_url}}
+
+Manage all your listings from your dashboard:
+{{dashboard_url}}
+
+The {{site_name}} Team
+{{site_url}}`,
+    variables: [
+      { key: "first_name", description: "Employer's first name" },
+      { key: "company_name", description: "Employer's company name" },
+      { key: "job_title", description: "Title of the job listing" },
+      { key: "job_url", description: "Public URL of the job listing" },
+      { key: "dashboard_url", description: "Direct link to the employer's dashboard" },
+      { key: "site_name", description: "Your platform name" },
+      { key: "site_url", description: "Your platform URL" },
+    ],
+    testVars: {
+      first_name: "Jordan",
+      company_name: "Acme Freight",
+      job_title: "CDL A Driver – OTR",
+      job_url: "https://lanelogicjobs.com/jobs/123",
+      dashboard_url: "https://lanelogicjobs.com/dashboard",
+      site_name: "LaneLogic Jobs",
+      site_url: "https://lanelogicjobs.com",
+    },
+    triggerType: "event",
+    triggerEvent: "job_posted",
+  },
+
+  // ─────────────────────────────────────────────────────────────
+  // APPLICATIONS (ADDITIONAL)
+  // ─────────────────────────────────────────────────────────────
+  {
+    slug: "application_withdrawn",
+    name: "Application Withdrawn",
+    subject: "{{seeker_name}} withdrew their application for {{job_title}}",
+    body: `Hi {{first_name}},
+
+{{seeker_name}} has withdrawn their application for the {{job_title}} position at {{company_name}}.
+
+You can review your remaining applicants in your dashboard:
+{{dashboard_url}}
+
+The {{site_name}} Team
+{{site_url}}`,
+    variables: [
+      { key: "first_name", description: "Employer's first name" },
+      { key: "seeker_name", description: "Name of the applicant who withdrew" },
+      { key: "job_title", description: "Title of the job" },
+      { key: "company_name", description: "Hiring company's name" },
+      { key: "dashboard_url", description: "Direct link to the employer's dashboard" },
+      { key: "site_url", description: "Your platform URL" },
+    ],
+    testVars: {
+      first_name: "Jordan",
+      seeker_name: "Alex Rivera",
+      job_title: "CDL A Driver – OTR",
+      company_name: "Acme Freight",
+      dashboard_url: "https://lanelogicjobs.com/dashboard",
+      site_name: "LaneLogic Jobs",
+      site_url: "https://lanelogicjobs.com",
+    },
+    triggerType: "event",
+    triggerEvent: "application_withdrawn",
+  },
+
+  // ─────────────────────────────────────────────────────────────
+  // SCHEDULED
   // ─────────────────────────────────────────────────────────────
   {
     slug: "account_expiring",
