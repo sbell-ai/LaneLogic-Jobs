@@ -8,23 +8,26 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
-import { CheckCircle, UserPlus, Clock } from "lucide-react";
+import { CheckCircle, UserPlus, Clock, ShieldCheck, ShieldOff } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 
 const ADMIN_CAPABILITIES = [
-  "View and manage all users (job seekers, employers, and admins)",
-  "Create, edit, and delete job listings",
-  "Manage products and Stripe pricing",
-  "Approve or reject employer and seeker verification requests",
-  "Configure and run automated job import pipelines",
-  "Sync employer registry from Notion",
-  "View and edit unpublished and expired jobs, resources, and blog posts",
-  "Manage site design and branding settings",
-  "Access and configure scheduled email automations and cron jobs",
-  "Admin portal access (all session-gated and secret-gated routes)",
+  { id: "manage_users", label: "View and manage all users (job seekers, employers, and admins)" },
+  { id: "manage_jobs", label: "Create, edit, and delete job listings" },
+  { id: "manage_products", label: "Manage products and Stripe pricing" },
+  { id: "manage_verification", label: "Approve or reject employer and seeker verification requests" },
+  { id: "manage_imports", label: "Configure and run automated job import pipelines" },
+  { id: "sync_registry", label: "Sync employer registry from Notion" },
+  { id: "manage_content", label: "View and edit unpublished and expired jobs, resources, and blog posts" },
+  { id: "manage_design", label: "Manage site design and branding settings" },
+  { id: "manage_email", label: "Access and configure scheduled email automations and cron jobs" },
+  { id: "admin_portal", label: "Admin portal access (all session-gated and secret-gated routes)" },
 ];
+
+const ALL_CAPABILITY_IDS = ADMIN_CAPABILITIES.map((c) => c.id);
 
 interface AdminUser {
   id: number;
@@ -36,6 +39,14 @@ interface AdminUser {
   emailVerified: boolean;
   lastLoginAt: string | null;
   isActive: boolean;
+  permissions: string[] | null;
+}
+
+interface InviteForm {
+  email: string;
+  firstName: string;
+  lastName: string;
+  permissions: string[];
 }
 
 export default function PermissionsSection() {
@@ -43,7 +54,12 @@ export default function PermissionsSection() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [inviteOpen, setInviteOpen] = useState(false);
-  const [inviteForm, setInviteForm] = useState({ email: "", firstName: "", lastName: "" });
+  const [inviteForm, setInviteForm] = useState<InviteForm>({
+    email: "",
+    firstName: "",
+    lastName: "",
+    permissions: [...ALL_CAPABILITY_IDS],
+  });
   const [inviteResult, setInviteResult] = useState<{ tempPassword: string } | null>(null);
 
   const { data: admins = [], isLoading } = useQuery<AdminUser[]>({
@@ -65,8 +81,13 @@ export default function PermissionsSection() {
   });
 
   const inviteMutation = useMutation({
-    mutationFn: async (data: { email: string; firstName: string; lastName: string }) => {
-      const res = await apiRequest("POST", "/api/admin/invite-admin", data);
+    mutationFn: async (data: InviteForm) => {
+      const res = await apiRequest("POST", "/api/admin/invite-admin", {
+        email: data.email,
+        firstName: data.firstName,
+        lastName: data.lastName,
+        permissions: data.permissions.length === ALL_CAPABILITY_IDS.length ? null : data.permissions,
+      });
       return res.json();
     },
     onSuccess: (data) => {
@@ -87,6 +108,28 @@ export default function PermissionsSection() {
     return [a.firstName, a.lastName].filter(Boolean).join(" ") || a.email;
   }
 
+  function permissionsLabel(permissions: string[] | null) {
+    if (!permissions) return { label: "Full access", count: ALL_CAPABILITY_IDS.length, full: true };
+    return { label: `${permissions.length} of ${ALL_CAPABILITY_IDS.length}`, count: permissions.length, full: false };
+  }
+
+  function toggleCapability(id: string) {
+    setInviteForm((prev) => ({
+      ...prev,
+      permissions: prev.permissions.includes(id)
+        ? prev.permissions.filter((p) => p !== id)
+        : [...prev.permissions, id],
+    }));
+  }
+
+  function selectAll() {
+    setInviteForm((prev) => ({ ...prev, permissions: [...ALL_CAPABILITY_IDS] }));
+  }
+
+  function selectNone() {
+    setInviteForm((prev) => ({ ...prev, permissions: [] }));
+  }
+
   const handleInviteSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     inviteMutation.mutate(inviteForm);
@@ -94,7 +137,7 @@ export default function PermissionsSection() {
 
   const closeInvite = () => {
     setInviteOpen(false);
-    setInviteForm({ email: "", firstName: "", lastName: "" });
+    setInviteForm({ email: "", firstName: "", lastName: "", permissions: [...ALL_CAPABILITY_IDS] });
     setInviteResult(null);
   };
 
@@ -108,9 +151,9 @@ export default function PermissionsSection() {
         <CardContent>
           <ul className="space-y-2" data-testid="list-permissions">
             {ADMIN_CAPABILITIES.map((cap) => (
-              <li key={cap} className="flex items-start gap-2 text-sm">
+              <li key={cap.id} className="flex items-start gap-2 text-sm">
                 <CheckCircle size={15} className="mt-0.5 text-green-500 shrink-0" />
-                {cap}
+                {cap.label}
               </li>
             ))}
           </ul>
@@ -138,43 +181,57 @@ export default function PermissionsSection() {
                   <TableHead>Email</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Last Login</TableHead>
+                  <TableHead>Permissions</TableHead>
                   <TableHead>Role</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {admins.map((admin) => (
-                  <TableRow key={admin.id} data-testid={`row-admin-${admin.id}`}>
-                    <TableCell className="font-medium">{fullName(admin)}</TableCell>
-                    <TableCell className="text-sm text-muted-foreground">{admin.email}</TableCell>
-                    <TableCell>
-                      <Badge variant="outline" className={admin.isActive ? "text-green-600 border-green-300" : "text-muted-foreground"}>
-                        {admin.isActive ? "Active" : "Inactive"}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-sm text-muted-foreground flex items-center gap-1">
-                      <Clock size={12} /> {formatDate(admin.lastLoginAt)}
-                    </TableCell>
-                    <TableCell>
-                      {admin.id === (currentUser as any)?.id ? (
-                        <Badge variant="secondary" data-testid={`badge-your-role`}>Admin (you)</Badge>
-                      ) : (
-                        <Select
-                          value={admin.role}
-                          onValueChange={(role) => roleMutation.mutate({ id: admin.id, role })}
+                {admins.map((admin) => {
+                  const perms = permissionsLabel(admin.permissions);
+                  return (
+                    <TableRow key={admin.id} data-testid={`row-admin-${admin.id}`}>
+                      <TableCell className="font-medium">{fullName(admin)}</TableCell>
+                      <TableCell className="text-sm text-muted-foreground">{admin.email}</TableCell>
+                      <TableCell>
+                        <Badge variant="outline" className={admin.isActive ? "text-green-600 border-green-300" : "text-muted-foreground"}>
+                          {admin.isActive ? "Active" : "Inactive"}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-sm text-muted-foreground">
+                        <span className="flex items-center gap-1"><Clock size={12} /> {formatDate(admin.lastLoginAt)}</span>
+                      </TableCell>
+                      <TableCell>
+                        <Badge
+                          variant="outline"
+                          className={perms.full ? "text-blue-600 border-blue-300 flex items-center gap-1 w-fit" : "text-amber-600 border-amber-300 flex items-center gap-1 w-fit"}
+                          data-testid={`badge-permissions-${admin.id}`}
                         >
-                          <SelectTrigger className="h-7 w-32 text-xs" data-testid={`select-role-${admin.id}`}>
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="admin">Admin</SelectItem>
-                            <SelectItem value="employer">Employer</SelectItem>
-                            <SelectItem value="job_seeker">Job Seeker</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      )}
-                    </TableCell>
-                  </TableRow>
-                ))}
+                          {perms.full ? <ShieldCheck size={11} /> : <ShieldOff size={11} />}
+                          {perms.label}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        {admin.id === (currentUser as any)?.id ? (
+                          <Badge variant="secondary" data-testid="badge-your-role">Admin (you)</Badge>
+                        ) : (
+                          <Select
+                            value={admin.role}
+                            onValueChange={(role) => roleMutation.mutate({ id: admin.id, role })}
+                          >
+                            <SelectTrigger className="h-7 w-32 text-xs" data-testid={`select-role-${admin.id}`}>
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="admin">Admin</SelectItem>
+                              <SelectItem value="employer">Employer</SelectItem>
+                              <SelectItem value="job_seeker">Job Seeker</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
               </TableBody>
             </Table>
           )}
@@ -182,7 +239,7 @@ export default function PermissionsSection() {
       </Card>
 
       <Dialog open={inviteOpen} onOpenChange={(o) => { if (!o) closeInvite(); else setInviteOpen(true); }}>
-        <DialogContent>
+        <DialogContent className="max-w-lg">
           <DialogHeader>
             <DialogTitle>Invite New Admin</DialogTitle>
           </DialogHeader>
@@ -234,9 +291,36 @@ export default function PermissionsSection() {
                   data-testid="input-invite-email"
                 />
               </div>
+
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <Label>Permissions</Label>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-muted-foreground">{inviteForm.permissions.length} of {ALL_CAPABILITY_IDS.length} selected</span>
+                    <Button type="button" variant="ghost" size="sm" className="h-6 text-xs px-2" onClick={selectAll} data-testid="button-select-all-perms">All</Button>
+                    <Button type="button" variant="ghost" size="sm" className="h-6 text-xs px-2" onClick={selectNone} data-testid="button-select-none-perms">None</Button>
+                  </div>
+                </div>
+                <div className="border rounded-md p-3 space-y-2.5 max-h-52 overflow-y-auto" data-testid="list-invite-permissions">
+                  {ADMIN_CAPABILITIES.map((cap) => (
+                    <div key={cap.id} className="flex items-start gap-2.5">
+                      <Checkbox
+                        id={`perm-${cap.id}`}
+                        checked={inviteForm.permissions.includes(cap.id)}
+                        onCheckedChange={() => toggleCapability(cap.id)}
+                        data-testid={`checkbox-perm-${cap.id}`}
+                      />
+                      <label htmlFor={`perm-${cap.id}`} className="text-sm leading-snug cursor-pointer select-none">
+                        {cap.label}
+                      </label>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
               <DialogFooter>
                 <Button variant="outline" type="button" onClick={closeInvite} data-testid="button-cancel-invite">Cancel</Button>
-                <Button type="submit" disabled={inviteMutation.isPending} data-testid="button-submit-invite">
+                <Button type="submit" disabled={inviteMutation.isPending || inviteForm.permissions.length === 0} data-testid="button-submit-invite">
                   {inviteMutation.isPending ? "Inviting…" : "Send Invite"}
                 </Button>
               </DialogFooter>

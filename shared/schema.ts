@@ -41,6 +41,7 @@ export const users = pgTable("users", {
   username: text("username").unique(),
   notificationPreferences: jsonb("notification_preferences"),
   lastLoginAt: timestamp("last_login_at"),
+  permissions: jsonb("permissions"),
 });
 
 export const jobs = pgTable("jobs", {

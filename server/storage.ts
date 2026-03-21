@@ -256,7 +256,7 @@ export interface IStorage {
   updateLastLoginAt(id: number): Promise<void>;
   getNotificationPreferences(id: number): Promise<Record<string, boolean>>;
   updateNotificationPreferences(id: number, prefs: Record<string, boolean>): Promise<void>;
-  inviteAdminUser(email: string, firstName: string, lastName: string, tempPassword: string): Promise<User>;
+  inviteAdminUser(email: string, firstName: string, lastName: string, tempPassword: string, permissions: string[] | null): Promise<User>;
   updateAdminUserRole(id: number, role: string): Promise<User>;
 }
 
@@ -1409,10 +1409,10 @@ export class DatabaseStorage implements IStorage {
     await db.update(users).set({ notificationPreferences: prefs } as any).where(eq(users.id, id));
   }
 
-  async inviteAdminUser(email: string, firstName: string, lastName: string, tempPassword: string): Promise<User> {
+  async inviteAdminUser(email: string, firstName: string, lastName: string, tempPassword: string, permissions: string[] | null): Promise<User> {
     const [user] = await db
       .insert(users)
-      .values({ email, password: tempPassword, role: "admin", membershipTier: "free", firstName, lastName })
+      .values({ email, password: tempPassword, role: "admin", membershipTier: "free", firstName, lastName, permissions: permissions as any })
       .returning();
     return user;
   }

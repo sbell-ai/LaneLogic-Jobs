@@ -3638,6 +3638,7 @@ ${urls.join("\n")}
         lastLoginAt: (u as any).lastLoginAt ?? null,
         isActive: (u as any).lastLoginAt !== null && (u as any).lastLoginAt !== undefined,
         createdAt: u.createdAt,
+        permissions: (u as any).permissions ?? null,
       }));
       res.json(sanitized);
     } catch (err) {
@@ -3670,12 +3671,13 @@ ${urls.join("\n")}
         email: z.string().email(),
         firstName: z.string().min(1),
         lastName: z.string().min(1),
+        permissions: z.array(z.string()).nullable().optional(),
       });
-      const { email, firstName, lastName } = schema.parse(req.body);
+      const { email, firstName, lastName, permissions } = schema.parse(req.body);
       const existing = await storage.getUserByEmail(email);
       if (existing) return res.status(409).json({ message: "A user with this email already exists" });
       const tempPassword = randomUUID().slice(0, 12);
-      const user = await storage.inviteAdminUser(email, firstName, lastName, tempPassword);
+      const user = await storage.inviteAdminUser(email, firstName, lastName, tempPassword, permissions ?? null);
       (async () => {
         try {
           const { sendTemplatedEmailByEvent } = await import("./email/sendTemplatedEmail.ts");
