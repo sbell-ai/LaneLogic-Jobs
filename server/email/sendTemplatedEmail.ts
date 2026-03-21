@@ -1,10 +1,13 @@
 // server/email/sendTemplatedEmail.ts
-// Loads a template by slug, renders it, and sends via Mailgun.
-// Fire-and-forget safe: never throws — logs failures silently.
+// Sends transactional emails via Mailgun using stored templates.
+// Two entry points:
+//   sendTemplatedEmail(slug, ...)       — fire by template slug (used by test endpoint)
+//   sendTemplatedEmailByEvent(event, .) — fire by trigger event key (used by routes)
+// Both are fire-and-forget safe: never throw — log failures silently.
 
 import FormData from "form-data";
 import Mailgun from "mailgun.js";
-import { storage } from "../storage"; // adjust import to your actual path
+import { storage } from "../storage";
 import { renderEmailTemplate, TemplateVars } from "./templateEngine";
 
 const mailgun = new Mailgun(FormData);
@@ -24,53 +27,59 @@ function getMailgunClient() {
   };
 }
 
+async function dispatchEmail(template: { subject: string; body: string; isActive: boolean }, label: string, toEmail: string, vars: TemplateVars): Promise<void> {
+  const mg = getMailgunClient();
+  if (!mg) {
+    console.warn(`[email] Mailgun not configured — skipping send for ${label}`);
+    return;
+  }
+  if (!template.isActive) {
+    console.info(`[email] Template inactive — skipping: ${label}`);
+    return;
+  }
+  const { subject, body } = renderEmailTemplate(template.subject, template.body, vars);
+  const isHtml = body.trimStart().startsWith("<");
+  await mg.client.messages.create(mg.domain, {
+    from: mg.from,
+    to: [toEmail],
+    subject,
+    ...(isHtml ? { html: body } : { text: body }),
+  });
+  console.info(`[email] Sent ${label} to="${toEmail}"`);
+}
+
 /**
  * Sends a transactional email using the stored template identified by slug.
- *
- * - If the template is inactive, logs and returns without sending.
- * - If Mailgun is not configured, logs and returns without throwing.
- * - Never throws — safe to call fire-and-forget.
- *
- * @param slug       Template slug (e.g. "welcome_seeker")
- * @param toEmail    Recipient email address
- * @param vars       Variable map for token replacement
+ * Used by the admin "Send Test" endpoint.
  */
-export async function sendTemplatedEmail(
-  slug: string,
-  toEmail: string,
-  vars: TemplateVars
-): Promise<void> {
+export async function sendTemplatedEmail(slug: string, toEmail: string, vars: TemplateVars): Promise<void> {
   try {
-    const mg = getMailgunClient();
-    if (!mg) {
-      console.warn(`[email] Mailgun not configured — skipping send for slug="${slug}"`);
-      return;
-    }
-
     const template = await storage.getEmailTemplateBySlug(slug);
     if (!template) {
       console.warn(`[email] Template not found: slug="${slug}"`);
       return;
     }
+    await dispatchEmail(template, `slug="${slug}"`, toEmail, vars);
+  } catch (err) {
+    console.error(`[email] Failed to send slug="${slug}" to="${toEmail}":`, err);
+  }
+}
 
-    if (!template.isActive) {
-      console.info(`[email] Template inactive — skipping: slug="${slug}"`);
+/**
+ * Sends a transactional email by looking up the active template assigned to a trigger event.
+ * This is the preferred call site for all automatic system emails.
+ * If no active template is assigned to the event, the send is silently skipped.
+ */
+export async function sendTemplatedEmailByEvent(triggerEvent: string, toEmail: string, vars: TemplateVars): Promise<void> {
+  try {
+    const templates = await storage.getEmailTemplates();
+    const template = templates.find(t => t.triggerEvent === triggerEvent && t.isActive);
+    if (!template) {
+      console.warn(`[email] No active template for event="${triggerEvent}" — skipping`);
       return;
     }
-
-    const { subject, body } = renderEmailTemplate(template.subject, template.body, vars);
-
-    const isHtml = body.trimStart().startsWith("<");
-    await mg.client.messages.create(mg.domain, {
-      from: mg.from,
-      to: [toEmail],
-      subject,
-      ...(isHtml ? { html: body } : { text: body }),
-    });
-
-    console.info(`[email] Sent slug="${slug}" to="${toEmail}"`);
+    await dispatchEmail(template, `event="${triggerEvent}"`, toEmail, vars);
   } catch (err) {
-    // Log but never propagate — email failures must not break calling routes
-    console.error(`[email] Failed to send slug="${slug}" to="${toEmail}":`, err);
+    console.error(`[email] Failed to send event="${triggerEvent}" to="${toEmail}":`, err);
   }
 }

@@ -14,8 +14,9 @@ export interface TemplateSeed {
   subject: string;
   body: string;
   variables: TemplateVariable[];
-  testVars: Record<string, string>; // Dummy values for Send Test
-  hasActiveTrigger: boolean;        // False = warn admin in UI (no scheduler hooked yet)
+  testVars: Record<string, string>;
+  triggerType: "event" | "scheduled" | "manual";
+  triggerEvent: string | null;
 }
 
 export const DEFAULT_TEMPLATES: TemplateSeed[] = [
@@ -56,7 +57,8 @@ The {{site_name}} Team
       site_url: "https://workboard.example.com",
       dashboard_url: "https://workboard.example.com/dashboard",
     },
-    hasActiveTrigger: true,
+    triggerType: "event",
+    triggerEvent: "user_registered_seeker",
   },
 
   {
@@ -93,7 +95,8 @@ The {{site_name}} Team
       site_url: "https://workboard.example.com",
       dashboard_url: "https://workboard.example.com/dashboard",
     },
-    hasActiveTrigger: true,
+    triggerType: "event",
+    triggerEvent: "user_registered_employer",
   },
 
   // ─────────────────────────────────────────────────────────────
@@ -132,7 +135,8 @@ The {{site_name}} Team
       site_url: "https://workboard.example.com",
       dashboard_url: "https://workboard.example.com/dashboard",
     },
-    hasActiveTrigger: true,
+    triggerType: "event",
+    triggerEvent: "application_status_changed",
   },
 
   {
@@ -164,7 +168,8 @@ The {{site_name}} Team
       site_url: "https://workboard.example.com",
       dashboard_url: "https://workboard.example.com/dashboard",
     },
-    hasActiveTrigger: true,
+    triggerType: "event",
+    triggerEvent: "application_received",
   },
 
   // ─────────────────────────────────────────────────────────────
@@ -200,7 +205,8 @@ The {{site_name}} Team`,
       inbox_url: "https://workboard.example.com/inbox",
       site_name: "WorkBoard",
     },
-    hasActiveTrigger: true,
+    triggerType: "event",
+    triggerEvent: "message_sent",
   },
 
   // ─────────────────────────────────────────────────────────────
@@ -232,6 +238,7 @@ The {{site_name}} Team`,
       expiry_date: "April 1, 2025",
       site_url: "https://workboard.example.com",
     },
-    hasActiveTrigger: false, // ⚠️ No scheduler hooked — show warning in admin UI
+    triggerType: "scheduled",
+    triggerEvent: "feature_expiring",
   },
 ];

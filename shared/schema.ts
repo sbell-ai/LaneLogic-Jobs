@@ -757,6 +757,8 @@ export const emailTemplates = pgTable("email_templates", {
   body: text("body").notNull(),
   variables: jsonb("variables").notNull().$type<{ key: string; description: string }[]>(),
   isActive: boolean("is_active").notNull().default(true),
+  triggerType: text("trigger_type").$type<"event" | "scheduled" | "manual">(),
+  triggerEvent: text("trigger_event"),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 

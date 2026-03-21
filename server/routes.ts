@@ -403,10 +403,10 @@ export async function registerRoutes(
       // Fire-and-forget welcome email
       (async () => {
         try {
-          const { sendTemplatedEmail } = await import("./email/sendTemplatedEmail.ts");
+          const { sendTemplatedEmailByEvent } = await import("./email/sendTemplatedEmail.ts");
           const siteUrl = process.env.CANONICAL_HOST || "https://lanelogicjobs.com";
-          await sendTemplatedEmail(
-            (user as any).role === "employer" ? "welcome_employer" : "welcome_seeker",
+          await sendTemplatedEmailByEvent(
+            (user as any).role === "employer" ? "user_registered_employer" : "user_registered_seeker",
             (user as any).email,
             {
               first_name: (user as any).firstName || (user as any).email,
@@ -913,13 +913,13 @@ export async function registerRoutes(
         // Fire-and-forget application received email
         (async () => {
           try {
-            const { sendTemplatedEmail } = await import("./email/sendTemplatedEmail.ts");
+            const { sendTemplatedEmailByEvent } = await import("./email/sendTemplatedEmail.ts");
             const seekerUser = await storage.getUser(user.id);
             const appJob = await storage.getJob((txResult.appData as any).jobId);
             if (seekerUser && appJob) {
               const siteUrl = process.env.CANONICAL_HOST || "https://lanelogicjobs.com";
               const employer = await storage.getUser(appJob.employerId);
-              await sendTemplatedEmail("application_received", (seekerUser as any).email, {
+              await sendTemplatedEmailByEvent("application_received", (seekerUser as any).email, {
                 first_name: (seekerUser as any).firstName || (seekerUser as any).email,
                 job_title: appJob.title,
                 company_name: employer ? ((employer as any).companyName || [(employer as any).firstName, (employer as any).lastName].filter(Boolean).join(" ")) : "the company",
@@ -975,7 +975,7 @@ export async function registerRoutes(
       if (input.status) {
         (async () => {
           try {
-            const { sendTemplatedEmail } = await import("./email/sendTemplatedEmail.ts");
+            const { sendTemplatedEmailByEvent } = await import("./email/sendTemplatedEmail.ts");
             const updatedApp = await db.query.applications.findFirst({ where: (a, { eq }) => eq(a.id, appId) });
             if (!updatedApp) return;
             const [seekerUser, appJob] = await Promise.all([
@@ -985,7 +985,7 @@ export async function registerRoutes(
             if (!seekerUser || !appJob) return;
             const employer = await storage.getUser(appJob.employerId);
             const siteUrl = process.env.CANONICAL_HOST || "https://lanelogicjobs.com";
-            await sendTemplatedEmail("application_status_changed", (seekerUser as any).email, {
+            await sendTemplatedEmailByEvent("application_status_changed", (seekerUser as any).email, {
               first_name: (seekerUser as any).firstName || (seekerUser as any).email,
               job_title: appJob.title,
               company_name: employer ? ((employer as any).companyName || [(employer as any).firstName, (employer as any).lastName].filter(Boolean).join(" ")) : "the company",
@@ -1671,14 +1671,19 @@ export async function registerRoutes(
   app.get("/api/admin/email-templates", adminOnly, async (_req, res) => {
     try {
       const templates = await storage.getEmailTemplates();
-      // Attach hasActiveTrigger from seeds for UI badge
-      const { DEFAULT_TEMPLATES } = await import("./email/templateSeeds.ts");
-      const seedMap = new Map(DEFAULT_TEMPLATES.map(s => [s.slug, s.hasActiveTrigger]));
-      const enriched = templates.map(t => ({ ...t, hasActiveTrigger: seedMap.get(t.slug) ?? true }));
+      const enriched = templates.map(t => ({
+        ...t,
+        hasActiveTrigger: !!(t.triggerEvent && t.triggerType === "event"),
+      }));
       res.json(enriched);
     } catch (err: any) {
       res.status(500).json({ message: err.message });
     }
+  });
+
+  app.get("/api/admin/trigger-events", adminOnly, async (_req, res) => {
+    const { TRIGGER_EVENTS } = await import("../shared/triggerEvents.ts");
+    res.json(TRIGGER_EVENTS);
   });
 
   app.get("/api/admin/email-templates/:slug", adminOnly, async (req, res) => {
@@ -1695,11 +1700,13 @@ export async function registerRoutes(
 
   app.put("/api/admin/email-templates/:slug", adminOnly, async (req, res) => {
     try {
-      const { subject, body, isActive } = req.body;
+      const { subject, body, isActive, triggerType, triggerEvent } = req.body;
       const updated = await storage.upsertEmailTemplate(req.params.slug, {
-        subject: subject ?? undefined,
-        body: body ?? undefined,
-        isActive: isActive ?? undefined,
+        ...(subject !== undefined ? { subject } : {}),
+        ...(body !== undefined ? { body } : {}),
+        ...(isActive !== undefined ? { isActive } : {}),
+        ...(triggerType !== undefined ? { triggerType } : {}),
+        ...(triggerEvent !== undefined ? { triggerEvent: triggerEvent || null } : {}),
       });
       res.json(updated);
     } catch (err: any) {
@@ -2379,11 +2386,11 @@ export async function registerRoutes(
     if (sender && recipient) {
       (async () => {
         try {
-          const { sendTemplatedEmail } = await import("./email/sendTemplatedEmail.ts");
+          const { sendTemplatedEmailByEvent } = await import("./email/sendTemplatedEmail.ts");
           const senderName = [(sender as any).firstName, (sender as any).lastName].filter(Boolean).join(" ") || (sender as any).companyName || (sender as any).email;
           const preview = content.trim().slice(0, 200);
           const siteUrl = process.env.CANONICAL_HOST || "https://lanelogicjobs.com";
-          await sendTemplatedEmail("new_message", (recipient as any).email, {
+          await sendTemplatedEmailByEvent("message_sent", (recipient as any).email, {
             first_name: (recipient as any).firstName || (recipient as any).email,
             sender_name: senderName,
             message_preview: preview,

@@ -3317,6 +3317,8 @@ function FilteredUsersTab({ role }: { role: "job_seeker" | "employer" }) {
 
 // ─── EMAIL TEMPLATES TAB ─────────────────────────────────────────────────────
 
+type TriggerEventDef = { key: string; label: string; description: string; type: string };
+
 type EmailTemplate = {
   id: number;
   slug: string;
@@ -3325,6 +3327,8 @@ type EmailTemplate = {
   body: string;
   variables: { key: string; description: string }[];
   isActive: boolean;
+  triggerType: "event" | "scheduled" | "manual" | null;
+  triggerEvent: string | null;
   hasActiveTrigger?: boolean;
 };
 
@@ -3487,9 +3491,17 @@ function EmailTemplatesTab() {
   const [body, setBody] = useState("");
   const [testCooldown, setTestCooldown] = useState(0);
   const editorRef = useRef<EmailBodyEditorHandle>(null);
+  const [triggerType, setTriggerType] = useState<"event" | "scheduled" | "manual" | "">("");
+  const [triggerEvent, setTriggerEvent] = useState<string>("");
+  const [customEvent, setCustomEvent] = useState<string>("");
+  const [showCustomEvent, setShowCustomEvent] = useState(false);
 
   const { data: templates = [], isLoading } = useQuery<EmailTemplate[]>({
     queryKey: ["/api/admin/email-templates"],
+  });
+
+  const { data: triggerEvents = [] } = useQuery<TriggerEventDef[]>({
+    queryKey: ["/api/admin/trigger-events"],
   });
 
   const selected = templates.find(t => t.slug === selectedSlug);
@@ -3498,8 +3510,21 @@ function EmailTemplatesTab() {
     if (selected) {
       setSubject(selected.subject);
       setBody(selected.body);
+      const tt = selected.triggerType ?? "";
+      const te = selected.triggerEvent ?? "";
+      setTriggerType(tt as any);
+      const known = triggerEvents.some(e => e.key === te);
+      if (te && !known) {
+        setShowCustomEvent(true);
+        setCustomEvent(te);
+        setTriggerEvent("__custom__");
+      } else {
+        setShowCustomEvent(false);
+        setCustomEvent("");
+        setTriggerEvent(te);
+      }
     }
-  }, [selected?.slug]);
+  }, [selected?.slug, triggerEvents.length]);
 
   useEffect(() => {
     if (testCooldown <= 0) return;
@@ -3507,11 +3532,15 @@ function EmailTemplatesTab() {
     return () => clearInterval(id);
   }, [testCooldown]);
 
+  const resolvedTriggerEvent = triggerEvent === "__custom__" ? customEvent.trim() : triggerEvent;
+
   const saveMutation = useMutation({
     mutationFn: async ({ slug, isActive }: { slug: string; isActive?: boolean }) => {
       const res = await apiRequest("PUT", `/api/admin/email-templates/${slug}`, {
         subject,
         body,
+        triggerType: triggerType || null,
+        triggerEvent: resolvedTriggerEvent || null,
         ...(isActive !== undefined ? { isActive } : {}),
       });
       return res.json();
@@ -3645,6 +3674,96 @@ function EmailTemplatesTab() {
               <Label>Body</Label>
               <p className="text-xs text-muted-foreground">Use <code className="bg-muted px-1 rounded">{"{{variable}}"}</code> tokens. Click a chip below to insert at cursor.</p>
               <EmailBodyEditor ref={editorRef} key={selected.slug} value={body} onChange={setBody} />
+            </div>
+
+            {/* ── Trigger Configuration ───────────────────────────── */}
+            <div className="rounded-xl border border-border bg-slate-50 dark:bg-slate-800/40 p-4 space-y-4">
+              <div className="flex items-center gap-2">
+                <div className="w-7 h-7 rounded-lg bg-violet-50 dark:bg-violet-900/20 flex items-center justify-center shrink-0">
+                  <Send size={13} className="text-violet-600" />
+                </div>
+                <div>
+                  <p className="text-sm font-semibold">Trigger</p>
+                  <p className="text-xs text-muted-foreground">What causes this email to send automatically.</p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Trigger Type</Label>
+                  <select
+                    data-testid="select-trigger-type"
+                    value={triggerType}
+                    onChange={e => {
+                      setTriggerType(e.target.value as any);
+                      setTriggerEvent("");
+                      setCustomEvent("");
+                      setShowCustomEvent(false);
+                    }}
+                    className="w-full h-9 rounded-md border border-input bg-white dark:bg-slate-900 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                  >
+                    <option value="">— None / Manual —</option>
+                    <option value="event">Event-driven</option>
+                    <option value="scheduled">Scheduled</option>
+                    <option value="manual">Manual only</option>
+                  </select>
+                </div>
+
+                {(triggerType === "event" || triggerType === "scheduled") && (
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">Event</Label>
+                    <select
+                      data-testid="select-trigger-event"
+                      value={triggerEvent}
+                      onChange={e => {
+                        const val = e.target.value;
+                        setTriggerEvent(val);
+                        setShowCustomEvent(val === "__custom__");
+                        if (val !== "__custom__") setCustomEvent("");
+                      }}
+                      className="w-full h-9 rounded-md border border-input bg-white dark:bg-slate-900 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                    >
+                      <option value="">— Select event —</option>
+                      {triggerEvents
+                        .filter(e => triggerType === "scheduled" ? e.type === "scheduled" : e.type === "event")
+                        .map(e => (
+                          <option key={e.key} value={e.key}>{e.label}</option>
+                        ))}
+                      <option value="__custom__">Custom event key…</option>
+                    </select>
+                  </div>
+                )}
+              </div>
+
+              {showCustomEvent && (
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Custom event key</Label>
+                  <Input
+                    data-testid="input-custom-event"
+                    placeholder="e.g. job_expiring"
+                    value={customEvent}
+                    onChange={e => setCustomEvent(e.target.value.replace(/[^a-z0-9_]/gi, "_").toLowerCase())}
+                    className="font-mono text-sm"
+                  />
+                  <p className="text-xs text-muted-foreground">Use lowercase letters, numbers, and underscores only.</p>
+                </div>
+              )}
+
+              {resolvedTriggerEvent && (() => {
+                const def = triggerEvents.find(e => e.key === resolvedTriggerEvent);
+                return def ? (
+                  <p className="text-xs text-muted-foreground italic">{def.description}</p>
+                ) : resolvedTriggerEvent ? (
+                  <p className="text-xs text-amber-600 dark:text-amber-400">Custom event — this will fire when code calls <code className="bg-muted px-1 rounded">sendTemplatedEmailByEvent("{resolvedTriggerEvent}", ...)</code>.</p>
+                ) : null;
+              })()}
+
+              {triggerType === "scheduled" && (
+                <div className="flex items-center gap-2 px-3 py-2 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-lg text-xs text-amber-700 dark:text-amber-300">
+                  <AlertTriangle size={13} className="shrink-0" />
+                  Scheduled emails require a background cron job to be configured in the server.
+                </div>
+              )}
             </div>
 
             {selected.variables.length > 0 && (

@@ -370,8 +370,17 @@ async function seedEmailTemplates() {
           body: t.body,
           variables: t.variables,
           isActive: true,
+          triggerType: t.triggerType,
+          triggerEvent: t.triggerEvent ?? undefined,
         });
         log(`[email] Seeded template: ${t.slug}`);
+      } else if (!existing.triggerEvent && t.triggerEvent) {
+        // Back-fill trigger data on existing templates that predate this feature
+        await storage.upsertEmailTemplate(t.slug, {
+          triggerType: t.triggerType,
+          triggerEvent: t.triggerEvent,
+        });
+        log(`[email] Back-filled trigger for: ${t.slug}`);
       }
     }
   } catch (err) {
