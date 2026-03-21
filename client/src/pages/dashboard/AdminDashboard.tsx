@@ -3322,7 +3322,7 @@ type EmailTemplate = {
   name: string;
   subject: string;
   body: string;
-  variables: string[];
+  variables: { key: string; description: string }[];
   isActive: boolean;
   hasActiveTrigger?: boolean;
 };
@@ -3513,8 +3513,8 @@ function EmailTemplatesTab() {
     onError: (e: any) => toast({ title: "Test failed", description: e.message, variant: "destructive" }),
   });
 
-  const insertVariable = (v: string) => {
-    editorRef.current?.insertAtCursor(`{{${v}}}`);
+  const insertVariable = (key: string) => {
+    editorRef.current?.insertAtCursor(`{{${key}}}`);
   };
 
   if (isLoading) {
@@ -3618,12 +3618,13 @@ function EmailTemplatesTab() {
                 <div className="flex flex-wrap gap-1.5">
                   {selected.variables.map((v, i) => (
                     <button
-                      key={`${v}-${i}`}
-                      data-testid={`chip-var-${v}`}
-                      onClick={() => insertVariable(v)}
+                      key={`${v.key}-${i}`}
+                      data-testid={`chip-var-${v.key}`}
+                      title={v.description}
+                      onClick={() => insertVariable(v.key)}
                       className="inline-flex items-center px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-xs font-mono text-slate-700 dark:text-slate-300 hover:bg-primary/10 hover:text-primary transition-colors"
                     >
-                      {`{{${v}}}`}
+                      {`{{${v.key}}}`}
                     </button>
                   ))}
                 </div>
