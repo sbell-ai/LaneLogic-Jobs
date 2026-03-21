@@ -80,7 +80,7 @@ function AppSidebar({ role }: { role: string }) {
       <Sidebar className="border-r border-border bg-card">
         <SidebarContent>
           <div className="p-4 py-6 border-b border-border">
-            <Link href="/" className="flex items-center gap-2 font-display font-bold text-xl tracking-tight">
+            <Link href="/" className="flex items-center gap-2 font-display font-bold text-xl tracking-tight text-foreground">
               LaneLogic <span className="text-primary">Jobs</span>
             </Link>
           </div>
@@ -125,7 +125,7 @@ function AppSidebar({ role }: { role: string }) {
     <Sidebar className="border-r border-border bg-card">
       <SidebarContent>
         <div className="p-4 py-6 border-b border-border">
-          <Link href="/" className="flex items-center gap-2 font-display font-bold text-xl tracking-tight">
+          <Link href="/" className="flex items-center gap-2 font-display font-bold text-xl tracking-tight text-foreground">
             LaneLogic <span className="text-primary">Jobs</span>
           </Link>
         </div>
