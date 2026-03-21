@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, forwardRef, useImperativeHandle, useCallback } from "react";
 import { DashboardLayout } from "./DashboardLayout";
 import { useAuth } from "@/hooks/use-auth";
 import { Link, useLocation } from "wouter";
@@ -24,10 +24,13 @@ import {
   AlertCircle, Download, Pencil, X, Tag, Ticket, ExternalLink,
   FilePlus2, Globe, Search as SearchIcon, Share2, PlusCircle, ArrowLeft,
   FileEdit, LayoutList, UserCircle, ChevronDown, ChevronRight, Info,
-  Building2, ImageIcon, Mail, Save, Send, AlertTriangle, ToggleLeft, ToggleRight, Loader2, Check
+  Building2, ImageIcon, Mail, Save, Send, AlertTriangle, ToggleLeft, ToggleRight, Loader2, Check,
+  Bold, Italic, Underline as UnderlineIcon, Link as LinkIcon, List, ListOrdered, Minus as MinusIcon,
 } from "lucide-react";
 import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
+import Underline from "@tiptap/extension-underline";
+import TipTapLink from "@tiptap/extension-link";
 import { ImageUpload } from "@/components/ui/image-upload";
 import { RichTextEditor } from "@/components/ui/rich-text-editor";
 import type { User, Job, Resource, BlogPost, Category, Coupon, SiteSettingsData, Page } from "@shared/schema";
@@ -3324,32 +3327,122 @@ type EmailTemplate = {
   hasActiveTrigger?: boolean;
 };
 
-function EmailBodyEditor({ value, onChange }: { value: string; onChange: (v: string) => void }) {
-  const editor = useEditor({
-    extensions: [StarterKit],
-    content: value,
-    editorProps: {
-      attributes: {
-        class: "min-h-[240px] p-3 text-sm font-mono leading-relaxed focus:outline-none whitespace-pre-wrap",
-      },
-    },
-    onUpdate({ editor }) {
-      onChange(editor.getText({ blockSeparator: "\n" }));
-    },
-  });
+type EmailBodyEditorHandle = { insertAtCursor: (text: string) => void };
 
-  useEffect(() => {
-    if (editor && value !== editor.getText({ blockSeparator: "\n" })) {
-      editor.commands.setContent(value, false);
-    }
-  }, [value]);
+function plainTextToHtml(value: string): string {
+  if (!value) return "<p></p>";
+  if (value.trimStart().startsWith("<")) return value;
+  return value
+    .split(/\n\n+/)
+    .map(para => `<p>${para.replace(/\n/g, "<br>")}</p>`)
+    .join("");
+}
 
+function EmailToolbarBtn({
+  onClick, active, title, children,
+}: { onClick: () => void; active?: boolean; title: string; children: React.ReactNode }) {
   return (
-    <div className="border border-border rounded-lg overflow-hidden bg-white dark:bg-slate-900">
-      <EditorContent editor={editor} />
-    </div>
+    <button
+      type="button"
+      title={title}
+      onClick={onClick}
+      className={`h-7 w-7 flex items-center justify-center rounded transition-colors shrink-0 ${
+        active ? "bg-primary/10 text-primary" : "hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-400"
+      }`}
+    >
+      {children}
+    </button>
   );
 }
+
+const EmailBodyEditor = forwardRef<EmailBodyEditorHandle, { value: string; onChange: (v: string) => void }>(
+  function EmailBodyEditor({ value, onChange }, ref) {
+    const setLink = useCallback((editor: ReturnType<typeof useEditor>) => {
+      if (!editor) return;
+      const prev = editor.getAttributes("link").href;
+      const url = window.prompt("URL", prev);
+      if (url === null) return;
+      if (url === "") {
+        editor.chain().focus().extendMarkRange("link").unsetLink().run();
+        return;
+      }
+      editor.chain().focus().extendMarkRange("link").setLink({ href: url }).run();
+    }, []);
+
+    const editor = useEditor({
+      extensions: [
+        StarterKit,
+        Underline,
+        TipTapLink.configure({
+          openOnClick: false,
+          HTMLAttributes: { class: "text-primary underline" },
+        }),
+      ],
+      content: plainTextToHtml(value),
+      onUpdate({ editor }) {
+        onChange(editor.getHTML());
+      },
+    });
+
+    useImperativeHandle(ref, () => ({
+      insertAtCursor(text: string) {
+        editor?.chain().focus().insertContent(text).run();
+      },
+    }));
+
+    useEffect(() => {
+      if (editor && !editor.isFocused) {
+        const current = editor.getHTML();
+        if (current !== value) {
+          editor.commands.setContent(plainTextToHtml(value), false);
+        }
+      }
+    }, [value]);
+
+    return (
+      <div className="border border-border rounded-lg overflow-hidden bg-white dark:bg-slate-900">
+        {editor && (
+          <div className="flex flex-wrap gap-0.5 p-1.5 border-b border-border bg-slate-50 dark:bg-slate-800/50">
+            <EmailToolbarBtn onClick={() => editor.chain().focus().toggleBold().run()} active={editor.isActive("bold")} title="Bold">
+              <Bold size={14} />
+            </EmailToolbarBtn>
+            <EmailToolbarBtn onClick={() => editor.chain().focus().toggleItalic().run()} active={editor.isActive("italic")} title="Italic">
+              <Italic size={14} />
+            </EmailToolbarBtn>
+            <EmailToolbarBtn onClick={() => editor.chain().focus().toggleUnderline().run()} active={editor.isActive("underline")} title="Underline">
+              <UnderlineIcon size={14} />
+            </EmailToolbarBtn>
+            <div className="w-px h-5 bg-border mx-0.5 self-center" />
+            <EmailToolbarBtn onClick={() => setLink(editor)} active={editor.isActive("link")} title="Link">
+              <LinkIcon size={14} />
+            </EmailToolbarBtn>
+            <div className="w-px h-5 bg-border mx-0.5 self-center" />
+            <EmailToolbarBtn onClick={() => editor.chain().focus().toggleBulletList().run()} active={editor.isActive("bulletList")} title="Bullet List">
+              <List size={14} />
+            </EmailToolbarBtn>
+            <EmailToolbarBtn onClick={() => editor.chain().focus().toggleOrderedList().run()} active={editor.isActive("orderedList")} title="Numbered List">
+              <ListOrdered size={14} />
+            </EmailToolbarBtn>
+            <div className="w-px h-5 bg-border mx-0.5 self-center" />
+            <EmailToolbarBtn onClick={() => editor.chain().focus().setHorizontalRule().run()} active={false} title="Horizontal Rule">
+              <MinusIcon size={14} />
+            </EmailToolbarBtn>
+          </div>
+        )}
+        <EditorContent
+          editor={editor}
+          className="prose prose-slate dark:prose-invert max-w-none min-h-[240px] p-3 text-sm
+            prose-p:my-1 prose-p:leading-relaxed
+            prose-a:text-primary prose-a:underline
+            prose-ul:list-disc prose-ul:pl-5 prose-ul:my-1
+            prose-ol:list-decimal prose-ol:pl-5 prose-ol:my-1
+            prose-li:my-0
+            [&_.tiptap]:outline-none [&_.tiptap]:min-h-[220px]"
+        />
+      </div>
+    );
+  }
+);
 
 function EmailTemplatesTab() {
   const { toast } = useToast();
@@ -3358,6 +3451,7 @@ function EmailTemplatesTab() {
   const [subject, setSubject] = useState("");
   const [body, setBody] = useState("");
   const [testCooldown, setTestCooldown] = useState(0);
+  const editorRef = useRef<EmailBodyEditorHandle>(null);
 
   const { data: templates = [], isLoading } = useQuery<EmailTemplate[]>({
     queryKey: ["/api/admin/email-templates"],
@@ -3420,7 +3514,7 @@ function EmailTemplatesTab() {
   });
 
   const insertVariable = (v: string) => {
-    setBody(b => b + `{{${v}}}`);
+    editorRef.current?.insertAtCursor(`{{${v}}}`);
   };
 
   if (isLoading) {
@@ -3513,9 +3607,9 @@ function EmailTemplatesTab() {
             </div>
 
             <div className="space-y-2">
-              <Label>Body (plain text)</Label>
-              <p className="text-xs text-muted-foreground">Use <code className="bg-muted px-1 rounded">{"{{variable}}"}</code> tokens. Click a chip below to insert.</p>
-              <EmailBodyEditor key={selected.slug} value={body} onChange={setBody} />
+              <Label>Body</Label>
+              <p className="text-xs text-muted-foreground">Use <code className="bg-muted px-1 rounded">{"{{variable}}"}</code> tokens. Click a chip below to insert at cursor.</p>
+              <EmailBodyEditor ref={editorRef} key={selected.slug} value={body} onChange={setBody} />
             </div>
 
             {selected.variables.length > 0 && (

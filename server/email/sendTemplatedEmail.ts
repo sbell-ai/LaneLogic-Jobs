@@ -60,11 +60,12 @@ export async function sendTemplatedEmail(
 
     const { subject, body } = renderEmailTemplate(template.subject, template.body, vars);
 
+    const isHtml = body.trimStart().startsWith("<");
     await mg.client.messages.create(mg.domain, {
       from: mg.from,
       to: [toEmail],
       subject,
-      text: body,
+      ...(isHtml ? { html: body } : { text: body }),
     });
 
     console.info(`[email] Sent slug="${slug}" to="${toEmail}"`);
