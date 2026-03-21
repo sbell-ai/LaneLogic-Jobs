@@ -3866,12 +3866,21 @@ function EmailTemplatesTab() {
                 ) : null;
               })()}
 
-              {triggerType === "scheduled" && (
-                <div className="flex items-center gap-2 px-3 py-2 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-lg text-xs text-amber-700 dark:text-amber-300">
-                  <AlertTriangle size={13} className="shrink-0" />
-                  Scheduled emails require a background cron job to be configured in the server.
-                </div>
-              )}
+              {triggerType === "scheduled" && (() => {
+                const CRON_WIRED = ["feature_expiring", "job_expiring", "profile_incomplete_reminder"];
+                const hasActiveCron = resolvedTriggerEvent && CRON_WIRED.includes(resolvedTriggerEvent);
+                return hasActiveCron ? (
+                  <div className="flex items-center gap-2 px-3 py-2 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700 rounded-lg text-xs text-green-700 dark:text-green-300">
+                    <CheckCircle2 size={13} className="shrink-0" />
+                    Cron job is active — runs daily at midnight UTC and scans for matching records automatically.
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2 px-3 py-2 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-lg text-xs text-amber-700 dark:text-amber-300">
+                    <AlertTriangle size={13} className="shrink-0" />
+                    Scheduled emails require a background cron job to be configured in the server.
+                  </div>
+                );
+              })()}
             </div>
 
             {/* ── Variables ───────────────────────────── */}
