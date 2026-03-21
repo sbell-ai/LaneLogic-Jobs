@@ -3430,7 +3430,7 @@ ${urls.join("\n")}
       const schema = z.object({
         firstName: z.string().min(1).optional(),
         lastName: z.string().min(1).optional(),
-        username: z.string().min(2).max(40).regex(/^[a-zA-Z0-9_-]+$/, "Username may only contain letters, numbers, _ and -").optional().nullable(),
+        username: z.union([z.literal(""), z.string().min(2).max(40).regex(/^[a-zA-Z0-9_-]+$/, "Username may only contain letters, numbers, _ and -")]).optional().nullable().transform(v => (v === "" ? null : v)),
         email: z.string().email().optional(),
         contactPhone: z.string().optional().nullable(),
         profileImage: z.string().optional().nullable(),

@@ -58,7 +58,8 @@ export default function IdentitySection({ profile, onUpdate }: IdentitySectionPr
 
   const updateMutation = useMutation({
     mutationFn: async (data: IdentityFormValues) => {
-      const res = await apiRequest("PUT", "/api/admin/profile", data);
+      const payload = { ...data, username: data.username === "" ? null : data.username };
+      const res = await apiRequest("PUT", "/api/admin/profile", payload);
       return res.json();
     },
     onSuccess: (data) => {
