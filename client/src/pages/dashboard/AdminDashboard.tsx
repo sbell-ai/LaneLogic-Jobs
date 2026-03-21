@@ -3317,7 +3317,7 @@ function FilteredUsersTab({ role }: { role: "job_seeker" | "employer" }) {
 
 // ─── EMAIL TEMPLATES TAB ─────────────────────────────────────────────────────
 
-type TriggerEventDef = { key: string; label: string; description: string; type: string };
+type TriggerEventDef = { key: string; label: string; description: string; type: string; variables: { key: string; description: string }[] };
 
 type EmailTemplate = {
   id: number;
@@ -3876,12 +3876,49 @@ function EmailTemplatesTab() {
 
             {/* ── Variables ───────────────────────────── */}
             <div className="rounded-xl border border-border bg-slate-50 dark:bg-slate-800/40 p-4 space-y-3">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-semibold">Variables</p>
-                  <p className="text-xs text-muted-foreground">Click a chip to insert it at the cursor. Use <code className="bg-muted px-1 rounded">{"{{key}}"}</code> syntax in the body.</p>
-                </div>
+              <div>
+                <p className="text-sm font-semibold">Variables</p>
+                <p className="text-xs text-muted-foreground">Click a chip to insert it at the cursor. Use <code className="bg-muted px-1 rounded">{"{{key}}"}</code> syntax in the body.</p>
               </div>
+
+              {/* Suggestions from selected trigger event */}
+              {(() => {
+                const eventDef = resolvedTriggerEvent ? triggerEvents.find(e => e.key === resolvedTriggerEvent) : null;
+                if (!eventDef || !eventDef.variables?.length) return null;
+                const unadded = eventDef.variables.filter(sv => !variables.some(v => v.key === sv.key));
+                if (!unadded.length) return null;
+                return (
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <p className="text-xs font-medium text-muted-foreground">Suggested for <span className="text-foreground">{eventDef.label}</span></p>
+                      <button
+                        onClick={() => setVariables(prev => {
+                          const existing = new Set(prev.map(v => v.key));
+                          const toAdd = unadded.filter(sv => !existing.has(sv.key));
+                          return [...prev, ...toAdd];
+                        })}
+                        className="text-xs text-primary hover:underline"
+                      >
+                        Add all
+                      </button>
+                    </div>
+                    <div className="flex flex-wrap gap-1.5">
+                      {unadded.map(sv => (
+                        <button
+                          key={sv.key}
+                          data-testid={`suggest-var-${sv.key}`}
+                          title={`Add: ${sv.description}`}
+                          onClick={() => setVariables(prev => [...prev, { key: sv.key, description: sv.description }])}
+                          className="inline-flex items-center gap-1 px-2 py-0.5 rounded border border-dashed border-primary/40 bg-primary/5 text-xs font-mono text-primary hover:bg-primary/10 hover:border-primary/60 transition-colors"
+                        >
+                          <Plus size={10} />
+                          {`{{${sv.key}}}`}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })()}
 
               {variables.length > 0 && (
                 <div className="space-y-1.5">
