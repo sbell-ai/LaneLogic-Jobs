@@ -2,25 +2,25 @@ import { getUncachableStripeClient } from './stripeClient';
 
 const products = [
   {
-    name: "TranspoJobs Basic - Job Seeker",
+    name: "LaneLogic Jobs Basic - Job Seeker",
     description: "Unlimited job applications, priority status, access to basic resources, and profile visibility boost.",
     amount: 1900,
     metadata: { tier: "basic", role: "job_seeker" },
   },
   {
-    name: "TranspoJobs Premium - Job Seeker",
+    name: "LaneLogic Jobs Premium - Job Seeker",
     description: "All Basic features plus unlimited resumes, featured profile badge, all premium resources, and career coaching.",
     amount: 4900,
     metadata: { tier: "premium", role: "job_seeker" },
   },
   {
-    name: "TranspoJobs Basic - Employer",
+    name: "LaneLogic Jobs Basic - Employer",
     description: "Post up to 10 jobs/month, featured listings, CSV bulk upload, and applicant filtering.",
     amount: 7900,
     metadata: { tier: "basic", role: "employer" },
   },
   {
-    name: "TranspoJobs Premium - Employer",
+    name: "LaneLogic Jobs Premium - Employer",
     description: "Unlimited job postings, priority placement, advanced analytics, and dedicated account manager.",
     amount: 19900,
     metadata: { tier: "premium", role: "employer" },

@@ -2444,7 +2444,7 @@ export async function registerRoutes(
       if (!resolvedPriceId && tier && ["basic", "premium"].includes(tier)) {
         const tierLabel = tier.charAt(0).toUpperCase() + tier.slice(1);
         const roleLabel = user.role === "employer" ? "Employer" : "Job Seeker";
-        const productName = `TranspoJobs ${tierLabel} - ${roleLabel}`;
+        const productName = `LaneLogic Jobs ${tierLabel} - ${roleLabel}`;
         const products = await stripe.products.search({ query: `name:'${productName}' AND active:'true'` });
         if (products.data.length > 0) {
           const prices = await stripe.prices.list({ product: products.data[0].id, active: true, limit: 1 });
