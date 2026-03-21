@@ -11,7 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
-import { CheckCircle, XCircle, Upload } from "lucide-react";
+import { CheckCircle, XCircle, Upload, Mail } from "lucide-react";
 
 const identitySchema = z.object({
   firstName: z.string().min(1, "First name is required"),
@@ -74,6 +74,19 @@ export default function IdentitySection({ profile, onUpdate }: IdentitySectionPr
     },
     onError: (err: any) => {
       toast({ title: "Update failed", description: err.message, variant: "destructive" });
+    },
+  });
+
+  const resendMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", "/api/auth/resend-verification", {});
+      return res.json();
+    },
+    onSuccess: () => {
+      toast({ title: "Verification email sent", description: "Check your inbox and click the link to verify your email address." });
+    },
+    onError: (err: any) => {
+      toast({ title: "Could not send email", description: err.message, variant: "destructive" });
     },
   });
 
@@ -190,9 +203,23 @@ export default function IdentitySection({ profile, onUpdate }: IdentitySectionPr
                         <CheckCircle size={12} /> Verified
                       </Badge>
                     ) : (
-                      <Badge variant="outline" className="text-amber-600 border-amber-300 whitespace-nowrap flex items-center gap-1">
-                        <XCircle size={12} /> Unverified
-                      </Badge>
+                      <div className="flex items-center gap-2">
+                        <Badge variant="outline" className="text-amber-600 border-amber-300 whitespace-nowrap flex items-center gap-1">
+                          <XCircle size={12} /> Unverified
+                        </Badge>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="text-xs h-7 gap-1"
+                          onClick={() => resendMutation.mutate()}
+                          disabled={resendMutation.isPending}
+                          data-testid="button-resend-verification"
+                        >
+                          <Mail size={12} />
+                          {resendMutation.isPending ? "Sending…" : "Send verification email"}
+                        </Button>
+                      </div>
                     )}
                   </div>
                   <FormMessage />
