@@ -52,6 +52,24 @@ The front end utilizes React, TypeScript, Wouter for routing, and Tailwind CSS w
 - **Zapier Webhooks**: Used for automating social media posts.
 - **Apify**: Web scraping platform used for automated Workday job imports. Requires `APIFY_TOKEN` env var.
 
+## Dynamic Cron Email Engine (Task #45)
+Replaced three hard-coded nightly cron jobs with a fully database-driven engine configurable entirely from the admin UI.
+
+### Architecture
+- **Database table**: `email_cron_configs` (id, name, description, templateId FK, sourceTable, triggerField, triggerOffsetDays, triggerDirection, recipientField, recipientJoin, filterConditions jsonb, variableMappings jsonb, isActive, runTime, lastRunAt, timestamps).
+- **Engine** (`server/cron/scheduledEmails.ts`): Ticks every 15 minutes; loads active configs; checks `runTime` (UTC HH:MM) and `lastRunAt` (prevents double-fires). Builds safe parameterized SQL via `pool.query()` with table/column whitelist enforcement. `recipientJoin` blocked by SQL keyword blocklist.
+- **Variable mappings**: JSON object mapping template tokens → DB column names. `literal:Value` prefix injects static strings. Engine auto-injects `site_name`, `site_url`, `dashboard_url`. Timestamps auto-formatted to human-readable dates.
+- **On-startup seeding**: 4 configs seeded with name-based guard: "Feature Expiring — Resume Access", "Feature Expiring — Featured Employer", "Job Listing Expiring", "Incomplete Profile Reminder" — all active, running at 08:00 UTC.
+- **CRUD API** (`server/routes.ts`): GET/POST/PUT/DELETE/PATCH/test at `/api/admin/email-cron-configs`. Test-send does a dry-run query and falls back to template testVars if no live data found; response includes `{ source: "live_data" | "sample_data" }`.
+- **Admin UI** (`client/src/pages/dashboard/ScheduledAutomations.tsx`): Full CRUD at `/dashboard/admin/scheduled-automations`. Card list with expand-for-details, active toggle, test send, edit, delete. Create/edit modal with all fields including JSON textarea editors for filter conditions and variable mappings.
+- **Cron banner update** (`AdminDashboard.tsx` `EmailTemplatesTab`): Banner is now driven by a live query to `/api/admin/email-cron-configs` — green if any active config references the current template, amber with link to create one otherwise.
+- **Sidebar**: "Scheduled Automations" nav item added to admin sidebar with Clock icon.
+
+### Security
+- Table/column names validated against `ALLOWED_TABLES` / `ALLOWED_FIELDS` whitelists before SQL interpolation.
+- Filter condition VALUES passed as `$N` positional params (never interpolated).
+- `recipientJoin` blocked by regex matching DROP, DELETE, UPDATE, INSERT, EXEC, UNION, ALTER, TRUNCATE, ;, --, /*, */.
+
 ## Email Templates System (Task #44)
 The admin dashboard includes a full email template management system for transactional emails.
 

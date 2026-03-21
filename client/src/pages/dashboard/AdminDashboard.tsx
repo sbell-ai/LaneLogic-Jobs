@@ -42,6 +42,7 @@ import ImportManagement from "./ImportManagement";
 import EmployerRegistry from "./EmployerRegistry";
 import VerificationInbox from "./VerificationInbox";
 import SeekerVerificationInbox from "./SeekerVerificationInbox";
+import ScheduledAutomations from "./ScheduledAutomations";
 import { insertResourceSchema, insertBlogPostSchema, insertJobSchema } from "@shared/schema";
 import { INTRO_TRUNCATE_LENGTH } from "@shared/constants";
 import { tokenize } from "@/lib/linkify";
@@ -3512,6 +3513,10 @@ function EmailTemplatesTab() {
     queryKey: ["/api/admin/trigger-events"],
   });
 
+  const { data: cronConfigs = [] } = useQuery<{ id: number; templateId: number; isActive: boolean }[]>({
+    queryKey: ["/api/admin/email-cron-configs"],
+  });
+
   const selected = templates.find(t => t.slug === selectedSlug);
 
   useEffect(() => {
@@ -3867,17 +3872,20 @@ function EmailTemplatesTab() {
               })()}
 
               {triggerType === "scheduled" && (() => {
-                const CRON_WIRED = ["feature_expiring", "job_expiring", "profile_incomplete_reminder"];
-                const hasActiveCron = resolvedTriggerEvent && CRON_WIRED.includes(resolvedTriggerEvent);
-                return hasActiveCron ? (
+                const matchingCron = selected
+                  ? cronConfigs.find(c => c.templateId === selected.id && c.isActive)
+                  : undefined;
+                return matchingCron ? (
                   <div className="flex items-center gap-2 px-3 py-2 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700 rounded-lg text-xs text-green-700 dark:text-green-300">
                     <CheckCircle2 size={13} className="shrink-0" />
-                    Cron job is active — runs daily at midnight UTC and scans for matching records automatically.
+                    Cron job is active — the dynamic engine will scan for matching records on schedule.{" "}
+                    <a href="/dashboard/admin/scheduled-automations" className="underline font-medium">Manage automations →</a>
                   </div>
                 ) : (
                   <div className="flex items-center gap-2 px-3 py-2 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-lg text-xs text-amber-700 dark:text-amber-300">
                     <AlertTriangle size={13} className="shrink-0" />
-                    Scheduled emails require a background cron job to be configured in the server.
+                    No active scheduled automation found for this template.{" "}
+                    <a href="/dashboard/admin/scheduled-automations" className="underline font-medium">Create one →</a>
                   </div>
                 );
               })()}
@@ -4162,6 +4170,7 @@ export default function AdminDashboard({ section, subsection }: { section?: stri
       case "verification": return <VerificationInbox />;
       case "seeker-verification": return <SeekerVerificationInbox />;
       case "email-templates": return <EmailTemplatesTab />;
+      case "scheduled-automations": return <ScheduledAutomations />;
       default: return <UsersLandingTab />;
     }
   };

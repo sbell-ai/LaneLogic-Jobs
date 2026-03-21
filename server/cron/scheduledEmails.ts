@@ -1,256 +1,272 @@
 /**
- * Scheduled email cron jobs.
+ * Dynamic Cron Email Engine — Task #45
  *
- * Three jobs run once per day (every 24 hours):
- *   1. feature_expiring  — users whose resumeAccessExpiresAt or featuredEmployerExpiresAt
- *                          falls within the next 6–8 days.
- *   2. job_expiring      — published jobs whose expiresAt falls within the next 6–8 days.
- *   3. profile_incomplete_reminder — job seekers with incomplete profiles whose accounts
- *                          are 3–4 days old (one reminder, no duplicate-send tracking needed).
+ * Replaces three hard-coded nightly jobs with a database-driven engine.
+ * Every 15 minutes the scheduler wakes up, loads all active EmailCronConfig
+ * rows, and fires any config whose run_time (UTC HH:MM) matches the current
+ * UTC hour:minute AND whose last_run_at is not today (UTC).
  *
- * The 6–8-day window ensures each item triggers exactly one notification per weekly run
- * without a separate "sent" tracking table.
+ * ─── Security model ───────────────────────────────────────────────────────────
+ * Table names and column names come from the DB config rows. They are validated
+ * against ALLOWED_TABLES / ALLOWED_FIELDS before any SQL interpolation.
+ * The recipient_join string is checked against a blocklist of dangerous SQL
+ * keywords and the JOIN target table must be in ALLOWED_TABLES.
+ * Filter condition VALUES are passed as $N positional params (never interpolated)
+ * via pool.query(), so they cannot cause SQL injection.
+ *
+ * ─── variable_mappings ────────────────────────────────────────────────────────
+ * Map template token names → DB column names.
+ * Values starting with "literal:" are passed as static strings,
+ * e.g. { feature_name: "literal:Resume Access" }.
+ * The engine auto-injects site_name, site_url, dashboard_url constants.
+ *
+ * ─── Legacy jobs (preserved as comments for reference) ────────────────────────
  */
 
-import { db } from "../db";
-import { users, jobs } from "@shared/schema";
-import { and, eq, gte, lte, isNotNull, or, ne } from "drizzle-orm";
+import { pool } from "../db";
+import { storage } from "../storage";
+import type { EmailCronConfig } from "@shared/schema";
 import { sendTemplatedEmailByEvent } from "../email/sendTemplatedEmail.ts";
 
+// ── Constants ─────────────────────────────────────────────────────────────────
 const SITE_NAME = "LaneLogic Jobs";
 const SITE_URL = process.env.CANONICAL_HOST || "https://lanelogicjobs.com";
 
-function addDays(date: Date, days: number): Date {
-  return new Date(date.getTime() + days * 24 * 60 * 60 * 1000);
+// ── Whitelists ────────────────────────────────────────────────────────────────
+const ALLOWED_TABLES = new Set(["users", "jobs", "applications"]);
+
+const ALLOWED_FIELDS: Record<string, Set<string>> = {
+  users: new Set([
+    "id", "email", "first_name", "last_name", "role", "company_name",
+    "created_at", "resume_access_expires_at", "featured_employer_expires_at",
+    "seeker_track", "is_active",
+  ]),
+  jobs: new Set([
+    "id", "employer_id", "title", "company_name", "expires_at",
+    "created_at", "is_published", "status", "category",
+  ]),
+  applications: new Set([
+    "id", "job_id", "job_seeker_id", "employer_id", "status", "created_at",
+  ]),
+};
+
+const JOIN_BLOCKLIST = /\b(DROP|DELETE|UPDATE|INSERT|EXEC|UNION|ALTER|TRUNCATE)\b|;|--|\*\/|\/\*/i;
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+/** Returns the bare column name (strips table prefix if any) */
+function bare(field: string): string {
+  return field.includes(".") ? field.split(".").pop()! : field;
 }
 
-function formatDate(d: Date): string {
-  return d.toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
+function isAllowedField(table: string, field: string): boolean {
+  return ALLOWED_FIELDS[table]?.has(bare(field)) ?? false;
 }
 
-// ── 1. Feature / Plan Expiring ────────────────────────────────────────────────
-
-async function runFeatureExpiringCron(): Promise<void> {
-  const now = new Date();
-  const windowStart = addDays(now, 6);
-  const windowEnd = addDays(now, 8);
-
-  try {
-    const expiringUsers = await db
-      .select()
-      .from(users)
-      .where(
-        or(
-          and(
-            isNotNull(users.resumeAccessExpiresAt),
-            gte(users.resumeAccessExpiresAt, windowStart),
-            lte(users.resumeAccessExpiresAt, windowEnd),
-          ),
-          and(
-            isNotNull(users.featuredEmployerExpiresAt),
-            gte(users.featuredEmployerExpiresAt, windowStart),
-            lte(users.featuredEmployerExpiresAt, windowEnd),
-          ),
-        ),
-      );
-
-    let sent = 0;
-    for (const user of expiringUsers) {
-      const features: { name: string; expiryDate: Date }[] = [];
-
-      if (
-        user.resumeAccessExpiresAt &&
-        user.resumeAccessExpiresAt >= windowStart &&
-        user.resumeAccessExpiresAt <= windowEnd
-      ) {
-        features.push({ name: "Resume Access", expiryDate: user.resumeAccessExpiresAt });
-      }
-      if (
-        user.featuredEmployerExpiresAt &&
-        user.featuredEmployerExpiresAt >= windowStart &&
-        user.featuredEmployerExpiresAt <= windowEnd
-      ) {
-        features.push({ name: "Featured Employer Listing", expiryDate: user.featuredEmployerExpiresAt });
-      }
-
-      for (const feature of features) {
-        try {
-          await sendTemplatedEmailByEvent("feature_expiring", user.email, {
-            first_name: user.firstName || user.email,
-            feature_name: feature.name,
-            expiry_date: formatDate(feature.expiryDate),
-            site_name: SITE_NAME,
-            site_url: SITE_URL,
-            dashboard_url: `${SITE_URL}/dashboard`,
-          });
-          sent++;
-        } catch (e: any) {
-          console.error(`[cron:feature_expiring] Error for user ${user.id}:`, e?.message);
-        }
-      }
-    }
-
-    console.log(`[cron:feature_expiring] Scanned ${expiringUsers.length} users, sent ${sent} emails`);
-  } catch (e: any) {
-    console.error("[cron:feature_expiring] Query error:", e?.message);
+function validateJoin(joinStr: string): void {
+  if (JOIN_BLOCKLIST.test(joinStr)) {
+    throw new Error(`Blocked keyword in recipient_join`);
+  }
+  const m = joinStr.match(/\bJOIN\s+(\w+)/i);
+  if (m && !ALLOWED_TABLES.has(m[1].toLowerCase())) {
+    throw new Error(`Join target "${m[1]}" not in ALLOWED_TABLES`);
   }
 }
 
-// ── 2. Job Listing Expiring ───────────────────────────────────────────────────
+function formatDateValue(val: unknown): string {
+  if (val instanceof Date) {
+    return val.toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
+  }
+  if (typeof val === "string" && /^\d{4}-\d{2}-\d{2}(T[\d:.Z+-]+)?$/.test(val)) {
+    const d = new Date(val);
+    if (!isNaN(d.getTime())) {
+      return d.toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
+    }
+  }
+  return String(val ?? "");
+}
 
-async function runJobExpiringCron(): Promise<void> {
-  const now = new Date();
-  const windowStart = addDays(now, 6);
-  const windowEnd = addDays(now, 8);
+// ── Per-config runner ─────────────────────────────────────────────────────────
 
+async function runConfig(config: EmailCronConfig): Promise<{ sent: number; errors: number }> {
+  const { sourceTable, triggerField, triggerOffsetDays, triggerDirection,
+          recipientField, recipientJoin, filterConditions, variableMappings,
+          templateId } = config;
+
+  // Validate table
+  if (!ALLOWED_TABLES.has(sourceTable)) {
+    throw new Error(`Blocked table "${sourceTable}" in config id=${config.id}`);
+  }
+
+  // Validate trigger field
+  if (!isAllowedField(sourceTable, triggerField)) {
+    throw new Error(`Blocked field "${triggerField}" on "${sourceTable}" in config id=${config.id}`);
+  }
+
+  // Validate join
+  if (recipientJoin) validateJoin(recipientJoin);
+
+  // Determine date expression
+  const offsetDays = Number(triggerOffsetDays) || 0;
+  const intervalExpr = triggerDirection === "before"
+    ? `CURRENT_DATE + INTERVAL '${offsetDays} days'`
+    : `CURRENT_DATE - INTERVAL '${offsetDays} days'`;
+
+  // Build WHERE parts and positional params
+  const params: unknown[] = [];
+  const whereParts: string[] = [
+    `${sourceTable}.${triggerField}::date = ${intervalExpr}`,
+  ];
+
+  const safeBoolOps = new Set(["=", "!=", ">", "<", ">=", "<="]);
+
+  for (const cond of (filterConditions ?? [])) {
+    const col = bare(cond.field);
+    if (!isAllowedField(sourceTable, col)) {
+      console.warn(`[cron-engine] Skipping unknown filter field "${cond.field}" in config id=${config.id}`);
+      continue;
+    }
+    if (cond.operator === "IS NULL") {
+      whereParts.push(`${sourceTable}.${col} IS NULL`);
+    } else if (cond.operator === "IS NOT NULL") {
+      whereParts.push(`${sourceTable}.${col} IS NOT NULL`);
+    } else {
+      const op = safeBoolOps.has(cond.operator) ? cond.operator : "=";
+      params.push(cond.value);
+      whereParts.push(`${sourceTable}.${col} ${op} $${params.length}`);
+    }
+  }
+
+  // Determine SELECT columns: source table + joined table if present
+  const joinedTable = recipientJoin
+    ? (recipientJoin.match(/\bJOIN\s+(\w+)/i)?.[1] ?? null)
+    : null;
+
+  const selectCols = joinedTable
+    ? `${sourceTable}.*, ${joinedTable}.*`
+    : `${sourceTable}.*`;
+
+  const queryStr = [
+    `SELECT ${selectCols}`,
+    `FROM ${sourceTable}`,
+    recipientJoin ?? "",
+    `WHERE ${whereParts.join(" AND ")}`,
+    `LIMIT 500`,
+  ].filter(Boolean).join(" ");
+
+  // Execute with parameterized values
+  let rows: Record<string, unknown>[] = [];
   try {
-    const expiringJobs = await db
-      .select()
-      .from(jobs)
-      .where(
-        and(
-          eq(jobs.isPublished, true),
-          isNotNull(jobs.expiresAt),
-          gte(jobs.expiresAt, windowStart),
-          lte(jobs.expiresAt, windowEnd),
-        ),
-      );
+    const result = await pool.query(queryStr, params);
+    rows = result.rows ?? [];
+  } catch (err: any) {
+    console.error(`[cron-engine] Query failed for config id=${config.id}:`, err?.message, "\nSQL:", queryStr);
+    return { sent: 0, errors: 1 };
+  }
 
-    let sent = 0;
-    for (const job of expiringJobs) {
-      try {
-        const [employer] = await db
-          .select()
-          .from(users)
-          .where(eq(users.id, job.employerId))
-          .limit(1);
+  // Look up template trigger event
+  const templates = await storage.getEmailTemplates();
+  const template = templates.find(t => t.id === templateId);
+  if (!template?.triggerEvent) {
+    console.error(`[cron-engine] No template/triggerEvent for templateId=${templateId} (config id=${config.id})`);
+    return { sent: 0, errors: 1 };
+  }
 
-        if (!employer) continue;
+  const recipientCol = bare(recipientField);
+  let sent = 0;
+  let errors = 0;
 
-        await sendTemplatedEmailByEvent("job_expiring", employer.email, {
-          first_name: employer.firstName || employer.companyName || employer.email,
-          company_name: job.companyName || employer.companyName || "",
-          job_title: job.title,
-          expiry_date: formatDate(job.expiresAt!),
-          renew_url: `${SITE_URL}/dashboard/jobs`,
-          dashboard_url: `${SITE_URL}/dashboard`,
-          site_name: SITE_NAME,
-          site_url: SITE_URL,
-        });
-        sent++;
-      } catch (e: any) {
-        console.error(`[cron:job_expiring] Error for job ${job.id}:`, e?.message);
+  for (const row of rows) {
+    const recipientEmail = row[recipientCol] as string | undefined;
+    if (!recipientEmail || typeof recipientEmail !== "string") continue;
+
+    const vars: Record<string, string> = {
+      site_name: SITE_NAME,
+      site_url: SITE_URL,
+      dashboard_url: `${SITE_URL}/dashboard`,
+    };
+
+    for (const [tokenName, mappingValue] of Object.entries(variableMappings ?? {})) {
+      if (typeof mappingValue === "string" && mappingValue.startsWith("literal:")) {
+        vars[tokenName] = mappingValue.slice("literal:".length);
+      } else {
+        const colVal = row[mappingValue] ?? row[bare(String(mappingValue))];
+        vars[tokenName] = formatDateValue(colVal);
       }
     }
 
-    console.log(`[cron:job_expiring] Scanned ${expiringJobs.length} jobs, sent ${sent} emails`);
-  } catch (e: any) {
-    console.error("[cron:job_expiring] Query error:", e?.message);
-  }
-}
-
-// ── 3. Incomplete Profile Reminder ───────────────────────────────────────────
-// Targets job seekers who registered 3–4 days ago and still have key fields missing.
-// The 3–4-day window acts as natural deduplication: each account falls in it exactly once.
-
-const PROFILE_FIELDS: { field: keyof typeof users.$inferSelect; label: string }[] = [
-  { field: "firstName", label: "First name" },
-  { field: "lastName", label: "Last name" },
-  { field: "seekerTrack", label: "Job track / category" },
-];
-
-async function runProfileIncompleteReminderCron(): Promise<void> {
-  const now = new Date();
-  const windowStart = addDays(now, -4);
-  const windowEnd = addDays(now, -3);
-
-  try {
-    const candidates = await db
-      .select()
-      .from(users)
-      .where(
-        and(
-          eq(users.role, "job_seeker"),
-          isNotNull(users.createdAt),
-          gte(users.createdAt, windowStart),
-          lte(users.createdAt, windowEnd),
-        ),
-      );
-
-    let sent = 0;
-    for (const user of candidates) {
-      const missingLabels: string[] = [];
-
-      for (const { field, label } of PROFILE_FIELDS) {
-        const val = user[field] as string | null | undefined;
-        if (!val || val === "Unknown") missingLabels.push(label);
-      }
-
-      if (missingLabels.length === 0) continue;
-
-      try {
-        await sendTemplatedEmailByEvent("profile_incomplete_reminder", user.email, {
-          first_name: user.firstName || user.email,
-          missing_fields: missingLabels.join(", "),
-          profile_url: `${SITE_URL}/dashboard/profile`,
-          site_name: SITE_NAME,
-          site_url: SITE_URL,
-        });
-        sent++;
-      } catch (e: any) {
-        console.error(`[cron:profile_incomplete_reminder] Error for user ${user.id}:`, e?.message);
-      }
+    try {
+      await sendTemplatedEmailByEvent(template.triggerEvent, recipientEmail, vars);
+      sent++;
+    } catch (err: any) {
+      console.error(`[cron-engine] Send failed (config id=${config.id}, to=${recipientEmail}):`, err?.message);
+      errors++;
     }
+  }
 
-    console.log(`[cron:profile_incomplete_reminder] Scanned ${candidates.length} seekers, sent ${sent} emails`);
-  } catch (e: any) {
-    console.error("[cron:profile_incomplete_reminder] Query error:", e?.message);
+  return { sent, errors };
+}
+
+// ── Engine tick ───────────────────────────────────────────────────────────────
+
+async function runDynamicCronEngine(): Promise<void> {
+  const now = new Date();
+  const utcH = String(now.getUTCHours()).padStart(2, "0");
+  const utcM = String(now.getUTCMinutes()).padStart(2, "0");
+  const currentUTCTime = `${utcH}:${utcM}`;
+  const todayUTCStr = now.toISOString().slice(0, 10);
+
+  let configs: EmailCronConfig[] = [];
+  try {
+    configs = await storage.getEmailCronConfigs();
+  } catch (err: any) {
+    console.error("[cron-engine] Failed to load configs:", err?.message);
+    return;
+  }
+
+  const due = configs.filter(c => {
+    if (!c.isActive) return false;
+    if (c.runTime !== currentUTCTime) return false;
+    if (c.lastRunAt) {
+      const lastDay = new Date(c.lastRunAt).toISOString().slice(0, 10);
+      if (lastDay === todayUTCStr) return false;
+    }
+    return true;
+  });
+
+  if (due.length === 0) return;
+  console.log(`[cron-engine] ${due.length} config(s) due at ${currentUTCTime} UTC`);
+
+  for (const config of due) {
+    console.log(`[cron-engine] Running "${config.name}" (id=${config.id})`);
+    try {
+      const { sent, errors } = await runConfig(config);
+      await storage.touchEmailCronConfigLastRun(config.id);
+      console.log(`[cron-engine] "${config.name}" done — sent=${sent} errors=${errors}`);
+    } catch (err: any) {
+      console.error(`[cron-engine] Error in config id=${config.id}:`, err?.message);
+    }
   }
 }
 
-// ── Scheduler ────────────────────────────────────────────────────────────────
+// ── Scheduler ─────────────────────────────────────────────────────────────────
 
-const CRON_INTERVAL_MS = 24 * 60 * 60 * 1000; // 24 hours
+const TICK_MS = 15 * 60 * 1000;
 
-async function runAllCronJobs(): Promise<void> {
-  console.log("[cron:scheduled-emails] Running daily email cron jobs...");
-  await runFeatureExpiringCron();
-  await runJobExpiringCron();
-  await runProfileIncompleteReminderCron();
-  console.log("[cron:scheduled-emails] Daily email cron jobs complete");
-}
-
-/**
- * Start the scheduled email cron jobs.
- * Runs once at startup (after a short delay) then every 24 hours aligned to midnight UTC.
- */
 export function initEmailCronJobs(): void {
-  // Run for the first time shortly after startup
-  setTimeout(() => {
-    runAllCronJobs().catch((e) =>
-      console.error("[cron:scheduled-emails] Startup run error:", e?.message),
-    );
-  }, 60_000); // 1 minute after boot
-
-  // Schedule next run at the next UTC midnight, then repeat every 24h
   const now = new Date();
-  const nextMidnightUTC = new Date(
-    Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1, 0, 0, 0, 0),
-  );
-  const msUntilMidnight = nextMidnightUTC.getTime() - now.getTime();
+  const msUntilFirstTick = TICK_MS - (now.getTime() % TICK_MS);
 
   setTimeout(() => {
-    runAllCronJobs().catch((e) =>
-      console.error("[cron:scheduled-emails] Midnight run error:", e?.message),
-    );
+    runDynamicCronEngine().catch(e => console.error("[cron-engine] tick error:", e?.message));
     setInterval(() => {
-      runAllCronJobs().catch((e) =>
-        console.error("[cron:scheduled-emails] Interval run error:", e?.message),
-      );
-    }, CRON_INTERVAL_MS);
-  }, msUntilMidnight);
+      runDynamicCronEngine().catch(e => console.error("[cron-engine] tick error:", e?.message));
+    }, TICK_MS);
+  }, msUntilFirstTick);
 
-  console.log(
-    `[cron:scheduled-emails] Initialized. Next midnight run in ${Math.round(msUntilMidnight / 60_000)} minutes.`,
-  );
+  console.log(`[cron-engine] Initialized. Ticking every 15 min, first tick in ${Math.round(msUntilFirstTick / 1000)}s.`);
 }
+
+// ─── Legacy functions (archived) ─────────────────────────────────────────────
+// runFeatureExpiringCron(), runJobExpiringCron(), runProfileIncompleteReminderCron()
+// replaced by the dynamic engine above. See git history for the original implementations.

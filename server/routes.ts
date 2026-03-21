@@ -2,9 +2,9 @@ import type { Express } from "express";
 import type { Server } from "http";
 import { storage } from "./storage";
 import { api } from "@shared/routes";
-import { insertPageSchema, jobs } from "@shared/schema";
+import { insertPageSchema, jobs, insertEmailCronConfigSchema } from "@shared/schema";
 import { eq } from "drizzle-orm";
-import { db } from "./db";
+import { db, pool } from "./db";
 import { z } from "zod";
 import session from "express-session";
 import connectPgSimple from "connect-pg-simple";
@@ -1932,6 +1932,164 @@ export async function registerRoutes(
       res.json({ message: `Test email sent to ${(req.user as any).email}` });
     } catch (err: any) {
       console.error("[email] Test send error:", err);
+      res.status(500).json({ message: err.message || "Test send failed" });
+    }
+  });
+
+  // ── Email Cron Configs ────────────────────────────────────────────────────
+
+  app.get("/api/admin/email-cron-configs", adminOnly, async (_req, res) => {
+    try {
+      const configs = await storage.getEmailCronConfigs();
+      res.json(configs);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.post("/api/admin/email-cron-configs", adminOnly, async (req, res) => {
+    try {
+      const parsed = insertEmailCronConfigSchema.safeParse(req.body);
+      if (!parsed.success) return res.status(400).json({ message: "Invalid input", errors: parsed.error.flatten() });
+      const config = await storage.createEmailCronConfig(parsed.data);
+      res.status(201).json(config);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.put("/api/admin/email-cron-configs/:id", adminOnly, async (req, res) => {
+    try {
+      const id = Number(req.params.id);
+      const parsed = insertEmailCronConfigSchema.partial().safeParse(req.body);
+      if (!parsed.success) return res.status(400).json({ message: "Invalid input", errors: parsed.error.flatten() });
+      const config = await storage.updateEmailCronConfig(id, parsed.data);
+      res.json(config);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.delete("/api/admin/email-cron-configs/:id", adminOnly, async (req, res) => {
+    try {
+      await storage.deleteEmailCronConfig(Number(req.params.id));
+      res.json({ ok: true });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.patch("/api/admin/email-cron-configs/:id/toggle", adminOnly, async (req, res) => {
+    try {
+      const id = Number(req.params.id);
+      const existing = await storage.getEmailCronConfig(id);
+      if (!existing) return res.status(404).json({ message: "Not found" });
+      const updated = await storage.updateEmailCronConfig(id, { isActive: !existing.isActive });
+      res.json(updated);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.post("/api/admin/email-cron-configs/:id/test", adminOnly, async (req, res) => {
+    const adminId = (req.user as any).id;
+    const last = testEmailRateLimit.get(adminId);
+    if (last && Date.now() - last < 30_000) {
+      return res.status(429).json({ message: "Please wait 30 seconds between test sends." });
+    }
+    try {
+      const config = await storage.getEmailCronConfig(Number(req.params.id));
+      if (!config) return res.status(404).json({ message: "Config not found" });
+
+      const template = await storage.getEmailTemplateBySlug(
+        (await storage.getEmailTemplates()).find(t => t.id === config.templateId)?.slug ?? ""
+      );
+      if (!template) return res.status(404).json({ message: "Associated template not found" });
+
+      const { DEFAULT_TEMPLATES } = await import("./email/templateSeeds.ts");
+      const seed = DEFAULT_TEMPLATES.find(s => s.slug === template.slug);
+      const fallbackVars: Record<string, string> = (seed?.testVars as Record<string, string>) ?? {};
+
+      // Try to fetch one live row
+      const ALLOWED_TABLES_SET = new Set(["users", "jobs", "applications"]);
+      const JOIN_BLOCKLIST = /\b(DROP|DELETE|UPDATE|INSERT|EXEC|UNION|ALTER|TRUNCATE)\b|;|--|\*\/|\/\*/i;
+
+      let liveVars: Record<string, string> | null = null;
+      let dataSource: "live_data" | "sample_data" = "sample_data";
+
+      try {
+        if (ALLOWED_TABLES_SET.has(config.sourceTable)) {
+          const join = config.recipientJoin ?? "";
+          if (!join || !JOIN_BLOCKLIST.test(join)) {
+            const joinedTable = join.match(/\bJOIN\s+(\w+)/i)?.[1];
+            const selectCols = joinedTable ? `${config.sourceTable}.*, ${joinedTable}.*` : `${config.sourceTable}.*`;
+            const offsetDays = Number(config.triggerOffsetDays) || 0;
+            const intervalExpr = config.triggerDirection === "before"
+              ? `CURRENT_DATE + INTERVAL '${offsetDays} days'`
+              : `CURRENT_DATE - INTERVAL '${offsetDays} days'`;
+
+            const qResult = await pool.query(
+              `SELECT ${selectCols} FROM ${config.sourceTable} ${join} WHERE ${config.sourceTable}.${config.triggerField}::date = ${intervalExpr} LIMIT 1`
+            );
+
+            if (qResult.rows.length > 0) {
+              const row = qResult.rows[0];
+              const vars: Record<string, string> = {
+                site_name: "LaneLogic Jobs",
+                site_url: process.env.CANONICAL_HOST || "https://lanelogicjobs.com",
+                dashboard_url: `${process.env.CANONICAL_HOST || "https://lanelogicjobs.com"}/dashboard`,
+              };
+              for (const [token, mapping] of Object.entries(config.variableMappings ?? {})) {
+                if (typeof mapping === "string" && mapping.startsWith("literal:")) {
+                  vars[token] = mapping.slice("literal:".length);
+                } else {
+                  const colVal = row[String(mapping)] ?? row[String(mapping).split(".").pop()!];
+                  const strVal = colVal instanceof Date
+                    ? colVal.toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })
+                    : String(colVal ?? "");
+                  vars[token] = strVal;
+                }
+              }
+              liveVars = vars;
+              dataSource = "live_data";
+            }
+          }
+        }
+      } catch (_) {}
+
+      const variablesUsed = liveVars ?? fallbackVars;
+
+      const { renderEmailTemplate } = await import("./email/templateEngine.ts");
+      const rendered = renderEmailTemplate(template.subject, template.body, variablesUsed);
+
+      const apiKey = process.env.MAILGUN_API_KEY;
+      const domain = process.env.MAILGUN_DOMAIN;
+      if (!apiKey || !domain) {
+        return res.status(500).json({ message: "Mailgun is not configured." });
+      }
+
+      const FormData = (await import("form-data")).default;
+      const Mailgun = (await import("mailgun.js")).default;
+      const mg = new Mailgun(FormData).client({ username: "api", key: apiKey });
+      const fromName = process.env.MAILGUN_FROM_NAME || "LaneLogic Jobs";
+      const fromEmail = process.env.MAILGUN_FROM_EMAIL || `no-reply@${domain}`;
+      const isHtml = rendered.body.trimStart().startsWith("<");
+
+      await mg.messages.create(domain, {
+        from: `${fromName} <${fromEmail}>`,
+        to: [(req.user as any).email],
+        subject: `[TEST] ${rendered.subject}`,
+        ...(isHtml ? { html: rendered.body } : { text: rendered.body }),
+      });
+
+      testEmailRateLimit.set(adminId, Date.now());
+      res.json({
+        message: `Test email sent to ${(req.user as any).email}`,
+        source: dataSource,
+        variablesUsed,
+      });
+    } catch (err: any) {
+      console.error("[cron-config] Test send error:", err);
       res.status(500).json({ message: err.message || "Test send failed" });
     }
   });
