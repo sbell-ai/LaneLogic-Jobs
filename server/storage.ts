@@ -250,6 +250,14 @@ export interface IStorage {
   updateEmailCronConfig(id: number, updates: Partial<InsertEmailCronConfig>): Promise<EmailCronConfig>;
   deleteEmailCronConfig(id: number): Promise<void>;
   touchEmailCronConfigLastRun(id: number): Promise<void>;
+
+  // Admin Profile
+  getAdminUsers(): Promise<User[]>;
+  updateLastLoginAt(id: number): Promise<void>;
+  getNotificationPreferences(id: number): Promise<Record<string, boolean>>;
+  updateNotificationPreferences(id: number, prefs: Record<string, boolean>): Promise<void>;
+  inviteAdminUser(email: string, firstName: string, lastName: string, tempPassword: string): Promise<User>;
+  updateAdminUserRole(id: number, role: string): Promise<User>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -1381,6 +1389,37 @@ export class DatabaseStorage implements IStorage {
       .update(emailCronConfigs)
       .set({ lastRunAt: new Date(), updatedAt: new Date() })
       .where(eq(emailCronConfigs.id, id));
+  }
+
+  // ── Admin Profile ──────────────────────────────────────────────────────────
+  async getAdminUsers(): Promise<User[]> {
+    return await db.select().from(users).where(eq(users.role, "admin"));
+  }
+
+  async updateLastLoginAt(id: number): Promise<void> {
+    await db.update(users).set({ lastLoginAt: new Date() } as any).where(eq(users.id, id));
+  }
+
+  async getNotificationPreferences(id: number): Promise<Record<string, boolean>> {
+    const [user] = await db.select({ notificationPreferences: users.notificationPreferences }).from(users).where(eq(users.id, id));
+    return (user?.notificationPreferences as Record<string, boolean>) ?? {};
+  }
+
+  async updateNotificationPreferences(id: number, prefs: Record<string, boolean>): Promise<void> {
+    await db.update(users).set({ notificationPreferences: prefs } as any).where(eq(users.id, id));
+  }
+
+  async inviteAdminUser(email: string, firstName: string, lastName: string, tempPassword: string): Promise<User> {
+    const [user] = await db
+      .insert(users)
+      .values({ email, password: tempPassword, role: "admin", membershipTier: "free", firstName, lastName })
+      .returning();
+    return user;
+  }
+
+  async updateAdminUserRole(id: number, role: string): Promise<User> {
+    const [user] = await db.update(users).set({ role }).where(eq(users.id, id)).returning();
+    return user;
   }
 }
 

@@ -39,6 +39,7 @@ import VerificationPage from "@/pages/employer/VerificationPage";
 import SeekerVerificationPage from "@/pages/seeker/SeekerVerificationPage";
 import ResetPassword from "@/pages/ResetPassword";
 import VerifyEmail from "@/pages/VerifyEmail";
+import AdminProfile from "@/pages/dashboard/admin-profile/AdminProfile";
 
 function ThemeInjector() {
   useSettings();
@@ -265,6 +266,7 @@ function Router() {
       <Route path="/dashboard" component={DashboardRouter} />
       <Route path="/dashboard/messages" component={InboxPage} />
       <Route path="/dashboard/:section" component={DashboardSectionRouter} />
+      <Route path="/dashboard/admin/profile" component={AdminProfile} />
       <Route path="/dashboard/admin/:section/:subsection" component={AdminSubSectionRouter} />
       <Route path="/dashboard/admin/:section" component={AdminSectionRouter} />
 

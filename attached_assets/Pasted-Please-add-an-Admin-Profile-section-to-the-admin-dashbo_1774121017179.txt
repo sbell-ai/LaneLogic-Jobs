@@ -1,0 +1,50 @@
+Please add an Admin Profile section to the admin dashboard. Here is the full spec:
+
+LOCATION
+The profile should be accessible from the top navigation bar as an avatar/dropdown. Clicking the avatar or admin name in the top nav opens a dropdown with a "My Profile" or "Account Settings" link that navigates to the full profile page.
+
+PROFILE PAGE SECTIONS
+Build a dedicated AdminProfile.tsx component page with the following sections:
+
+1. ACCOUNT IDENTITY
+- Unique username (editable)
+- Verified email address (editable, with re-verification flow if changed)
+- Email verification status badge (Verified / Unverified)
+- Profile photo / avatar (upload or initials fallback)
+- Name (first and last, editable)
+- Contact info (phone number, optional)
+
+2. SECURITY
+- Change password form (current password, new password, confirm new password)
+- Login activity / session history table showing: date/time, IP address, device/browser, location (if available), and a "Revoke Session" action for active sessions
+- Security scan summary — show last scan date, any flagged issues, and a "Run Scan" trigger button
+
+3. PERMISSIONS & ACCESS
+- Global permissions display (read-only list of what this admin account can access)
+- User management section — list of all admin users with their roles, status (active/inactive), last login, and actions to invite new admin, deactivate, or change role
+
+4. NOTIFICATION PREFERENCES
+- Toggles for email notification types (e.g. new job posted, new user registered, system alerts, cron job failures, security alerts)
+- Each toggle saves immediately on change (no save button needed, or show a subtle auto-save indicator)
+
+5. SYSTEM STATUS
+- A system status dashboard panel showing: server uptime, database connection status, email service status, cron engine status (last run, next scheduled run), and any active error flags
+- Each status item shows a green/amber/red indicator
+- A "Refresh" button to pull current status on demand
+
+NAVIGATION
+- Add an avatar element to the top navigation bar showing either the admin's profile photo or their initials in a circle
+- Clicking it opens a small dropdown with: My Profile, and Sign Out
+- The profile page should be a route, e.g. /admin/profile, accessible from the dropdown link
+
+TECHNICAL NOTES
+- Extract each major section into its own sub-component inside a /dashboard/admin-profile/ folder to keep the file sizes manageable
+- All editable fields must validate before saving and show inline error messages
+- Password change must require the current password before accepting a new one
+- Email changes must trigger a re-verification email before the new address is treated as verified
+- Session revocation should immediately invalidate the token server-side
+- The security scan can be a placeholder trigger for now that logs "Manual scan triggered" — the actual scan logic can be wired in a later ticket
+- System status values should be fetched from a new GET /api/admin/system-status endpoint
+- Notification preference toggles should persist to a new admin_notification_preferences table or a JSONB column on the admin user record — whichever fits the existing schema better
+
+Please confirm the approach for storing notification preferences and the session/token model before beginning, so the implementation fits the existing auth architecture.

@@ -38,6 +38,9 @@ export const users = pgTable("users", {
   passwordResetToken: text("password_reset_token"),
   passwordResetTokenExpiry: timestamp("password_reset_token_expiry"),
   createdAt: timestamp("created_at").defaultNow(),
+  username: text("username").unique(),
+  notificationPreferences: jsonb("notification_preferences"),
+  lastLoginAt: timestamp("last_login_at"),
 });
 
 export const jobs = pgTable("jobs", {

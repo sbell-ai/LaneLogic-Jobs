@@ -3,6 +3,8 @@ import { useAuth } from "@/hooks/use-auth";
 import { Link, useLocation } from "wouter";
 import { Briefcase, LayoutDashboard, FileText, LogOut, Users, BookOpen, Upload, CreditCard, UserPlus, PlusCircle, Palette, FileEdit, Tag, Ticket, UserCircle, FilePlus2, Share2, Database, Package, Gauge, ArrowDownToLine, ShieldCheck, MessageSquare, Mail, Clock } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { useQuery } from "@tanstack/react-query";
 
 interface AdminLink {
@@ -187,14 +189,53 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
               <SidebarTrigger />
               <h2 className="font-display font-semibold hidden sm:block capitalize">{user.role.replace('_', ' ')} Portal</h2>
             </div>
-            <div className="flex items-center gap-4">
-              <div className="text-sm text-right hidden md:block">
-                <p className="font-semibold">{user.firstName} {user.lastName}</p>
-                <p className="text-muted-foreground text-xs capitalize">{user.membershipTier} Tier</p>
-              </div>
-              <Button variant="ghost" size="icon" onClick={() => logout()} title="Logout" className="hover-elevate rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
-                <LogOut size={18} />
-              </Button>
+            <div className="flex items-center gap-3">
+              {user.role === "admin" ? (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <button
+                      className="flex items-center gap-2.5 rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                      data-testid="button-avatar-dropdown"
+                    >
+                      <div className="text-sm text-right hidden md:block">
+                        <p className="font-semibold leading-tight">{user.firstName} {user.lastName}</p>
+                        <p className="text-muted-foreground text-xs">Admin</p>
+                      </div>
+                      <Avatar className="h-9 w-9 border border-border">
+                        <AvatarImage src={(user as any).profileImage ?? ""} alt="Profile" />
+                        <AvatarFallback className="bg-primary/10 text-primary font-semibold text-sm">
+                          {`${user.firstName?.[0] ?? ""}${user.lastName?.[0] ?? ""}`.toUpperCase() || "AD"}
+                        </AvatarFallback>
+                      </Avatar>
+                    </button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-44">
+                    <DropdownMenuItem asChild>
+                      <Link href="/dashboard/admin/profile" data-testid="link-my-profile" className="cursor-pointer flex items-center gap-2">
+                        <UserCircle size={15} /> My Profile
+                      </Link>
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem
+                      onClick={() => logout()}
+                      className="text-red-600 dark:text-red-400 cursor-pointer flex items-center gap-2"
+                      data-testid="button-sign-out"
+                    >
+                      <LogOut size={15} /> Sign Out
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              ) : (
+                <>
+                  <div className="text-sm text-right hidden md:block">
+                    <p className="font-semibold">{user.firstName} {user.lastName}</p>
+                    <p className="text-muted-foreground text-xs capitalize">{user.membershipTier} Tier</p>
+                  </div>
+                  <Button variant="ghost" size="icon" onClick={() => logout()} title="Logout" className="hover-elevate rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
+                    <LogOut size={18} />
+                  </Button>
+                </>
+              )}
             </div>
           </header>
           <main className="flex-1 p-6 md:p-8 overflow-auto">
