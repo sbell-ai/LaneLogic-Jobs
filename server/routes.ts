@@ -3613,12 +3613,76 @@ ${urls.join("\n")}
     }
   });
 
-  // POST /api/admin/security-scan — placeholder
+  // POST /api/admin/security-scan — real checks
   app.post("/api/admin/security-scan", async (req: any, res) => {
     if (!requireAdminSession(req, res)) return;
     const scannedAt = new Date().toISOString();
-    console.log(`[security-scan] Manual scan triggered by admin ${req.user.id} at ${scannedAt}`);
-    res.json({ scannedAt, message: "Scan initiated. No issues detected (placeholder)." });
+    console.log(`[security-scan] Scan triggered by admin ${req.user.id} at ${scannedAt}`);
+
+    type ScanCheck = { label: string; status: "ok" | "warning" | "error"; detail: string };
+    const checks: ScanCheck[] = [];
+
+    try {
+      // 1. Unverified admin email addresses
+      const unverifiedResult = await pool.query(
+        `SELECT COUNT(*) AS cnt FROM users WHERE role = 'admin' AND email_verified = false`
+      );
+      const unverifiedCount = parseInt(unverifiedResult.rows[0].cnt, 10);
+      checks.push(
+        unverifiedCount === 0
+          ? { label: "Admin email verification", status: "ok", detail: "All admin accounts have verified email addresses." }
+          : { label: "Admin email verification", status: "warning", detail: `${unverifiedCount} admin account${unverifiedCount > 1 ? "s have" : " has"} an unverified email address.` }
+      );
+
+      // 2. Admin accounts that have never logged in
+      const neverLoggedResult = await pool.query(
+        `SELECT COUNT(*) AS cnt FROM users WHERE role = 'admin' AND last_login_at IS NULL`
+      );
+      const neverLoggedCount = parseInt(neverLoggedResult.rows[0].cnt, 10);
+      checks.push(
+        neverLoggedCount === 0
+          ? { label: "Admin login history", status: "ok", detail: "All admin accounts have logged in at least once." }
+          : { label: "Admin login history", status: "warning", detail: `${neverLoggedCount} admin account${neverLoggedCount > 1 ? "s have" : " has"} never logged in.` }
+      );
+
+      // 3. Stale (expired) password reset tokens still stored in DB
+      const staleTokenResult = await pool.query(
+        `SELECT COUNT(*) AS cnt FROM users WHERE password_reset_token IS NOT NULL AND password_reset_token_expiry < NOW()`
+      );
+      const staleTokenCount = parseInt(staleTokenResult.rows[0].cnt, 10);
+      checks.push(
+        staleTokenCount === 0
+          ? { label: "Password reset tokens", status: "ok", detail: "No expired password reset tokens found in the database." }
+          : { label: "Password reset tokens", status: "warning", detail: `${staleTokenCount} expired password reset token${staleTokenCount > 1 ? "s are" : " is"} still stored in the database.` }
+      );
+
+      // 4. Email service configuration
+      const emailConfigured = !!(process.env.MAILGUN_API_KEY && process.env.MAILGUN_DOMAIN);
+      checks.push(
+        emailConfigured
+          ? { label: "Email service", status: "ok", detail: "Email service is configured (Mailgun)." }
+          : { label: "Email service", status: "error", detail: "Email service is not configured. Password resets and notifications will not work." }
+      );
+
+      // 5. Pending password reset tokens (active, not yet expired)
+      const activeTokenResult = await pool.query(
+        `SELECT COUNT(*) AS cnt FROM users WHERE password_reset_token IS NOT NULL AND password_reset_token_expiry > NOW()`
+      );
+      const activeTokenCount = parseInt(activeTokenResult.rows[0].cnt, 10);
+      checks.push(
+        activeTokenCount === 0
+          ? { label: "Active password resets", status: "ok", detail: "No active password reset requests pending." }
+          : { label: "Active password resets", status: "ok", detail: `${activeTokenCount} password reset request${activeTokenCount > 1 ? "s are" : " is"} currently pending (in-progress resets).` }
+      );
+
+      const issueCount = checks.filter(c => c.status === "error").length;
+      const warningCount = checks.filter(c => c.status === "warning").length;
+
+      res.json({ scannedAt, checks, issueCount, warningCount });
+    } catch (err: any) {
+      console.error("[security-scan] Error:", err);
+      res.status(500).json({ message: "Security scan failed: " + err.message });
+    }
   });
 
   // GET /api/admin/admin-users — list all admin-role users

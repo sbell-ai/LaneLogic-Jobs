@@ -12,7 +12,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
-import { Shield, Trash2, ScanLine, Eye, EyeOff } from "lucide-react";
+import { Shield, Trash2, ScanLine, Eye, EyeOff, CheckCircle2, AlertTriangle, XCircle, Loader2 } from "lucide-react";
 
 const passwordSchema = z.object({
   currentPassword: z.string().min(1, "Current password is required"),
@@ -36,7 +36,9 @@ interface Session {
 export default function SecuritySection() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const [scanResult, setScanResult] = useState<{ scannedAt: string; message: string } | null>(null);
+  type ScanCheck = { label: string; status: "ok" | "warning" | "error"; detail: string };
+  type ScanResult = { scannedAt: string; checks: ScanCheck[]; issueCount: number; warningCount: number };
+  const [scanResult, setScanResult] = useState<ScanResult | null>(null);
   const [showPasswords, setShowPasswords] = useState({ current: false, newPw: false, confirm: false });
 
   const { data: sessions = [], isLoading: sessionsLoading } = useQuery<Session[]>({
@@ -82,7 +84,11 @@ export default function SecuritySection() {
     },
     onSuccess: (data) => {
       setScanResult(data);
-      toast({ title: "Scan complete", description: data.message });
+      const issues = data.issueCount + data.warningCount;
+      toast({
+        title: "Scan complete",
+        description: issues === 0 ? "All checks passed." : `${issues} issue${issues > 1 ? "s" : ""} found.`,
+      });
     },
     onError: (err: any) => {
       toast({ title: "Scan failed", description: err.message, variant: "destructive" });
@@ -237,11 +243,36 @@ export default function SecuritySection() {
           </CardTitle>
           <CardDescription>Run a manual security check on your admin account.</CardDescription>
         </CardHeader>
-        <CardContent className="space-y-3">
-          {scanResult && (
-            <div className="text-sm bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded p-3" data-testid="text-scan-result">
-              <p className="font-medium text-green-700 dark:text-green-300">{scanResult.message}</p>
-              <p className="text-muted-foreground mt-0.5">Scanned at {formatDate(scanResult.scannedAt)}</p>
+        <CardContent className="space-y-4">
+          {scanMutation.isPending && (
+            <div className="flex items-center gap-2 text-sm text-muted-foreground" data-testid="text-scan-running">
+              <Loader2 size={15} className="animate-spin" />
+              Running security checks…
+            </div>
+          )}
+          {scanResult && !scanMutation.isPending && (
+            <div className="space-y-2" data-testid="text-scan-result">
+              <div className="divide-y divide-border border rounded-lg overflow-hidden">
+                {scanResult.checks.map((check) => (
+                  <div key={check.label} className="flex items-start gap-3 px-4 py-3 bg-card">
+                    {check.status === "ok" && <CheckCircle2 size={16} className="mt-0.5 text-green-500 shrink-0" />}
+                    {check.status === "warning" && <AlertTriangle size={16} className="mt-0.5 text-amber-500 shrink-0" />}
+                    {check.status === "error" && <XCircle size={16} className="mt-0.5 text-red-500 shrink-0" />}
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium leading-snug">{check.label}</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">{check.detail}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <div className="flex items-center justify-between text-xs text-muted-foreground pt-1">
+                <span>
+                  {scanResult.issueCount === 0 && scanResult.warningCount === 0
+                    ? "All checks passed"
+                    : `${scanResult.warningCount} warning${scanResult.warningCount !== 1 ? "s" : ""}, ${scanResult.issueCount} error${scanResult.issueCount !== 1 ? "s" : ""}`}
+                </span>
+                <span>Scanned {formatDate(scanResult.scannedAt)}</span>
+              </div>
             </div>
           )}
           <Button
