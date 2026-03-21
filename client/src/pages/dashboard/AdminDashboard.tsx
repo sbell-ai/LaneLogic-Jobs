@@ -25,12 +25,13 @@ import {
   FilePlus2, Globe, Search as SearchIcon, Share2, PlusCircle, ArrowLeft,
   FileEdit, LayoutList, UserCircle, ChevronDown, ChevronRight, Info,
   Building2, ImageIcon, Mail, Save, Send, AlertTriangle, ToggleLeft, ToggleRight, Loader2, Check,
-  Bold, Italic, Underline as UnderlineIcon, Link as LinkIcon, List, ListOrdered, Minus as MinusIcon,
+  Bold, Italic, Underline as UnderlineIcon, Link as LinkIcon, List, ListOrdered, Minus as MinusIcon, Pilcrow,
 } from "lucide-react";
 import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Underline from "@tiptap/extension-underline";
 import TipTapLink from "@tiptap/extension-link";
+import { Extension } from "@tiptap/core";
 import { ImageUpload } from "@/components/ui/image-upload";
 import { RichTextEditor } from "@/components/ui/rich-text-editor";
 import type { User, Job, Resource, BlogPost, Category, Coupon, SiteSettingsData, Page } from "@shared/schema";
@@ -3329,6 +3330,28 @@ type EmailTemplate = {
 
 type EmailBodyEditorHandle = { insertAtCursor: (text: string) => void };
 
+const SpaceAfterExtension = Extension.create({
+  name: "spaceAfter",
+  addGlobalAttributes() {
+    return [
+      {
+        types: ["paragraph"],
+        attributes: {
+          spaceAfter: {
+            default: false,
+            parseHTML: (element) =>
+              element.style.marginBottom === "1.25em" || element.getAttribute("data-space-after") === "true",
+            renderHTML: (attributes) => {
+              if (!attributes.spaceAfter) return {};
+              return { "data-space-after": "true", style: "margin-bottom: 1.25em" };
+            },
+          },
+        },
+      },
+    ];
+  },
+});
+
 function plainTextToHtml(value: string): string {
   if (!value) return "<p></p>";
   if (value.trimStart().startsWith("<")) return value;
@@ -3377,6 +3400,7 @@ const EmailBodyEditor = forwardRef<EmailBodyEditorHandle, { value: string; onCha
           openOnClick: false,
           HTMLAttributes: { class: "text-primary underline" },
         }),
+        SpaceAfterExtension,
       ],
       content: plainTextToHtml(value),
       onUpdate({ editor }) {
@@ -3426,6 +3450,17 @@ const EmailBodyEditor = forwardRef<EmailBodyEditorHandle, { value: string; onCha
             <div className="w-px h-5 bg-border mx-0.5 self-center" />
             <EmailToolbarBtn onClick={() => editor.chain().focus().setHorizontalRule().run()} active={false} title="Horizontal Rule">
               <MinusIcon size={14} />
+            </EmailToolbarBtn>
+            <div className="w-px h-5 bg-border mx-0.5 self-center" />
+            <EmailToolbarBtn
+              onClick={() => {
+                const current = editor.getAttributes("paragraph").spaceAfter === true;
+                editor.chain().focus().updateAttributes("paragraph", { spaceAfter: !current }).run();
+              }}
+              active={editor.getAttributes("paragraph").spaceAfter === true}
+              title="Space After Paragraph"
+            >
+              <Pilcrow size={14} />
             </EmailToolbarBtn>
           </div>
         )}
