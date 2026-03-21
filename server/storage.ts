@@ -232,6 +232,7 @@ export interface IStorage {
   createMessage(conversationId: number, senderId: number, content: string): Promise<Message>;
   markConversationRead(conversationId: number, userId: number): Promise<void>;
   getUnreadMessageCount(userId: number): Promise<number>;
+  getConversationUnreadCount(conversationId: number, recipientId: number): Promise<number>;
   getConversation(conversationId: number): Promise<Conversation | undefined>;
 
   // Employer enriched applicants
@@ -1243,6 +1244,16 @@ export class DatabaseStorage implements IStorage {
         inArray(messages.conversationId, convIds),
         eq(messages.isRead, false),
         sql`${messages.senderId} != ${userId}`
+      ));
+    return Number(result?.cnt ?? 0);
+  }
+
+  async getConversationUnreadCount(conversationId: number, recipientId: number): Promise<number> {
+    const [result] = await db.select({ cnt: count() }).from(messages)
+      .where(and(
+        eq(messages.conversationId, conversationId),
+        eq(messages.isRead, false),
+        sql`${messages.senderId} != ${recipientId}`
       ));
     return Number(result?.cnt ?? 0);
   }

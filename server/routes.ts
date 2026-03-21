@@ -2398,32 +2398,40 @@ export async function registerRoutes(
     const conv = await storage.getConversation(convId);
     if (!conv) return res.status(404).json({ error: "Conversation not found" });
     if (conv.seekerId !== userId && conv.employerId !== userId) return res.status(403).json({ error: "Forbidden" });
+    // Check unread count BEFORE inserting so we know if the recipient was already
+    // waiting on unread messages. If they were, they already got a notification
+    // email for this thread — skip sending another to avoid inbox spam.
+    const recipientId = conv.seekerId === userId ? conv.employerId : conv.seekerId;
+    const existingUnread = await storage.getConversationUnreadCount(convId, recipientId);
+
     const msg = await storage.createMessage(convId, userId, content.trim());
 
     // Email notification to recipient via template (fire-and-forget)
-    const recipientId = conv.seekerId === userId ? conv.employerId : conv.seekerId;
-    const [sender, recipient] = await Promise.all([
-      storage.getUser(userId),
-      storage.getUser(recipientId),
-    ]);
-    if (sender && recipient) {
-      (async () => {
-        try {
-          const { sendTemplatedEmailByEvent } = await import("./email/sendTemplatedEmail.ts");
-          const senderName = [(sender as any).firstName, (sender as any).lastName].filter(Boolean).join(" ") || (sender as any).companyName || (sender as any).email;
-          const preview = content.trim().slice(0, 200);
-          const siteUrl = process.env.CANONICAL_HOST || "https://lanelogicjobs.com";
-          await sendTemplatedEmailByEvent("message_sent", (recipient as any).email, {
-            first_name: (recipient as any).firstName || (recipient as any).email,
-            sender_name: senderName,
-            message_preview: preview,
-            inbox_url: `${siteUrl}/dashboard/messages`,
-            site_url: siteUrl,
-          });
-        } catch (e: any) {
-          console.error("Messaging email notification failed:", e?.message);
-        }
-      })();
+    // Only fires when the recipient had no prior unread messages in this thread.
+    if (existingUnread === 0) {
+      const [sender, recipient] = await Promise.all([
+        storage.getUser(userId),
+        storage.getUser(recipientId),
+      ]);
+      if (sender && recipient) {
+        (async () => {
+          try {
+            const { sendTemplatedEmailByEvent } = await import("./email/sendTemplatedEmail.ts");
+            const senderName = [(sender as any).firstName, (sender as any).lastName].filter(Boolean).join(" ") || (sender as any).companyName || (sender as any).email;
+            const preview = content.trim().slice(0, 200);
+            const siteUrl = process.env.CANONICAL_HOST || "https://lanelogicjobs.com";
+            await sendTemplatedEmailByEvent("message_sent", (recipient as any).email, {
+              first_name: (recipient as any).firstName || (recipient as any).email,
+              sender_name: senderName,
+              message_preview: preview,
+              inbox_url: `${siteUrl}/dashboard/messages`,
+              site_url: siteUrl,
+            });
+          } catch (e: any) {
+            console.error("Messaging email notification failed:", e?.message);
+          }
+        })();
+      }
     }
 
     res.json(msg);
