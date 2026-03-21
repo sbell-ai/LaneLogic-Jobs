@@ -10,6 +10,7 @@ import { requireAdminSecret } from "./middleware/requireAdminSecret.ts";
 import { adminRouter } from "./routes/admin.ts";
 import { sendAlertEmail } from "./alerts/sendAlertEmail.ts";
 import { syncAllRegistries } from "./registry/syncAll";
+import { initEmailCronJobs } from "./cron/scheduledEmails";
 
 const app = express();
 const httpServer = createServer(app);
@@ -174,6 +175,7 @@ async function startServer() {
   initStripeBackground();
   initRegistrySync();
   initImportScheduler();
+  initEmailCronJobs();
 }
 
 async function seedSeekerCredentials() {

@@ -221,24 +221,109 @@ The {{site_name}} Team`,
 Just a heads up — your {{feature_name}} is set to expire on {{expiry_date}}.
 
 To continue without interruption, log in and review your account:
-{{site_url}}
+{{dashboard_url}}
 
 If you have questions about your account, reply to this email.
 
-The {{site_name}} Team`,
+The {{site_name}} Team
+{{site_url}}`,
     variables: [
       { key: "first_name", description: "User's first name" },
       { key: "feature_name", description: "Name of the feature or plan expiring" },
       { key: "expiry_date", description: "Human-readable expiry date (e.g. April 1, 2025)" },
+      { key: "site_name", description: "Your platform name" },
       { key: "site_url", description: "Root URL of the platform" },
+      { key: "dashboard_url", description: "Direct link to the user's dashboard" },
     ],
     testVars: {
       first_name: "Alex",
       feature_name: "Premium Employer Plan",
       expiry_date: "April 1, 2025",
+      site_name: "WorkBoard",
       site_url: "https://workboard.example.com",
+      dashboard_url: "https://workboard.example.com/dashboard",
     },
     triggerType: "scheduled",
     triggerEvent: "feature_expiring",
+  },
+
+  // ─────────────────────────────────────────────────────────────
+  // JOB EXPIRING (SCHEDULED)
+  // ─────────────────────────────────────────────────────────────
+  {
+    slug: "job_expiring",
+    name: "Job Listing Expiring Soon",
+    subject: "Your job listing \"{{job_title}}\" expires on {{expiry_date}}",
+    body: `Hi {{first_name}},
+
+Your job listing "{{job_title}}" at {{company_name}} is set to expire on {{expiry_date}}.
+
+To keep it live and attracting candidates, renew it from your dashboard:
+{{renew_url}}
+
+Need help? Just reply to this email.
+
+The {{site_name}} Team
+{{site_url}}`,
+    variables: [
+      { key: "first_name", description: "Employer's first name" },
+      { key: "company_name", description: "Employer's company name" },
+      { key: "job_title", description: "Title of the expiring job listing" },
+      { key: "expiry_date", description: "Human-readable expiry date (e.g. April 1, 2025)" },
+      { key: "renew_url", description: "Link to renew or extend the listing" },
+      { key: "dashboard_url", description: "Direct link to the employer's dashboard" },
+      { key: "site_name", description: "Your platform name" },
+      { key: "site_url", description: "Root URL of the platform" },
+    ],
+    testVars: {
+      first_name: "Jordan",
+      company_name: "Acme Freight",
+      job_title: "CDL A Driver – OTR",
+      expiry_date: "April 1, 2025",
+      renew_url: "https://workboard.example.com/dashboard/jobs",
+      dashboard_url: "https://workboard.example.com/dashboard",
+      site_name: "WorkBoard",
+      site_url: "https://workboard.example.com",
+    },
+    triggerType: "scheduled",
+    triggerEvent: "job_expiring",
+  },
+
+  // ─────────────────────────────────────────────────────────────
+  // INCOMPLETE PROFILE REMINDER (SCHEDULED)
+  // ─────────────────────────────────────────────────────────────
+  {
+    slug: "profile_incomplete_reminder",
+    name: "Complete Your Profile Reminder",
+    subject: "Complete your {{site_name}} profile to stand out to employers",
+    body: `Hi {{first_name}},
+
+Your {{site_name}} profile is almost ready — just a few fields are missing:
+
+{{missing_fields}}
+
+A complete profile helps employers find you and increases your chances of being contacted for great opportunities.
+
+Finish your profile here:
+{{profile_url}}
+
+The {{site_name}} Team
+{{site_url}}`,
+    variables: [
+      { key: "first_name", description: "Recipient's first name" },
+      { key: "missing_fields", description: "Comma-separated list of incomplete profile fields" },
+      { key: "profile_url", description: "Direct link to the user's profile edit page" },
+      { key: "site_name", description: "Your platform name" },
+      { key: "site_url", description: "Root URL of the platform" },
+    ],
+    testVars: {
+      first_name: "Alex",
+      missing_fields: "First name, Last name, Job track / category",
+      profile_url: "https://workboard.example.com/dashboard/profile",
+      site_name: "WorkBoard",
+      site_url: "https://workboard.example.com",
+    },
+    triggerType: "scheduled",
+    triggerEvent: "profile_incomplete_reminder",
   },
 ];
