@@ -67,9 +67,12 @@ function validateJoin(joinStr: string): void {
   if (JOIN_BLOCKLIST.test(joinStr)) {
     throw new Error(`Blocked keyword in recipient_join`);
   }
-  const m = joinStr.match(/\bJOIN\s+(\w+)/i);
-  if (m && !ALLOWED_TABLES.has(m[1].toLowerCase())) {
-    throw new Error(`Join target "${m[1]}" not in ALLOWED_TABLES`);
+  // Validate every JOIN target (handles multiple JOINs)
+  const joinMatches = Array.from(joinStr.matchAll(/\bJOIN\s+(\w+)/gi));
+  for (const m of joinMatches) {
+    if (!ALLOWED_TABLES.has(m[1].toLowerCase())) {
+      throw new Error(`Join target "${m[1]}" not in ALLOWED_TABLES`);
+    }
   }
 }
 

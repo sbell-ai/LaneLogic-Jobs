@@ -8,7 +8,7 @@ import {
   employerVerificationRequests, employerEvidenceItems,
   seekerCredentialRequirements, seekerRequirementRules,
   seekerVerificationRequests, seekerCredentialEvidenceItems,
-  conversations, messages, emailTemplates, emailCronConfigs,
+  conversations, messages,
   type User, type InsertUser, type Job, type InsertJob,
   type Application, type InsertApplication,
   type Resource, type InsertResource,

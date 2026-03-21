@@ -1959,9 +1959,12 @@ export async function registerRoutes(
   function validateCronRecipientJoin(joinStr: string | null | undefined): string | null {
     if (!joinStr) return null;
     if (CRON_JOIN_BLOCKLIST.test(joinStr)) return "recipient_join contains a blocked SQL keyword";
-    const m = joinStr.match(/\bJOIN\s+(\w+)/i);
-    if (m && !CRON_ALLOWED_TABLES.has(m[1].toLowerCase())) {
-      return `Join target "${m[1]}" is not in the allowed tables list`;
+    // Validate every JOIN target in the string (handles multiple JOINs)
+    const joinMatches = Array.from(joinStr.matchAll(/\bJOIN\s+(\w+)/gi));
+    for (const m of joinMatches) {
+      if (!CRON_ALLOWED_TABLES.has(m[1].toLowerCase())) {
+        return `Join target "${m[1]}" is not in the allowed tables list`;
+      }
     }
     return null;
   }
@@ -2090,8 +2093,28 @@ export async function registerRoutes(
                 ? `CURRENT_DATE + INTERVAL '${offsetDays} days'`
                 : `CURRENT_DATE - INTERVAL '${offsetDays} days'`;
 
+              const params: unknown[] = [];
+              const whereParts: string[] = [
+                `${config.sourceTable}.${bareField}::date = ${intervalExpr}`,
+              ];
+              const safeBoolOps = new Set(["=", "!=", ">", "<", ">=", "<="]);
+              for (const cond of (config.filterConditions ?? []) as Array<{ field: string; operator: string; value: string }>) {
+                const col = cond.field.includes(".") ? cond.field.split(".").pop()! : cond.field;
+                if (!CRON_ALLOWED_FIELDS[config.sourceTable]?.has(col)) continue;
+                if (cond.operator === "IS NULL") {
+                  whereParts.push(`${config.sourceTable}.${col} IS NULL`);
+                } else if (cond.operator === "IS NOT NULL") {
+                  whereParts.push(`${config.sourceTable}.${col} IS NOT NULL`);
+                } else {
+                  const op = safeBoolOps.has(cond.operator) ? cond.operator : "=";
+                  params.push(cond.value);
+                  whereParts.push(`${config.sourceTable}.${col} ${op} $${params.length}`);
+                }
+              }
+
               const qResult = await pool.query(
-                `SELECT ${selectCols} FROM ${config.sourceTable} ${join} WHERE ${config.sourceTable}.${bareField}::date = ${intervalExpr} LIMIT 1`
+                `SELECT ${selectCols} FROM ${config.sourceTable} ${join} WHERE ${whereParts.join(" AND ")} LIMIT 1`,
+                params
               );
 
               if (qResult.rows.length > 0) {
