@@ -5,22 +5,31 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import {
-  Clock, Plus, Pencil, Trash2, Play, CheckCircle2, AlertTriangle,
-  ChevronDown, ChevronRight, Loader2, X,
+  Clock, Plus, Pencil, Trash2, Play, CheckCircle2,
+  ChevronDown, ChevronRight, Loader2, X, Copy,
 } from "lucide-react";
 import type { EmailCronConfig, EmailTemplate } from "@shared/schema";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
-interface FilterCondition {
+interface FilterConditionRow {
   field: string;
   operator: string;
   value: string;
+}
+
+interface VarMappingRow {
+  token: string;
+  mapping: string;
+}
+
+interface CronSchema {
+  allowedTables: string[];
+  allowedFields: Record<string, string[]>;
 }
 
 interface ConfigFormData {
@@ -33,11 +42,13 @@ interface ConfigFormData {
   triggerDirection: "before" | "after";
   recipientField: string;
   recipientJoin: string;
-  filterConditionsRaw: string;
-  variableMappingsRaw: string;
+  filterConditions: FilterConditionRow[];
+  variableMappings: VarMappingRow[];
   isActive: boolean;
   runTime: string;
 }
+
+const OPERATORS = ["=", "!=", ">", "<", ">=", "<=", "IS NULL", "IS NOT NULL"];
 
 const EMPTY_FORM: ConfigFormData = {
   name: "",
@@ -49,22 +60,66 @@ const EMPTY_FORM: ConfigFormData = {
   triggerDirection: "before",
   recipientField: "email",
   recipientJoin: "",
-  filterConditionsRaw: "[]",
-  variableMappingsRaw: "{}",
+  filterConditions: [],
+  variableMappings: [],
   isActive: true,
   runTime: "08:00",
 };
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
-function parseJson<T>(raw: string, fallback: T): T {
-  try { return JSON.parse(raw) as T; } catch { return fallback; }
-}
-
 function formatLastRun(lastRunAt: string | null | undefined): string {
   if (!lastRunAt) return "Never";
   const d = new Date(lastRunAt);
   return d.toLocaleString("en-US", { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" });
+}
+
+function cronConfigToForm(c: EmailCronConfig): ConfigFormData {
+  const filterConditions: FilterConditionRow[] = Array.isArray(c.filterConditions)
+    ? (c.filterConditions as FilterConditionRow[])
+    : [];
+  const rawMappings = (c.variableMappings ?? {}) as Record<string, string>;
+  const variableMappings: VarMappingRow[] = Object.entries(rawMappings).map(
+    ([token, mapping]) => ({ token, mapping })
+  );
+  return {
+    name: c.name,
+    description: c.description ?? "",
+    templateId: c.templateId,
+    sourceTable: c.sourceTable,
+    triggerField: c.triggerField,
+    triggerOffsetDays: c.triggerOffsetDays,
+    triggerDirection: (c.triggerDirection as "before" | "after") ?? "before",
+    recipientField: c.recipientField,
+    recipientJoin: c.recipientJoin ?? "",
+    filterConditions,
+    variableMappings,
+    isActive: c.isActive,
+    runTime: c.runTime,
+  };
+}
+
+function formToPayload(form: ConfigFormData) {
+  const variableMappings: Record<string, string> = {};
+  for (const row of form.variableMappings) {
+    if (row.token.trim()) variableMappings[row.token.trim()] = row.mapping;
+  }
+  const filterConditions = form.filterConditions.filter(r => r.field.trim());
+  return {
+    name: form.name.trim(),
+    description: form.description.trim() || undefined,
+    templateId: Number(form.templateId),
+    sourceTable: form.sourceTable,
+    triggerField: form.triggerField.trim(),
+    triggerOffsetDays: Number(form.triggerOffsetDays),
+    triggerDirection: form.triggerDirection,
+    recipientField: form.recipientField.trim(),
+    recipientJoin: form.recipientJoin.trim() || undefined,
+    filterConditions,
+    variableMappings,
+    isActive: form.isActive,
+    runTime: form.runTime,
+  };
 }
 
 // ── Main component ─────────────────────────────────────────────────────────────
@@ -86,6 +141,12 @@ export default function ScheduledAutomations() {
   const { data: templates = [] } = useQuery<EmailTemplate[]>({
     queryKey: ["/api/admin/email-templates"],
   });
+
+  const { data: schema } = useQuery<CronSchema>({
+    queryKey: ["/api/admin/email-cron-configs/schema"],
+  });
+
+  const fieldOptions = schema?.allowedFields[form.sourceTable] ?? [];
 
   const createMutation = useMutation({
     mutationFn: (data: object) => apiRequest("POST", "/api/admin/email-cron-configs", data),
@@ -133,22 +194,16 @@ export default function ScheduledAutomations() {
 
   function openEdit(c: EmailCronConfig) {
     setEditingId(c.id);
-    setForm({
-      name: c.name,
-      description: c.description ?? "",
-      templateId: c.templateId,
-      sourceTable: c.sourceTable,
-      triggerField: c.triggerField,
-      triggerOffsetDays: c.triggerOffsetDays,
-      triggerDirection: (c.triggerDirection as "before" | "after") ?? "before",
-      recipientField: c.recipientField,
-      recipientJoin: c.recipientJoin ?? "",
-      filterConditionsRaw: JSON.stringify(c.filterConditions ?? [], null, 2),
-      variableMappingsRaw: JSON.stringify(c.variableMappings ?? {}, null, 2),
-      isActive: c.isActive,
-      runTime: c.runTime,
-    });
+    setForm(cronConfigToForm(c));
     setShowForm(true);
+  }
+
+  function openDuplicate(c: EmailCronConfig) {
+    setEditingId(null);
+    const base = cronConfigToForm(c);
+    setForm({ ...base, name: `${base.name} (Copy)`, isActive: false });
+    setShowForm(true);
+    toast({ title: "Duplicating automation", description: "Edit as needed and save to create a copy." });
   }
 
   function closeForm() {
@@ -161,6 +216,34 @@ export default function ScheduledAutomations() {
     setForm(f => ({ ...f, [key]: value }));
   }
 
+  // Filter condition row helpers
+  function addFilter() {
+    setForm(f => ({ ...f, filterConditions: [...f.filterConditions, { field: "", operator: "=", value: "" }] }));
+  }
+  function updateFilter(i: number, key: keyof FilterConditionRow, value: string) {
+    setForm(f => {
+      const rows = f.filterConditions.map((r, idx) => idx === i ? { ...r, [key]: value } : r);
+      return { ...f, filterConditions: rows };
+    });
+  }
+  function removeFilter(i: number) {
+    setForm(f => ({ ...f, filterConditions: f.filterConditions.filter((_, idx) => idx !== i) }));
+  }
+
+  // Variable mapping row helpers
+  function addVarMapping() {
+    setForm(f => ({ ...f, variableMappings: [...f.variableMappings, { token: "", mapping: "" }] }));
+  }
+  function updateVarMapping(i: number, key: keyof VarMappingRow, value: string) {
+    setForm(f => {
+      const rows = f.variableMappings.map((r, idx) => idx === i ? { ...r, [key]: value } : r);
+      return { ...f, variableMappings: rows };
+    });
+  }
+  function removeVarMapping(i: number) {
+    setForm(f => ({ ...f, variableMappings: f.variableMappings.filter((_, idx) => idx !== i) }));
+  }
+
   function handleSubmit() {
     if (!form.name.trim()) return toast({ title: "Name is required", variant: "destructive" });
     if (!form.templateId) return toast({ title: "Template is required", variant: "destructive" });
@@ -168,24 +251,7 @@ export default function ScheduledAutomations() {
     if (!form.recipientField.trim()) return toast({ title: "Recipient field is required", variant: "destructive" });
     if (!/^\d{2}:\d{2}$/.test(form.runTime)) return toast({ title: "Run time must be HH:MM (UTC)", variant: "destructive" });
 
-    const filterConditions = parseJson<FilterCondition[]>(form.filterConditionsRaw, []);
-    const variableMappings = parseJson<Record<string, string>>(form.variableMappingsRaw, {});
-
-    const payload = {
-      name: form.name.trim(),
-      description: form.description.trim() || undefined,
-      templateId: Number(form.templateId),
-      sourceTable: form.sourceTable,
-      triggerField: form.triggerField.trim(),
-      triggerOffsetDays: Number(form.triggerOffsetDays),
-      triggerDirection: form.triggerDirection,
-      recipientField: form.recipientField.trim(),
-      recipientJoin: form.recipientJoin.trim() || undefined,
-      filterConditions,
-      variableMappings,
-      isActive: form.isActive,
-      runTime: form.runTime,
-    };
+    const payload = formToPayload(form);
 
     if (editingId !== null) {
       updateMutation.mutate({ id: editingId, data: payload });
@@ -205,7 +271,7 @@ export default function ScheduledAutomations() {
       const data = await res.json();
       toast({
         title: "Test email sent",
-        description: `Data source: ${data.source === "live_data" ? "live DB data" : "template sample data"}`,
+        description: `Using ${data.source === "live_data" ? "live DB data" : "template sample data"}`,
       });
       setTestCooldown(30);
       const cd = setInterval(() => setTestCooldown(prev => {
@@ -221,7 +287,7 @@ export default function ScheduledAutomations() {
 
   // ── Render ────────────────────────────────────────────────────────────────────
 
-  const scheduledTemplates = templates.filter(t => t.triggerType === "scheduled");
+  const isSaving = createMutation.isPending || updateMutation.isPending;
 
   return (
     <div>
@@ -282,7 +348,6 @@ export default function ScheduledAutomations() {
               >
                 {/* Row header */}
                 <div className="flex items-center gap-3 px-4 py-3">
-                  {/* Expand toggle */}
                   <button
                     onClick={() => setExpandedId(isExpanded ? null : cfg.id)}
                     className="text-muted-foreground hover:text-foreground transition-colors"
@@ -291,12 +356,10 @@ export default function ScheduledAutomations() {
                     {isExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
                   </button>
 
-                  {/* Active indicator */}
                   <span
                     className={`w-2 h-2 rounded-full shrink-0 ${cfg.isActive ? "bg-green-500" : "bg-slate-300 dark:bg-slate-600"}`}
                   />
 
-                  {/* Name + template */}
                   <div className="flex-1 min-w-0">
                     <p className="font-medium text-sm truncate" data-testid={`text-automation-name-${cfg.id}`}>
                       {cfg.name}
@@ -312,21 +375,18 @@ export default function ScheduledAutomations() {
                     </p>
                   </div>
 
-                  {/* Last run */}
                   <span className="text-xs text-muted-foreground hidden sm:block shrink-0">
                     Last run: {formatLastRun(cfg.lastRunAt as string | null)}
                   </span>
 
-                  {/* Actions */}
-                  <div className="flex items-center gap-2 shrink-0">
+                  <div className="flex items-center gap-1.5 shrink-0">
                     <Switch
                       checked={cfg.isActive}
                       onCheckedChange={() => toggleMutation.mutate(cfg.id)}
                       data-testid={`switch-active-${cfg.id}`}
                     />
                     <Button
-                      variant="ghost"
-                      size="icon"
+                      variant="ghost" size="icon"
                       onClick={() => handleTestSend(cfg.id)}
                       disabled={testingId === cfg.id || testCooldown > 0}
                       title="Send test email"
@@ -336,8 +396,16 @@ export default function ScheduledAutomations() {
                       {testingId === cfg.id ? <Loader2 size={14} className="animate-spin" /> : <Play size={14} />}
                     </Button>
                     <Button
-                      variant="ghost"
-                      size="icon"
+                      variant="ghost" size="icon"
+                      onClick={() => openDuplicate(cfg)}
+                      title="Duplicate automation"
+                      data-testid={`button-duplicate-${cfg.id}`}
+                      className="w-8 h-8"
+                    >
+                      <Copy size={14} />
+                    </Button>
+                    <Button
+                      variant="ghost" size="icon"
                       onClick={() => openEdit(cfg)}
                       data-testid={`button-edit-${cfg.id}`}
                       className="w-8 h-8"
@@ -345,11 +413,8 @@ export default function ScheduledAutomations() {
                       <Pencil size={14} />
                     </Button>
                     <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => {
-                        if (confirm(`Delete "${cfg.name}"?`)) deleteMutation.mutate(cfg.id);
-                      }}
+                      variant="ghost" size="icon"
+                      onClick={() => { if (confirm(`Delete "${cfg.name}"?`)) deleteMutation.mutate(cfg.id); }}
                       data-testid={`button-delete-${cfg.id}`}
                       className="w-8 h-8 text-destructive hover:text-destructive"
                     >
@@ -410,7 +475,8 @@ export default function ScheduledAutomations() {
         <CheckCircle2 size={14} className="shrink-0 mt-0.5" />
         <span>
           <strong>Dynamic Cron Engine is running.</strong> It ticks every 15 minutes and fires any active
-          automation whose run time (UTC) matches. <code className="bg-green-100 dark:bg-green-800/40 px-1 rounded">8:00 AM Eastern = 13:00 UTC</code>
+          automation whose run time (UTC) falls within the current 15-minute window.{" "}
+          <code className="bg-green-100 dark:bg-green-800/40 px-1 rounded">8:00 AM Eastern = 13:00 UTC</code>
         </span>
       </div>
 
@@ -418,7 +484,6 @@ export default function ScheduledAutomations() {
       {showForm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
           <div className="bg-white dark:bg-slate-900 rounded-2xl border border-border shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-            {/* Modal header */}
             <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-border sticky top-0 bg-white dark:bg-slate-900 z-10">
               <h3 className="text-lg font-semibold">
                 {editingId !== null ? "Edit Automation" : "New Scheduled Automation"}
@@ -473,41 +538,57 @@ export default function ScheduledAutomations() {
                     ))}
                   </SelectContent>
                 </Select>
-                {scheduledTemplates.length > 0 && (
-                  <p className="text-xs text-muted-foreground">
-                    Tip: Choose a template with trigger type "scheduled" for scheduled automations.
-                  </p>
-                )}
               </div>
 
-              {/* Source Table + Trigger Field row */}
+              {/* Source Table */}
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1.5">
                   <Label>Source Table</Label>
-                  <Select value={form.sourceTable} onValueChange={v => setField("sourceTable", v)}>
+                  <Select
+                    value={form.sourceTable}
+                    onValueChange={v => {
+                      setField("sourceTable", v);
+                      setField("triggerField", "");
+                      setField("recipientField", "email");
+                    }}
+                  >
                     <SelectTrigger data-testid="select-source-table">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="users">users</SelectItem>
-                      <SelectItem value="jobs">jobs</SelectItem>
-                      <SelectItem value="applications">applications</SelectItem>
+                      {(schema?.allowedTables ?? ["users", "jobs", "applications"]).map(t => (
+                        <SelectItem key={t} value={t}>{t}</SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </div>
+
+                {/* Trigger Field — schema-driven dropdown */}
                 <div className="space-y-1.5">
-                  <Label htmlFor="sa-trigger-field">Trigger Field <span className="text-xs text-muted-foreground">(column name)</span></Label>
-                  <Input
-                    id="sa-trigger-field"
-                    data-testid="input-trigger-field"
-                    value={form.triggerField}
-                    onChange={e => setField("triggerField", e.target.value)}
-                    placeholder="expires_at"
-                  />
+                  <Label>Trigger Field <span className="text-xs text-muted-foreground">(date column)</span></Label>
+                  {fieldOptions.length > 0 ? (
+                    <Select value={form.triggerField} onValueChange={v => setField("triggerField", v)}>
+                      <SelectTrigger data-testid="select-trigger-field">
+                        <SelectValue placeholder="Select field…" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {fieldOptions.map(f => (
+                          <SelectItem key={f} value={f}>{f}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  ) : (
+                    <Input
+                      data-testid="input-trigger-field"
+                      value={form.triggerField}
+                      onChange={e => setField("triggerField", e.target.value)}
+                      placeholder="expires_at"
+                    />
+                  )}
                 </div>
               </div>
 
-              {/* Offset + Direction row */}
+              {/* Offset + Direction */}
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1.5">
                   <Label htmlFor="sa-offset">Offset Days</Label>
@@ -534,118 +615,195 @@ export default function ScheduledAutomations() {
                 </div>
               </div>
 
-              {/* Recipient Field */}
+              {/* Recipient Field — schema-driven */}
               <div className="space-y-1.5">
-                <Label htmlFor="sa-recipient">Recipient Field</Label>
-                <Input
-                  id="sa-recipient"
-                  data-testid="input-recipient-field"
-                  value={form.recipientField}
-                  onChange={e => setField("recipientField", e.target.value)}
-                  placeholder="email  or  users.email"
-                />
-                <p className="text-xs text-muted-foreground">Column that contains the recipient's email address.</p>
+                <Label>Recipient Field <span className="text-xs text-muted-foreground">(email column)</span></Label>
+                {fieldOptions.length > 0 ? (
+                  <Select value={form.recipientField} onValueChange={v => setField("recipientField", v)}>
+                    <SelectTrigger data-testid="select-recipient-field">
+                      <SelectValue placeholder="Select field…" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {fieldOptions.map(f => (
+                        <SelectItem key={f} value={f}>{f}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <Input
+                    data-testid="input-recipient-field"
+                    value={form.recipientField}
+                    onChange={e => setField("recipientField", e.target.value)}
+                    placeholder="email"
+                  />
+                )}
               </div>
 
               {/* Recipient JOIN */}
               <div className="space-y-1.5">
-                <Label htmlFor="sa-join">Recipient JOIN <span className="text-muted-foreground font-normal">(optional)</span></Label>
+                <Label htmlFor="sa-join">
+                  Recipient JOIN <span className="text-muted-foreground font-normal">(optional)</span>
+                </Label>
                 <Input
                   id="sa-join"
                   data-testid="input-recipient-join"
                   value={form.recipientJoin}
                   onChange={e => setField("recipientJoin", e.target.value)}
-                  placeholder="JOIN users ON jobs.employer_id = users.id"
+                  placeholder="LEFT JOIN users ON jobs.employer_id = users.id"
                 />
                 <p className="text-xs text-muted-foreground">
-                  SQL JOIN clause to reach the email column. Only tables in the allowed list (users, jobs, applications) are permitted.
+                  Only allowed tables may be joined. Dangerous SQL keywords are blocked on save.
                 </p>
               </div>
 
-              {/* Run Time */}
-              <div className="space-y-1.5">
-                <Label htmlFor="sa-runtime">Run Time (UTC)</Label>
-                <Input
-                  id="sa-runtime"
-                  data-testid="input-run-time"
-                  value={form.runTime}
-                  onChange={e => setField("runTime", e.target.value)}
-                  placeholder="08:00"
-                  pattern="\d{2}:\d{2}"
-                />
-                <p className="text-xs text-muted-foreground">HH:MM in UTC — e.g. 8:00 AM Eastern = <code className="bg-muted px-1 rounded">13:00</code></p>
-              </div>
-
-              {/* Filter Conditions */}
-              <div className="space-y-1.5">
-                <Label htmlFor="sa-filters">Filter Conditions <span className="text-muted-foreground font-normal">(JSON array)</span></Label>
-                <Textarea
-                  id="sa-filters"
-                  data-testid="input-filter-conditions"
-                  value={form.filterConditionsRaw}
-                  onChange={e => setField("filterConditionsRaw", e.target.value)}
-                  rows={4}
-                  className="font-mono text-xs"
-                  placeholder={'[\n  { "field": "is_published", "operator": "=", "value": "true" }\n]'}
-                />
-                <p className="text-xs text-muted-foreground">
-                  Operators: = != &gt; &lt; &gt;= &lt;= IS NULL IS NOT NULL. Values are parameterized (safe).
-                </p>
-              </div>
-
-              {/* Variable Mappings */}
-              <div className="space-y-1.5">
-                <Label htmlFor="sa-vars">Variable Mappings <span className="text-muted-foreground font-normal">(JSON object)</span></Label>
-                <Textarea
-                  id="sa-vars"
-                  data-testid="input-variable-mappings"
-                  value={form.variableMappingsRaw}
-                  onChange={e => setField("variableMappingsRaw", e.target.value)}
-                  rows={5}
-                  className="font-mono text-xs"
-                  placeholder={'{\n  "first_name": "first_name",\n  "feature_name": "literal:Resume Access",\n  "expiry_date": "expires_at"\n}'}
-                />
-                <p className="text-xs text-muted-foreground">
-                  Maps template tokens → DB column names. Use <code className="bg-muted px-1 rounded">literal:Value</code> for static strings.
-                  <br />Auto-injected: <code className="bg-muted px-1 rounded">site_name</code>, <code className="bg-muted px-1 rounded">site_url</code>, <code className="bg-muted px-1 rounded">dashboard_url</code>.
-                </p>
-              </div>
-
-              {/* Active toggle */}
-              <div className="flex items-center gap-3">
-                <Switch
-                  checked={form.isActive}
-                  onCheckedChange={v => setField("isActive", v)}
-                  data-testid="switch-form-active"
-                />
-                <Label className="cursor-pointer">{form.isActive ? "Active" : "Paused"}</Label>
-              </div>
-
-              {/* Validation notices */}
-              {(() => {
-                const filterErr = (() => { try { JSON.parse(form.filterConditionsRaw); return null; } catch { return "Filter Conditions is not valid JSON"; } })();
-                const varErr = (() => { try { JSON.parse(form.variableMappingsRaw); return null; } catch { return "Variable Mappings is not valid JSON"; } })();
-                return (filterErr || varErr) ? (
-                  <div className="flex items-start gap-2 px-3 py-2 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-lg text-xs text-amber-700 dark:text-amber-300">
-                    <AlertTriangle size={13} className="shrink-0 mt-0.5" />
-                    <span>{filterErr || varErr}</span>
+              {/* Run Time + Active */}
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <Label htmlFor="sa-runtime">Run Time (UTC, HH:MM)</Label>
+                  <Input
+                    id="sa-runtime"
+                    data-testid="input-run-time"
+                    value={form.runTime}
+                    onChange={e => setField("runTime", e.target.value)}
+                    placeholder="08:00"
+                  />
+                  <p className="text-xs text-muted-foreground">e.g. 13:00 = 8 AM Eastern</p>
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Active</Label>
+                  <div className="flex items-center gap-3 h-10">
+                    <Switch
+                      checked={form.isActive}
+                      onCheckedChange={v => setField("isActive", v)}
+                      data-testid="switch-form-active"
+                    />
+                    <span className="text-sm text-muted-foreground">{form.isActive ? "Enabled" : "Paused"}</span>
                   </div>
-                ) : null;
-              })()}
+                </div>
+              </div>
+
+              {/* ── Filter Conditions (dynamic row builder) ───────────────── */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <Label>Filter Conditions</Label>
+                  <Button type="button" variant="outline" size="sm" onClick={addFilter} className="h-7 text-xs gap-1">
+                    <Plus size={12} /> Add Filter
+                  </Button>
+                </div>
+                {form.filterConditions.length === 0 ? (
+                  <p className="text-xs text-muted-foreground">No filters — all rows matching the trigger date will be included.</p>
+                ) : (
+                  <div className="space-y-2">
+                    {form.filterConditions.map((row, i) => (
+                      <div key={i} className="flex items-center gap-2">
+                        {fieldOptions.length > 0 ? (
+                          <Select value={row.field} onValueChange={v => updateFilter(i, "field", v)}>
+                            <SelectTrigger className="w-36 h-8 text-xs">
+                              <SelectValue placeholder="Field" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {fieldOptions.map(f => <SelectItem key={f} value={f}>{f}</SelectItem>)}
+                            </SelectContent>
+                          </Select>
+                        ) : (
+                          <Input
+                            className="w-36 h-8 text-xs"
+                            placeholder="field"
+                            value={row.field}
+                            onChange={e => updateFilter(i, "field", e.target.value)}
+                          />
+                        )}
+                        <Select value={row.operator} onValueChange={v => updateFilter(i, "operator", v)}>
+                          <SelectTrigger className="w-28 h-8 text-xs">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {OPERATORS.map(op => <SelectItem key={op} value={op}>{op}</SelectItem>)}
+                          </SelectContent>
+                        </Select>
+                        {row.operator !== "IS NULL" && row.operator !== "IS NOT NULL" && (
+                          <Input
+                            className="flex-1 h-8 text-xs"
+                            placeholder="value"
+                            value={row.value}
+                            onChange={e => updateFilter(i, "value", e.target.value)}
+                          />
+                        )}
+                        <Button
+                          type="button" variant="ghost" size="icon"
+                          className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                          onClick={() => removeFilter(i)}
+                        >
+                          <X size={14} />
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* ── Variable Mappings (dynamic row builder) ───────────────── */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <Label>Variable Mappings</Label>
+                  <Button type="button" variant="outline" size="sm" onClick={addVarMapping} className="h-7 text-xs gap-1">
+                    <Plus size={12} /> Add Mapping
+                  </Button>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Map template <code>{"{{token}}"}</code> → DB column. Use{" "}
+                  <code>literal:My Value</code> for static text.
+                </p>
+                {form.variableMappings.length === 0 ? (
+                  <p className="text-xs text-muted-foreground">No mappings yet. Auto-injected: <code>site_name</code>, <code>site_url</code>, <code>dashboard_url</code>.</p>
+                ) : (
+                  <div className="space-y-2">
+                    {form.variableMappings.map((row, i) => (
+                      <div key={i} className="flex items-center gap-2">
+                        <Input
+                          className="w-40 h-8 text-xs font-mono"
+                          placeholder="token_name"
+                          value={row.token}
+                          onChange={e => updateVarMapping(i, "token", e.target.value)}
+                        />
+                        <span className="text-xs text-muted-foreground shrink-0">→</span>
+                        {fieldOptions.length > 0 ? (
+                          <div className="flex-1 flex gap-1">
+                            <Input
+                              className="flex-1 h-8 text-xs font-mono"
+                              placeholder="column or literal:Value"
+                              value={row.mapping}
+                              onChange={e => updateVarMapping(i, "mapping", e.target.value)}
+                            />
+                          </div>
+                        ) : (
+                          <Input
+                            className="flex-1 h-8 text-xs font-mono"
+                            placeholder="column or literal:Value"
+                            value={row.mapping}
+                            onChange={e => updateVarMapping(i, "mapping", e.target.value)}
+                          />
+                        )}
+                        <Button
+                          type="button" variant="ghost" size="icon"
+                          className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                          onClick={() => removeVarMapping(i)}
+                        >
+                          <X size={14} />
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
 
             {/* Modal footer */}
-            <div className="flex items-center justify-end gap-3 px-6 pb-6 pt-2 border-t border-border sticky bottom-0 bg-white dark:bg-slate-900">
-              <Button variant="outline" onClick={closeForm} data-testid="button-cancel-form">Cancel</Button>
-              <Button
-                onClick={handleSubmit}
-                disabled={createMutation.isPending || updateMutation.isPending}
-                data-testid="button-save-automation"
-              >
-                {(createMutation.isPending || updateMutation.isPending)
-                  ? <><Loader2 size={14} className="animate-spin mr-2" /> Saving…</>
-                  : editingId !== null ? "Save Changes" : "Create Automation"
-                }
+            <div className="flex items-center justify-end gap-3 px-6 pb-6 pt-2 border-t border-border">
+              <Button variant="outline" onClick={closeForm} disabled={isSaving}>Cancel</Button>
+              <Button onClick={handleSubmit} disabled={isSaving} data-testid="button-save-automation">
+                {isSaving ? <Loader2 size={14} className="animate-spin mr-2" /> : null}
+                {editingId !== null ? "Save Changes" : "Create Automation"}
               </Button>
             </div>
           </div>

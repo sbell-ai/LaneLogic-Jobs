@@ -778,7 +778,7 @@ export const emailCronConfigs = pgTable("email_cron_configs", {
   id: serial("id").primaryKey(),
   name: text("name").notNull(),
   description: text("description"),
-  templateId: integer("template_id").notNull(),
+  templateId: integer("template_id").notNull().references(() => emailTemplates.id),
   sourceTable: text("source_table").notNull(),
   triggerField: text("trigger_field").notNull(),
   triggerOffsetDays: integer("trigger_offset_days").notNull().default(0),

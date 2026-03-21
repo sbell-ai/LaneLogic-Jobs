@@ -1938,6 +1938,45 @@ export async function registerRoutes(
 
   // ── Email Cron Configs ────────────────────────────────────────────────────
 
+  // Shared whitelist constants (mirrors server/cron/scheduledEmails.ts)
+  const CRON_ALLOWED_TABLES = new Set(["users", "jobs", "applications"]);
+  const CRON_ALLOWED_FIELDS: Record<string, Set<string>> = {
+    users: new Set([
+      "id", "email", "first_name", "last_name", "role", "company_name",
+      "created_at", "resume_access_expires_at", "featured_employer_expires_at",
+      "seeker_track", "is_active",
+    ]),
+    jobs: new Set([
+      "id", "employer_id", "title", "company_name", "expires_at",
+      "created_at", "is_published", "status", "category",
+    ]),
+    applications: new Set([
+      "id", "job_id", "job_seeker_id", "employer_id", "status", "created_at",
+    ]),
+  };
+  const CRON_JOIN_BLOCKLIST = /\b(DROP|DELETE|UPDATE|INSERT|EXEC|UNION|ALTER|TRUNCATE)\b|;|--|\*\/|\/\*/i;
+
+  function validateCronRecipientJoin(joinStr: string | null | undefined): string | null {
+    if (!joinStr) return null;
+    if (CRON_JOIN_BLOCKLIST.test(joinStr)) return "recipient_join contains a blocked SQL keyword";
+    const m = joinStr.match(/\bJOIN\s+(\w+)/i);
+    if (m && !CRON_ALLOWED_TABLES.has(m[1].toLowerCase())) {
+      return `Join target "${m[1]}" is not in the allowed tables list`;
+    }
+    return null;
+  }
+
+  app.get("/api/admin/email-cron-configs/schema", adminOnly, (_req, res) => {
+    const allowedFields: Record<string, string[]> = {};
+    for (const [table, fields] of Object.entries(CRON_ALLOWED_FIELDS)) {
+      allowedFields[table] = Array.from(fields);
+    }
+    res.json({
+      allowedTables: Array.from(CRON_ALLOWED_TABLES),
+      allowedFields,
+    });
+  });
+
   app.get("/api/admin/email-cron-configs", adminOnly, async (_req, res) => {
     try {
       const configs = await storage.getEmailCronConfigs();
@@ -1947,10 +1986,22 @@ export async function registerRoutes(
     }
   });
 
+  app.get("/api/admin/email-cron-configs/:id", adminOnly, async (req, res) => {
+    try {
+      const config = await storage.getEmailCronConfig(Number(req.params.id));
+      if (!config) return res.status(404).json({ message: "Not found" });
+      res.json(config);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
   app.post("/api/admin/email-cron-configs", adminOnly, async (req, res) => {
     try {
       const parsed = insertEmailCronConfigSchema.safeParse(req.body);
       if (!parsed.success) return res.status(400).json({ message: "Invalid input", errors: parsed.error.flatten() });
+      const joinErr = validateCronRecipientJoin(parsed.data.recipientJoin);
+      if (joinErr) return res.status(400).json({ message: joinErr });
       const config = await storage.createEmailCronConfig(parsed.data);
       res.status(201).json(config);
     } catch (err: any) {
@@ -1963,6 +2014,8 @@ export async function registerRoutes(
       const id = Number(req.params.id);
       const parsed = insertEmailCronConfigSchema.partial().safeParse(req.body);
       if (!parsed.success) return res.status(400).json({ message: "Invalid input", errors: parsed.error.flatten() });
+      const joinErr = validateCronRecipientJoin(parsed.data.recipientJoin);
+      if (joinErr) return res.status(400).json({ message: joinErr });
       const config = await storage.updateEmailCronConfig(id, parsed.data);
       res.json(config);
     } catch (err: any) {
@@ -2010,52 +2063,65 @@ export async function registerRoutes(
       const seed = DEFAULT_TEMPLATES.find(s => s.slug === template.slug);
       const fallbackVars: Record<string, string> = (seed?.testVars as Record<string, string>) ?? {};
 
-      // Try to fetch one live row
-      const ALLOWED_TABLES_SET = new Set(["users", "jobs", "applications"]);
-      const JOIN_BLOCKLIST = /\b(DROP|DELETE|UPDATE|INSERT|EXEC|UNION|ALTER|TRUNCATE)\b|;|--|\*\/|\/\*/i;
-
       let liveVars: Record<string, string> | null = null;
       let dataSource: "live_data" | "sample_data" = "sample_data";
+      let liveQueryError: string | null = null;
 
-      try {
-        if (ALLOWED_TABLES_SET.has(config.sourceTable)) {
-          const join = config.recipientJoin ?? "";
-          if (!join || !JOIN_BLOCKLIST.test(join)) {
-            const joinedTable = join.match(/\bJOIN\s+(\w+)/i)?.[1];
-            const selectCols = joinedTable ? `${config.sourceTable}.*, ${joinedTable}.*` : `${config.sourceTable}.*`;
-            const offsetDays = Number(config.triggerOffsetDays) || 0;
-            const intervalExpr = config.triggerDirection === "before"
-              ? `CURRENT_DATE + INTERVAL '${offsetDays} days'`
-              : `CURRENT_DATE - INTERVAL '${offsetDays} days'`;
+      if (CRON_ALLOWED_TABLES.has(config.sourceTable)) {
+        const join = config.recipientJoin ?? "";
+        const joinErr = validateCronRecipientJoin(join);
+        if (joinErr) {
+          liveQueryError = joinErr;
+        } else {
+          // Validate trigger field
+          const bareField = config.triggerField.includes(".")
+            ? config.triggerField.split(".").pop()!
+            : config.triggerField;
+          if (!CRON_ALLOWED_FIELDS[config.sourceTable]?.has(bareField)) {
+            liveQueryError = `Trigger field "${config.triggerField}" is not in the allowed list`;
+          } else {
+            try {
+              const joinedTable = join ? join.match(/\bJOIN\s+(\w+)/i)?.[1] : null;
+              const selectCols = joinedTable
+                ? `${config.sourceTable}.*, ${joinedTable}.*`
+                : `${config.sourceTable}.*`;
+              const offsetDays = Number(config.triggerOffsetDays) || 0;
+              const intervalExpr = config.triggerDirection === "before"
+                ? `CURRENT_DATE + INTERVAL '${offsetDays} days'`
+                : `CURRENT_DATE - INTERVAL '${offsetDays} days'`;
 
-            const qResult = await pool.query(
-              `SELECT ${selectCols} FROM ${config.sourceTable} ${join} WHERE ${config.sourceTable}.${config.triggerField}::date = ${intervalExpr} LIMIT 1`
-            );
+              const qResult = await pool.query(
+                `SELECT ${selectCols} FROM ${config.sourceTable} ${join} WHERE ${config.sourceTable}.${bareField}::date = ${intervalExpr} LIMIT 1`
+              );
 
-            if (qResult.rows.length > 0) {
-              const row = qResult.rows[0];
-              const vars: Record<string, string> = {
-                site_name: "LaneLogic Jobs",
-                site_url: process.env.CANONICAL_HOST || "https://lanelogicjobs.com",
-                dashboard_url: `${process.env.CANONICAL_HOST || "https://lanelogicjobs.com"}/dashboard`,
-              };
-              for (const [token, mapping] of Object.entries(config.variableMappings ?? {})) {
-                if (typeof mapping === "string" && mapping.startsWith("literal:")) {
-                  vars[token] = mapping.slice("literal:".length);
-                } else {
-                  const colVal = row[String(mapping)] ?? row[String(mapping).split(".").pop()!];
-                  const strVal = colVal instanceof Date
-                    ? colVal.toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })
-                    : String(colVal ?? "");
-                  vars[token] = strVal;
+              if (qResult.rows.length > 0) {
+                const row = qResult.rows[0];
+                const vars: Record<string, string> = {
+                  site_name: "LaneLogic Jobs",
+                  site_url: process.env.CANONICAL_HOST || "https://lanelogicjobs.com",
+                  dashboard_url: `${process.env.CANONICAL_HOST || "https://lanelogicjobs.com"}/dashboard`,
+                };
+                for (const [token, mapping] of Object.entries(config.variableMappings ?? {})) {
+                  if (typeof mapping === "string" && mapping.startsWith("literal:")) {
+                    vars[token] = mapping.slice("literal:".length);
+                  } else {
+                    const col = String(mapping).split(".").pop() ?? String(mapping);
+                    const colVal = row[col];
+                    vars[token] = colVal instanceof Date
+                      ? colVal.toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })
+                      : String(colVal ?? "");
+                  }
                 }
+                liveVars = vars;
+                dataSource = "live_data";
               }
-              liveVars = vars;
-              dataSource = "live_data";
+            } catch (err: any) {
+              console.warn(`[cron-config] Live query failed for config id=${config.id}:`, err?.message);
+              liveQueryError = err?.message ?? "Live query failed";
             }
           }
         }
-      } catch (_) {}
+      }
 
       const variablesUsed = liveVars ?? fallbackVars;
 
@@ -2087,6 +2153,7 @@ export async function registerRoutes(
         message: `Test email sent to ${(req.user as any).email}`,
         source: dataSource,
         variablesUsed,
+        ...(liveQueryError ? { liveQueryWarning: liveQueryError } : {}),
       });
     } catch (err: any) {
       console.error("[cron-config] Test send error:", err);

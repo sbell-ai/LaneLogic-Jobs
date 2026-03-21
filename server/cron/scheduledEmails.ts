@@ -209,11 +209,18 @@ async function runConfig(config: EmailCronConfig): Promise<{ sent: number; error
 
 // ── Engine tick ───────────────────────────────────────────────────────────────
 
+/** Returns true if `runTime` (HH:MM UTC) falls within the 15-minute window ending at `now`. */
+function isTimeDue(runTime: string, now: Date): boolean {
+  const [rh, rm] = runTime.split(":").map(Number);
+  if (isNaN(rh) || isNaN(rm)) return false;
+  const runMinutes = rh * 60 + rm;
+  const nowMinutes = now.getUTCHours() * 60 + now.getUTCMinutes();
+  const diff = nowMinutes - runMinutes;
+  return diff >= 0 && diff < 15;
+}
+
 async function runDynamicCronEngine(): Promise<void> {
   const now = new Date();
-  const utcH = String(now.getUTCHours()).padStart(2, "0");
-  const utcM = String(now.getUTCMinutes()).padStart(2, "0");
-  const currentUTCTime = `${utcH}:${utcM}`;
   const todayUTCStr = now.toISOString().slice(0, 10);
 
   let configs: EmailCronConfig[] = [];
@@ -226,7 +233,7 @@ async function runDynamicCronEngine(): Promise<void> {
 
   const due = configs.filter(c => {
     if (!c.isActive) return false;
-    if (c.runTime !== currentUTCTime) return false;
+    if (!isTimeDue(c.runTime, now)) return false;
     if (c.lastRunAt) {
       const lastDay = new Date(c.lastRunAt).toISOString().slice(0, 10);
       if (lastDay === todayUTCStr) return false;
@@ -235,7 +242,9 @@ async function runDynamicCronEngine(): Promise<void> {
   });
 
   if (due.length === 0) return;
-  console.log(`[cron-engine] ${due.length} config(s) due at ${currentUTCTime} UTC`);
+  const nowHH = String(now.getUTCHours()).padStart(2, "0");
+  const nowMM = String(now.getUTCMinutes()).padStart(2, "0");
+  console.log(`[cron-engine] ${due.length} config(s) due at ${nowHH}:${nowMM} UTC`);
 
   for (const config of due) {
     console.log(`[cron-engine] Running "${config.name}" (id=${config.id})`);
