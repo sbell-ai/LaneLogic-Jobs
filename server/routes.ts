@@ -324,7 +324,6 @@ export async function registerRoutes(
   app: Express
 ): Promise<Server> {
   const r2Ready = isR2Configured();
-  console.log(`[R2] Image storage: ${r2Ready ? "Cloudflare R2 (configured)" : "Local disk (R2 not configured)"}`);
   if (!r2Ready && process.env.NODE_ENV === "production") {
     console.warn("[R2] WARNING: R2 is not configured in production. Uploads will use ephemeral local disk and may be lost on restart.");
   }
