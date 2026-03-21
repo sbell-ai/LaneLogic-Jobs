@@ -3490,6 +3490,9 @@ function EmailTemplatesTab() {
   const [subject, setSubject] = useState("");
   const [body, setBody] = useState("");
   const [testCooldown, setTestCooldown] = useState(0);
+  const [variables, setVariables] = useState<{ key: string; description: string }[]>([]);
+  const [newVarKey, setNewVarKey] = useState("");
+  const [newVarDesc, setNewVarDesc] = useState("");
   const [showNewDialog, setShowNewDialog] = useState(false);
   const [newName, setNewName] = useState("");
   const [newSlug, setNewSlug] = useState("");
@@ -3515,6 +3518,8 @@ function EmailTemplatesTab() {
     if (selected) {
       setSubject(selected.subject);
       setBody(selected.body);
+      setVariables(selected.variables ?? []);
+      setNewVarKey(""); setNewVarDesc("");
       const tt = selected.triggerType ?? "";
       const te = selected.triggerEvent ?? "";
       setTriggerType(tt as any);
@@ -3561,10 +3566,11 @@ function EmailTemplatesTab() {
   const resolvedTriggerEvent = triggerEvent === "__custom__" ? customEvent.trim() : triggerEvent;
 
   const saveMutation = useMutation({
-    mutationFn: async ({ slug, isActive }: { slug: string; isActive?: boolean }) => {
+    mutationFn: async ({ slug, isActive, vars }: { slug: string; isActive?: boolean; vars?: { key: string; description: string }[] }) => {
       const res = await apiRequest("PUT", `/api/admin/email-templates/${slug}`, {
         subject,
         body,
+        variables: vars !== undefined ? vars : variables,
         triggerType: triggerType || null,
         triggerEvent: resolvedTriggerEvent || null,
         ...(isActive !== undefined ? { isActive } : {}),
@@ -3868,29 +3874,79 @@ function EmailTemplatesTab() {
               )}
             </div>
 
-            {selected.variables.length > 0 && (
-              <div className="space-y-2">
-                <Label className="text-xs text-muted-foreground">Available variables</Label>
-                <div className="flex flex-wrap gap-1.5">
-                  {selected.variables.map((v, i) => (
-                    <button
-                      key={`${v.key}-${i}`}
-                      data-testid={`chip-var-${v.key}`}
-                      title={v.description}
-                      onClick={() => insertVariable(v.key)}
-                      className="inline-flex items-center px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-xs font-mono text-slate-700 dark:text-slate-300 hover:bg-primary/10 hover:text-primary transition-colors"
-                    >
-                      {`{{${v.key}}}`}
-                    </button>
-                  ))}
+            {/* ── Variables ───────────────────────────── */}
+            <div className="rounded-xl border border-border bg-slate-50 dark:bg-slate-800/40 p-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-semibold">Variables</p>
+                  <p className="text-xs text-muted-foreground">Click a chip to insert it at the cursor. Use <code className="bg-muted px-1 rounded">{"{{key}}"}</code> syntax in the body.</p>
                 </div>
               </div>
-            )}
+
+              {variables.length > 0 && (
+                <div className="space-y-1.5">
+                  {variables.map((v, i) => (
+                    <div key={`${v.key}-${i}`} className="flex items-center gap-2">
+                      <button
+                        data-testid={`chip-var-${v.key}`}
+                        title={v.description}
+                        onClick={() => insertVariable(v.key)}
+                        className="inline-flex items-center px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-xs font-mono text-slate-700 dark:text-slate-300 hover:bg-primary/10 hover:text-primary transition-colors shrink-0"
+                      >
+                        {`{{${v.key}}}`}
+                      </button>
+                      <span className="text-xs text-muted-foreground flex-1 truncate">{v.description}</span>
+                      <button
+                        data-testid={`button-remove-var-${v.key}`}
+                        onClick={() => setVariables(prev => prev.filter((_, idx) => idx !== i))}
+                        className="text-slate-400 hover:text-red-500 transition-colors shrink-0"
+                        aria-label={`Remove variable ${v.key}`}
+                      >
+                        <X size={13} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <div className="flex items-center gap-2 pt-1">
+                <Input
+                  data-testid="input-new-var-key"
+                  placeholder="key"
+                  value={newVarKey}
+                  onChange={e => setNewVarKey(e.target.value.replace(/[^a-z0-9_]/gi, "_").toLowerCase())}
+                  className="font-mono text-xs h-8 w-28 shrink-0"
+                />
+                <Input
+                  data-testid="input-new-var-desc"
+                  placeholder="description (optional)"
+                  value={newVarDesc}
+                  onChange={e => setNewVarDesc(e.target.value)}
+                  className="text-xs h-8 flex-1"
+                />
+                <button
+                  data-testid="button-add-variable"
+                  disabled={!newVarKey.trim() || variables.some(v => v.key === newVarKey.trim())}
+                  onClick={() => {
+                    const key = newVarKey.trim();
+                    if (!key || variables.some(v => v.key === key)) return;
+                    setVariables(prev => [...prev, { key, description: newVarDesc.trim() }]);
+                    setNewVarKey(""); setNewVarDesc("");
+                  }}
+                  className="h-8 px-3 rounded-md text-xs bg-primary text-primary-foreground disabled:opacity-40 hover:bg-primary/90 transition-colors shrink-0"
+                >
+                  Add
+                </button>
+              </div>
+              {variables.some(v => v.key === newVarKey.trim()) && newVarKey.trim() && (
+                <p className="text-xs text-red-500">A variable with that key already exists.</p>
+              )}
+            </div>
 
             <div className="flex items-center gap-3 pt-2 border-t border-border">
               <Button
                 data-testid="button-save-template"
-                onClick={() => saveMutation.mutate({ slug: selected.slug })}
+                onClick={() => saveMutation.mutate({ slug: selected.slug, vars: variables })}
                 disabled={saveMutation.isPending}
               >
                 <Save size={15} className="mr-1.5" />

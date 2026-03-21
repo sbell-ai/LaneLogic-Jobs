@@ -1722,10 +1722,11 @@ export async function registerRoutes(
 
   app.put("/api/admin/email-templates/:slug", adminOnly, async (req, res) => {
     try {
-      const { subject, body, isActive, triggerType, triggerEvent } = req.body;
+      const { subject, body, variables, isActive, triggerType, triggerEvent } = req.body;
       const updated = await storage.upsertEmailTemplate(req.params.slug, {
         ...(subject !== undefined ? { subject } : {}),
         ...(body !== undefined ? { body } : {}),
+        ...(variables !== undefined ? { variables } : {}),
         ...(isActive !== undefined ? { isActive } : {}),
         ...(triggerType !== undefined ? { triggerType } : {}),
         ...(triggerEvent !== undefined ? { triggerEvent: triggerEvent || null } : {}),
