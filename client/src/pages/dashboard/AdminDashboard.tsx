@@ -3490,6 +3490,11 @@ function EmailTemplatesTab() {
   const [subject, setSubject] = useState("");
   const [body, setBody] = useState("");
   const [testCooldown, setTestCooldown] = useState(0);
+  const [showNewDialog, setShowNewDialog] = useState(false);
+  const [newName, setNewName] = useState("");
+  const [newSlug, setNewSlug] = useState("");
+  const [newSubject, setNewSubject] = useState("");
+  const [slugManuallyEdited, setSlugManuallyEdited] = useState(false);
   const editorRef = useRef<EmailBodyEditorHandle>(null);
   const [triggerType, setTriggerType] = useState<"event" | "scheduled" | "manual" | "">("");
   const [triggerEvent, setTriggerEvent] = useState<string>("");
@@ -3531,6 +3536,27 @@ function EmailTemplatesTab() {
     const id = window.setInterval(() => setTestCooldown(c => Math.max(0, c - 1)), 1000);
     return () => clearInterval(id);
   }, [testCooldown]);
+
+  const createMutation = useMutation({
+    mutationFn: async (data: { name: string; slug: string; subject: string }) => {
+      const res = await apiRequest("POST", "/api/admin/email-templates", data);
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.message || "Failed to create template");
+      }
+      return res.json() as Promise<EmailTemplate>;
+    },
+    onSuccess: (created) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/email-templates"] });
+      setShowNewDialog(false);
+      setNewName(""); setNewSlug(""); setNewSubject(""); setSlugManuallyEdited(false);
+      setSelectedSlug(created.slug);
+      toast({ title: "Template created", description: `"${created.name}" is ready to edit.` });
+    },
+    onError: (err: Error) => {
+      toast({ title: "Error", description: err.message, variant: "destructive" });
+    },
+  });
 
   const resolvedTriggerEvent = triggerEvent === "__custom__" ? customEvent.trim() : triggerEvent;
 
@@ -3601,9 +3627,85 @@ function EmailTemplatesTab() {
         </div>
       </div>
 
+      {/* ── New Template Dialog ── */}
+      {showNewDialog && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-border shadow-2xl w-full max-w-md p-6 space-y-5">
+            <div>
+              <h3 className="text-lg font-semibold">New Email Template</h3>
+              <p className="text-sm text-muted-foreground mt-0.5">You can edit the body and trigger after creating it.</p>
+            </div>
+            <div className="space-y-1.5">
+              <Label>Template Name</Label>
+              <Input
+                data-testid="input-new-template-name"
+                placeholder="e.g. Password Reset"
+                value={newName}
+                onChange={e => {
+                  const v = e.target.value;
+                  setNewName(v);
+                  if (!slugManuallyEdited) {
+                    setNewSlug(v.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, ""));
+                  }
+                }}
+                autoFocus
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Slug <span className="text-muted-foreground font-normal">(unique identifier)</span></Label>
+              <Input
+                data-testid="input-new-template-slug"
+                placeholder="e.g. password_reset"
+                value={newSlug}
+                onChange={e => {
+                  setSlugManuallyEdited(true);
+                  setNewSlug(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, "_"));
+                }}
+                className="font-mono text-sm"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Subject Line <span className="text-muted-foreground font-normal">(optional)</span></Label>
+              <Input
+                data-testid="input-new-template-subject"
+                placeholder="e.g. Reset your password"
+                value={newSubject}
+                onChange={e => setNewSubject(e.target.value)}
+              />
+            </div>
+            <div className="flex justify-end gap-2 pt-1">
+              <button
+                data-testid="button-cancel-new-template"
+                onClick={() => { setShowNewDialog(false); setNewName(""); setNewSlug(""); setNewSubject(""); setSlugManuallyEdited(false); }}
+                className="px-4 py-2 rounded-lg text-sm border border-border hover:bg-muted transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                data-testid="button-confirm-new-template"
+                disabled={!newName.trim() || !newSlug.trim() || createMutation.isPending}
+                onClick={() => createMutation.mutate({ name: newName.trim(), slug: newSlug.trim(), subject: newSubject.trim() })}
+                className="px-4 py-2 rounded-lg text-sm bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 transition-colors flex items-center gap-2"
+              >
+                {createMutation.isPending && <Loader2 size={14} className="animate-spin" />}
+                Create Template
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="flex gap-6 min-h-[600px]">
         {/* Left: template list */}
         <div className="w-64 shrink-0 space-y-1">
+          <button
+            data-testid="button-new-template"
+            onClick={() => setShowNewDialog(true)}
+            className="w-full flex items-center justify-center gap-2 px-3 py-2 mb-2 rounded-lg border border-dashed border-border text-sm text-muted-foreground hover:border-primary hover:text-primary transition-colors"
+          >
+            <Plus size={14} />
+            New Template
+          </button>
           {templates.map(t => (
             <button
               key={t.slug}

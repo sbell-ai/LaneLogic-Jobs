@@ -1681,6 +1681,28 @@ export async function registerRoutes(
     }
   });
 
+  app.post("/api/admin/email-templates", adminOnly, async (req, res) => {
+    try {
+      const { name, slug, subject } = req.body;
+      if (!name || !slug) return res.status(400).json({ message: "name and slug are required" });
+      const slugClean = String(slug).toLowerCase().replace(/[^a-z0-9_]/g, "_");
+      const existing = await storage.getEmailTemplateBySlug(slugClean);
+      if (existing) return res.status(409).json({ message: "A template with that slug already exists" });
+      const created = await storage.upsertEmailTemplate(slugClean, {
+        name: String(name),
+        subject: String(subject || ""),
+        body: "<p>Write your email body here. Use <strong>{{variables}}</strong> to personalise it.</p>",
+        variables: [],
+        isActive: false,
+        triggerType: null,
+        triggerEvent: null,
+      });
+      res.status(201).json(created);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
   app.get("/api/admin/trigger-events", adminOnly, async (_req, res) => {
     const { TRIGGER_EVENTS } = await import("../shared/triggerEvents.ts");
     res.json(TRIGGER_EVENTS);
