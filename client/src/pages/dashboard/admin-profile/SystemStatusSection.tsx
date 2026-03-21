@@ -42,6 +42,7 @@ export default function SystemStatusSection() {
           icon: <Server size={16} />,
           label: "Server Uptime",
           value: status.uptime,
+          description: "How long the website has been running continuously without a restart. A longer uptime means the platform has been stable and available to users.",
           level: "green" as StatusLevel,
           testId: "status-server-uptime",
         },
@@ -49,6 +50,7 @@ export default function SystemStatusSection() {
           icon: <Database size={16} />,
           label: "Database",
           value: status.dbStatus === "ok" ? "Connected" : "Connection error",
+          description: "The database stores everything on the platform — job listings, user accounts, applications, and settings. When connected, all data saves and loads normally.",
           level: (status.dbStatus === "ok" ? "green" : "red") as StatusLevel,
           testId: "status-database",
         },
@@ -56,6 +58,7 @@ export default function SystemStatusSection() {
           icon: <Mail size={16} />,
           label: "Email Service",
           value: status.emailConfigured ? "Configured" : "Not configured",
+          description: "Handles all automated emails sent to users, including account verification, password resets, application confirmations, and job alert digests.",
           level: (status.emailConfigured ? "green" : "amber") as StatusLevel,
           testId: "status-email",
         },
@@ -67,6 +70,7 @@ export default function SystemStatusSection() {
             : status.cronNextRun
             ? `Next scheduled: ${formatDate(status.cronNextRun)}`
             : "No active cron configs",
+          description: "Runs scheduled tasks automatically in the background — such as sending email campaigns, refreshing job listings, and other timed jobs — without any manual action.",
           level: (status.cronLastRun ? "green" : "amber") as StatusLevel,
           testId: "status-cron",
         },
@@ -110,6 +114,7 @@ export default function SystemStatusSection() {
                       {item.label}
                     </div>
                     <p className="text-sm text-muted-foreground mt-0.5 break-words">{item.value}</p>
+                    <p className="text-xs text-muted-foreground/70 mt-1 leading-relaxed">{item.description}</p>
                   </div>
                 </div>
               ))}
