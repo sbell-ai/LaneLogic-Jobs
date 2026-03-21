@@ -81,7 +81,7 @@ function AppSidebar({ role }: { role: string }) {
         <SidebarContent>
           <div className="p-4 py-6 border-b border-border">
             <Link href="/" className="flex items-center gap-2 font-display font-bold text-xl tracking-tight">
-              Transpo<span className="text-primary">Jobs</span>
+              LaneLogic <span className="text-primary">Jobs</span>
             </Link>
           </div>
           <SidebarGroup>
@@ -126,7 +126,7 @@ function AppSidebar({ role }: { role: string }) {
       <SidebarContent>
         <div className="p-4 py-6 border-b border-border">
           <Link href="/" className="flex items-center gap-2 font-display font-bold text-xl tracking-tight">
-            Transpo<span className="text-primary">Jobs</span>
+            LaneLogic <span className="text-primary">Jobs</span>
           </Link>
         </div>
         <SidebarGroup>
