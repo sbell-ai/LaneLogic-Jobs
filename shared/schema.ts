@@ -770,6 +770,43 @@ export const insertEmailTemplateSchema = createInsertSchema(emailTemplates).omit
 export type EmailTemplate = typeof emailTemplates.$inferSelect;
 export type InsertEmailTemplate = z.infer<typeof insertEmailTemplateSchema>;
 
+// ─── Email Cron Configs ───────────────────────────────────────────────────────
+// Each row drives one scheduled email job in the dynamic cron engine.
+// The engine runs every 15 min, checks run_time (UTC), and skips if last_run_at
+// is already today (UTC). All times are UTC.
+export const emailCronConfigs = pgTable("email_cron_configs", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  description: text("description"),
+  templateId: integer("template_id").notNull(),
+  sourceTable: text("source_table").notNull(),
+  triggerField: text("trigger_field").notNull(),
+  triggerOffsetDays: integer("trigger_offset_days").notNull().default(0),
+  triggerDirection: text("trigger_direction").$type<"before" | "after">().notNull().default("before"),
+  recipientField: text("recipient_field").notNull(),
+  recipientJoin: text("recipient_join"),
+  filterConditions: jsonb("filter_conditions")
+    .$type<{ field: string; operator: string; value: string }[]>()
+    .default([]),
+  variableMappings: jsonb("variable_mappings")
+    .$type<Record<string, string>>()
+    .default({}),
+  isActive: boolean("is_active").notNull().default(false),
+  runTime: text("run_time").notNull().default("08:00"),
+  lastRunAt: timestamp("last_run_at"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const insertEmailCronConfigSchema = createInsertSchema(emailCronConfigs).omit({
+  id: true,
+  lastRunAt: true,
+  createdAt: true,
+  updatedAt: true,
+});
+export type EmailCronConfig = typeof emailCronConfigs.$inferSelect;
+export type InsertEmailCronConfig = z.infer<typeof insertEmailCronConfigSchema>;
+
 // Auth requests
 export const loginSchema = z.object({
   email: z.string().email(),

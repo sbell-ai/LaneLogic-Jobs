@@ -8,7 +8,7 @@ import {
   employerVerificationRequests, employerEvidenceItems,
   seekerCredentialRequirements, seekerRequirementRules,
   seekerVerificationRequests, seekerCredentialEvidenceItems,
-  conversations, messages, emailTemplates,
+  conversations, messages, emailTemplates, emailCronConfigs,
   type User, type InsertUser, type Job, type InsertJob,
   type Application, type InsertApplication,
   type Resource, type InsertResource,
@@ -41,6 +41,7 @@ import {
   type Conversation, type InsertConversation,
   type Message, type InsertMessage,
   emailTemplates, type EmailTemplate, type InsertEmailTemplate,
+  emailCronConfigs, type EmailCronConfig, type InsertEmailCronConfig,
 } from "@shared/schema";
 import { eq, and, sql, desc, asc, isNotNull, gte, lte, gt, ne, notInArray, inArray, count } from "drizzle-orm";
 
@@ -240,6 +241,15 @@ export interface IStorage {
 
   // Employer enriched applicants
   getEmployerApplicationsEnriched(employerId: number): Promise<(Application & { seekerName: string; seekerEmail: string; employerNotes?: string | null })[]>;
+
+  // Email Cron Configs
+  getEmailCronConfigs(): Promise<EmailCronConfig[]>;
+  getEmailCronConfig(id: number): Promise<EmailCronConfig | undefined>;
+  getEmailCronConfigByName(name: string): Promise<EmailCronConfig | undefined>;
+  createEmailCronConfig(config: InsertEmailCronConfig): Promise<EmailCronConfig>;
+  updateEmailCronConfig(id: number, updates: Partial<InsertEmailCronConfig>): Promise<EmailCronConfig>;
+  deleteEmailCronConfig(id: number): Promise<void>;
+  touchEmailCronConfigLastRun(id: number): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -1331,6 +1341,46 @@ export class DatabaseStorage implements IStorage {
       .values({ slug, name: data.name ?? slug, subject: data.subject ?? "", body: data.body ?? "", variables: data.variables ?? [], isActive: data.isActive ?? true, ...data })
       .returning();
     return created;
+  }
+
+  // ── Email Cron Configs ─────────────────────────────────────────────────────
+  async getEmailCronConfigs(): Promise<EmailCronConfig[]> {
+    return await db.select().from(emailCronConfigs).orderBy(asc(emailCronConfigs.name));
+  }
+
+  async getEmailCronConfig(id: number): Promise<EmailCronConfig | undefined> {
+    const [c] = await db.select().from(emailCronConfigs).where(eq(emailCronConfigs.id, id));
+    return c;
+  }
+
+  async getEmailCronConfigByName(name: string): Promise<EmailCronConfig | undefined> {
+    const [c] = await db.select().from(emailCronConfigs).where(eq(emailCronConfigs.name, name));
+    return c;
+  }
+
+  async createEmailCronConfig(config: InsertEmailCronConfig): Promise<EmailCronConfig> {
+    const [c] = await db.insert(emailCronConfigs).values({ ...config, updatedAt: new Date() }).returning();
+    return c;
+  }
+
+  async updateEmailCronConfig(id: number, updates: Partial<InsertEmailCronConfig>): Promise<EmailCronConfig> {
+    const [c] = await db
+      .update(emailCronConfigs)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(emailCronConfigs.id, id))
+      .returning();
+    return c;
+  }
+
+  async deleteEmailCronConfig(id: number): Promise<void> {
+    await db.delete(emailCronConfigs).where(eq(emailCronConfigs.id, id));
+  }
+
+  async touchEmailCronConfigLastRun(id: number): Promise<void> {
+    await db
+      .update(emailCronConfigs)
+      .set({ lastRunAt: new Date(), updatedAt: new Date() })
+      .where(eq(emailCronConfigs.id, id));
   }
 }
 

@@ -165,6 +165,7 @@ async function startServer() {
   await runParagraphizeMigration();
   await runResourceContentBackfill();
   await seedEmailTemplates();
+  await seedEmailCronConfigs();
   httpServer.listen(
     { port, host: "0.0.0.0", reusePort: true },
     () => {
@@ -387,6 +388,131 @@ async function seedEmailTemplates() {
     }
   } catch (err) {
     console.error("[email] Failed to seed email templates:", err);
+  }
+}
+
+async function seedEmailCronConfigs() {
+  try {
+    const { storage } = await import("./storage");
+    const templates = await storage.getEmailTemplates();
+
+    const findTemplateId = (triggerEvent: string): number | null => {
+      const t = templates.find(t => t.triggerEvent === triggerEvent);
+      return t ? t.id : null;
+    };
+
+    const configs: Array<{
+      name: string;
+      description: string;
+      triggerEvent: string;
+      sourceTable: string;
+      triggerField: string;
+      triggerOffsetDays: number;
+      triggerDirection: "before" | "after";
+      recipientField: string;
+      recipientJoin: string | null;
+      filterConditions: { field: string; operator: string; value: string }[];
+      variableMappings: Record<string, string>;
+    }> = [
+      {
+        name: "Feature Expiring — Resume Access",
+        description: "Sends 7 days before a user's Resume Access feature expires.",
+        triggerEvent: "feature_expiring",
+        sourceTable: "users",
+        triggerField: "resume_access_expires_at",
+        triggerOffsetDays: 7,
+        triggerDirection: "before",
+        recipientField: "email",
+        recipientJoin: null,
+        filterConditions: [],
+        variableMappings: {
+          first_name: "first_name",
+          expiry_date: "resume_access_expires_at",
+          feature_name: "literal:Resume Access",
+        },
+      },
+      {
+        name: "Feature Expiring — Featured Employer",
+        description: "Sends 7 days before a user's Featured Employer Listing feature expires.",
+        triggerEvent: "feature_expiring",
+        sourceTable: "users",
+        triggerField: "featured_employer_expires_at",
+        triggerOffsetDays: 7,
+        triggerDirection: "before",
+        recipientField: "email",
+        recipientJoin: null,
+        filterConditions: [],
+        variableMappings: {
+          first_name: "first_name",
+          expiry_date: "featured_employer_expires_at",
+          feature_name: "literal:Featured Employer Listing",
+        },
+      },
+      {
+        name: "Job Listing Expiring",
+        description: "Sends 7 days before a published job listing expires.",
+        triggerEvent: "job_expiring",
+        sourceTable: "jobs",
+        triggerField: "expires_at",
+        triggerOffsetDays: 7,
+        triggerDirection: "before",
+        recipientField: "users.email",
+        recipientJoin: "JOIN users ON jobs.employer_id = users.id",
+        filterConditions: [{ field: "is_published", operator: "=", value: "true" }],
+        variableMappings: {
+          first_name: "first_name",
+          company_name: "company_name",
+          job_title: "title",
+          expiry_date: "expires_at",
+        },
+      },
+      {
+        name: "Incomplete Profile Reminder",
+        description: "Sends 3 days after a job seeker registers if their profile is incomplete.",
+        triggerEvent: "profile_incomplete_reminder",
+        sourceTable: "users",
+        triggerField: "created_at",
+        triggerOffsetDays: 3,
+        triggerDirection: "after",
+        recipientField: "email",
+        recipientJoin: null,
+        filterConditions: [{ field: "role", operator: "=", value: "job_seeker" }],
+        variableMappings: {
+          first_name: "first_name",
+          missing_fields: "literal:First name, Last name, Job track / category",
+        },
+      },
+    ];
+
+    for (const cfg of configs) {
+      const existing = await storage.getEmailCronConfigByName(cfg.name);
+      if (existing) continue;
+
+      const templateId = findTemplateId(cfg.triggerEvent);
+      if (!templateId) {
+        log(`[cron-seed] No template found for event "${cfg.triggerEvent}", skipping "${cfg.name}"`);
+        continue;
+      }
+
+      await storage.createEmailCronConfig({
+        name: cfg.name,
+        description: cfg.description,
+        templateId,
+        sourceTable: cfg.sourceTable,
+        triggerField: cfg.triggerField,
+        triggerOffsetDays: cfg.triggerOffsetDays,
+        triggerDirection: cfg.triggerDirection,
+        recipientField: cfg.recipientField,
+        recipientJoin: cfg.recipientJoin ?? undefined,
+        filterConditions: cfg.filterConditions,
+        variableMappings: cfg.variableMappings,
+        isActive: true,
+        runTime: "08:00",
+      });
+      log(`[cron-seed] Seeded cron config: ${cfg.name}`);
+    }
+  } catch (err) {
+    console.error("[cron-seed] Failed to seed email cron configs:", err);
   }
 }
 
