@@ -86,6 +86,21 @@ export const TRIGGER_EVENTS: TriggerEvent[] = [
 
   // ── Applications ─────────────────────────────────────────────────────────
   {
+    key: "employer_new_applicant",
+    label: "New Applicant (Employer Notification)",
+    description: "Fires when a job seeker submits an application — sent to the employer.",
+    type: "event",
+    variables: [
+      { key: "first_name", description: "Employer's first name" },
+      { key: "company_name", description: "Employer's company name" },
+      { key: "applicant_name", description: "Full name of the job seeker who applied" },
+      { key: "job_title", description: "Title of the job that was applied to" },
+      { key: "site_name", description: "Your platform name" },
+      { key: "site_url", description: "Your platform URL" },
+      { key: "dashboard_url", description: "Direct link to the employer's dashboard" },
+    ],
+  },
+  {
     key: "application_received",
     label: "Application Submitted",
     description: "Fires when a job seeker submits an application to a job.",
@@ -126,6 +141,36 @@ export const TRIGGER_EVENTS: TriggerEvent[] = [
       { key: "company_name", description: "Hiring company's name" },
       { key: "dashboard_url", description: "Direct link to the employer's dashboard" },
       { key: "site_url", description: "Your platform URL" },
+    ],
+  },
+
+  // ── Verification ─────────────────────────────────────────────────────────
+  {
+    key: "verification_decision_employer",
+    label: "Employer Verification Decision",
+    description: "Fires when an admin approves, rejects, or requests more info on an employer verification request.",
+    type: "event",
+    variables: [
+      { key: "first_name", description: "Employer's first name" },
+      { key: "decision", description: "Human-readable outcome: Verified, Rejected, or Needs More Information" },
+      { key: "admin_notes_section", description: "Pre-formatted admin notes line (empty string if no notes)" },
+      { key: "site_name", description: "Your platform name" },
+      { key: "site_url", description: "Your platform URL" },
+      { key: "dashboard_url", description: "Direct link to the employer's dashboard" },
+    ],
+  },
+  {
+    key: "verification_decision_seeker",
+    label: "Seeker Verification Decision",
+    description: "Fires when an admin approves, rejects, or requests more info on a job seeker verification request.",
+    type: "event",
+    variables: [
+      { key: "first_name", description: "Job seeker's first name" },
+      { key: "decision", description: "Human-readable outcome: Verified, Rejected, or Needs More Information" },
+      { key: "admin_notes_section", description: "Pre-formatted admin notes line (empty string if no notes)" },
+      { key: "site_name", description: "Your platform name" },
+      { key: "site_url", description: "Your platform URL" },
+      { key: "dashboard_url", description: "Direct link to the seeker's dashboard" },
     ],
   },
 

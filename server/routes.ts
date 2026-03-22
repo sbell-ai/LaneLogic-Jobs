@@ -1057,6 +1057,7 @@ export async function registerRoutes(
                   company_name: companyName,
                   applicant_name: applicantName,
                   job_title: appJob.title,
+                  site_name: "LaneLogic Jobs",
                   site_url: siteUrl,
                   dashboard_url: `${siteUrl}/dashboard`,
                 });
