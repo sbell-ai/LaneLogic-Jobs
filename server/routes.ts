@@ -1039,14 +1039,28 @@ export async function registerRoutes(
             if (seekerUser && appJob) {
               const siteUrl = process.env.CANONICAL_HOST || "https://lanelogicjobs.com";
               const employer = await storage.getUser(appJob.employerId);
+              const companyName = employer
+                ? ((employer as any).companyName || [(employer as any).firstName, (employer as any).lastName].filter(Boolean).join(" "))
+                : "the company";
               await sendTemplatedEmailByEvent("application_received", (seekerUser as any).email, {
                 first_name: (seekerUser as any).firstName || (seekerUser as any).email,
                 job_title: appJob.title,
-                company_name: employer ? ((employer as any).companyName || [(employer as any).firstName, (employer as any).lastName].filter(Boolean).join(" ")) : "the company",
+                company_name: companyName,
                 application_id: String((txResult.appData as any).id),
                 site_url: siteUrl,
                 dashboard_url: `${siteUrl}/dashboard`,
               });
+              if (employer && (employer as any).email) {
+                const applicantName = [(seekerUser as any).firstName, (seekerUser as any).lastName].filter(Boolean).join(" ") || (seekerUser as any).email;
+                await sendTemplatedEmailByEvent("employer_new_applicant", (employer as any).email, {
+                  first_name: (employer as any).firstName || (employer as any).email,
+                  company_name: companyName,
+                  applicant_name: applicantName,
+                  job_title: appJob.title,
+                  site_url: siteUrl,
+                  dashboard_url: `${siteUrl}/dashboard`,
+                });
+              }
             }
           } catch {}
         })();

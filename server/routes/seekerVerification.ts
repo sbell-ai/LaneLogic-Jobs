@@ -360,6 +360,29 @@ seekerVerificationRouter.post("/api/admin/seeker-verification/request/decision",
       await storage.updateSeekerVerificationStatus(updated.seekerId, "needs_more");
     }
     res.json({ request: updated });
+    (async () => {
+      try {
+        const { sendTemplatedEmailByEvent } = await import("../email/sendTemplatedEmail.ts");
+        const seeker = await storage.getUser(updated.seekerId);
+        if (seeker) {
+          const decisionLabel = parsed.decision === "verified" ? "Verified"
+            : parsed.decision === "rejected" ? "Rejected"
+            : "Needs More Information";
+          const adminNotesSection = parsed.adminNotes
+            ? `\nAdmin notes: ${parsed.adminNotes}\n`
+            : "";
+          const siteUrl = process.env.CANONICAL_HOST || "https://lanelogicjobs.com";
+          await sendTemplatedEmailByEvent("verification_decision_seeker", (seeker as any).email, {
+            first_name: (seeker as any).firstName || (seeker as any).email,
+            decision: decisionLabel,
+            admin_notes_section: adminNotesSection,
+            site_name: "LaneLogic Jobs",
+            site_url: siteUrl,
+            dashboard_url: `${siteUrl}/dashboard`,
+          });
+        }
+      } catch {}
+    })();
   } catch (err) {
     if (err instanceof z.ZodError) {
       return res.status(400).json({ ok: false, error: "validation_error", message: err.errors[0].message });

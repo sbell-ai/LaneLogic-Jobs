@@ -489,6 +489,121 @@ The {{site_name}} Team
   },
 
   // ─────────────────────────────────────────────────────────────
+  // EMPLOYER — NEW APPLICANT NOTIFICATION
+  // ─────────────────────────────────────────────────────────────
+  {
+    slug: "employer_new_applicant",
+    name: "New Applicant Notification (Employer)",
+    subject: "{{applicant_name}} applied for {{job_title}}",
+    body: `Hi {{first_name}},
+
+Great news — {{applicant_name}} has applied for your {{job_title}} position at {{company_name}}.
+
+Review their application and all your other applicants from your dashboard:
+{{dashboard_url}}
+
+The {{site_name}} Team
+{{site_url}}`,
+    variables: [
+      { key: "first_name", description: "Employer's first name" },
+      { key: "company_name", description: "Employer's company name" },
+      { key: "applicant_name", description: "Full name of the job seeker who applied" },
+      { key: "job_title", description: "Title of the job that was applied to" },
+      { key: "dashboard_url", description: "Direct link to the employer's dashboard" },
+      { key: "site_name", description: "Your platform name" },
+      { key: "site_url", description: "Root URL of the platform" },
+    ],
+    testVars: {
+      first_name: "Jordan",
+      company_name: "Acme Freight",
+      applicant_name: "Alex Rivera",
+      job_title: "CDL A Driver – OTR",
+      dashboard_url: "https://lanelogicjobs.com/dashboard",
+      site_name: "LaneLogic Jobs",
+      site_url: "https://lanelogicjobs.com",
+    },
+    triggerType: "event",
+    triggerEvent: "employer_new_applicant",
+  },
+
+  // ─────────────────────────────────────────────────────────────
+  // VERIFICATION DECISIONS
+  // ─────────────────────────────────────────────────────────────
+  {
+    slug: "verification_decision_employer",
+    name: "Employer Verification Decision",
+    subject: "Your verification request on {{site_name}} has been updated",
+    body: `Hi {{first_name}},
+
+Your employer verification request on {{site_name}} has been reviewed.
+
+Outcome: {{decision}}
+{{admin_notes_section}}
+Log in to view your updated account status:
+{{dashboard_url}}
+
+If you have questions, reply to this email.
+
+The {{site_name}} Team
+{{site_url}}`,
+    variables: [
+      { key: "first_name", description: "Employer's first name" },
+      { key: "decision", description: "Human-readable outcome: Verified, Rejected, or Needs More Information" },
+      { key: "admin_notes_section", description: "Pre-formatted admin notes line (empty string if no notes)" },
+      { key: "dashboard_url", description: "Direct link to the employer's dashboard" },
+      { key: "site_name", description: "Your platform name" },
+      { key: "site_url", description: "Root URL of the platform" },
+    ],
+    testVars: {
+      first_name: "Jordan",
+      decision: "Verified",
+      admin_notes_section: "\nAdmin notes: All documents reviewed and confirmed.\n",
+      dashboard_url: "https://lanelogicjobs.com/dashboard",
+      site_name: "LaneLogic Jobs",
+      site_url: "https://lanelogicjobs.com",
+    },
+    triggerType: "event",
+    triggerEvent: "verification_decision_employer",
+  },
+
+  {
+    slug: "verification_decision_seeker",
+    name: "Seeker Verification Decision",
+    subject: "Your verification request on {{site_name}} has been updated",
+    body: `Hi {{first_name}},
+
+Your credential verification request on {{site_name}} has been reviewed.
+
+Outcome: {{decision}}
+{{admin_notes_section}}
+Log in to view your updated profile status:
+{{dashboard_url}}
+
+If you have questions, reply to this email.
+
+The {{site_name}} Team
+{{site_url}}`,
+    variables: [
+      { key: "first_name", description: "Job seeker's first name" },
+      { key: "decision", description: "Human-readable outcome: Verified, Rejected, or Needs More Information" },
+      { key: "admin_notes_section", description: "Pre-formatted admin notes line (empty string if no notes)" },
+      { key: "dashboard_url", description: "Direct link to the seeker's dashboard" },
+      { key: "site_name", description: "Your platform name" },
+      { key: "site_url", description: "Root URL of the platform" },
+    ],
+    testVars: {
+      first_name: "Alex",
+      decision: "Verified",
+      admin_notes_section: "\nAdmin notes: CDL documents confirmed valid.\n",
+      dashboard_url: "https://lanelogicjobs.com/dashboard",
+      site_name: "LaneLogic Jobs",
+      site_url: "https://lanelogicjobs.com",
+    },
+    triggerType: "event",
+    triggerEvent: "verification_decision_seeker",
+  },
+
+  // ─────────────────────────────────────────────────────────────
   // INCOMPLETE PROFILE REMINDER (SCHEDULED)
   // ─────────────────────────────────────────────────────────────
   {
