@@ -2,10 +2,75 @@ import { Link } from "wouter";
 import { Truck } from "lucide-react";
 import { SiX, SiLinkedin, SiFacebook, SiInstagram, SiYoutube, SiTiktok } from "react-icons/si";
 import { useSiteSettings } from "@/hooks/use-settings";
+import { useMenu, type MenuItemNode } from "@/hooks/use-menu";
 import { normalizeHex } from "@shared/colorUtils";
+
+const HARDCODED_GROUPS = [
+  {
+    label: "Candidates",
+    children: [
+      { label: "Browse Jobs", url: "/jobs", openInNewTab: false },
+      { label: "Create Profile", url: "/register", openInNewTab: false },
+      { label: "Resource Center", url: "/resources", openInNewTab: false },
+      { label: "Career Advice", url: "/blog", openInNewTab: false },
+      { label: "Job Seeker Guide", url: "/guides/job-seeker", openInNewTab: false },
+    ],
+  },
+  {
+    label: "Employers",
+    children: [
+      { label: "Post a Job", url: "/register", openInNewTab: false },
+      { label: "Pricing", url: "/pricing", openInNewTab: false },
+      { label: "Employer Resources", url: "/resources", openInNewTab: false },
+      { label: "Employer Guide", url: "/guides/employer", openInNewTab: false },
+    ],
+  },
+  {
+    label: "Company",
+    children: [
+      { label: "About Us", url: "/about", openInNewTab: false },
+      { label: "Contact", url: "https://mailgun-form-sender.replit.app", openInNewTab: true },
+      { label: "Privacy Policy", url: "/privacy", openInNewTab: false },
+      { label: "Terms of Service", url: "/terms", openInNewTab: false },
+    ],
+  },
+];
+
+function FooterLink({ url, label, openInNewTab }: { url: string; label: string; openInNewTab: boolean }) {
+  if (openInNewTab || url.startsWith("http")) {
+    return (
+      <a href={url} target="_blank" rel="noopener noreferrer" className="ftl focus-visible:underline focus-visible:outline-none">
+        {label}
+      </a>
+    );
+  }
+  return (
+    <Link href={url} className="ftl focus-visible:underline focus-visible:outline-none">
+      {label}
+    </Link>
+  );
+}
+
+function FooterGroup({ label, children, footerText }: { label: string; children: { label: string; url: string; openInNewTab: boolean }[]; footerText: string }) {
+  return (
+    <div>
+      <h4 className="font-semibold mb-4 font-display" style={{ color: footerText }}>
+        {label}
+      </h4>
+      <ul className="space-y-2 text-sm">
+        {children.map((item) => (
+          <li key={item.label}>
+            <FooterLink url={item.url} label={item.label} openInNewTab={item.openInNewTab} />
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
 
 export function Footer() {
   const settings = useSiteSettings();
+  const { data: menuData } = useMenu("footer");
 
   const bgColor = normalizeHex(settings.footerBgColor || "#0b1220") || "#0b1220";
   const bgOpacity = settings.footerBgOpacity ?? 1;
@@ -37,6 +102,26 @@ export function Footer() {
     { url: settings.socialYoutube, icon: SiYoutube, label: "YouTube" },
     { url: settings.socialTiktok, icon: SiTiktok, label: "TikTok" },
   ].filter(s => s.url?.trim());
+
+  // Build footer groups from DB data or fall back to hardcoded
+  const footerGroups = (() => {
+    if (menuData?.items?.length) {
+      const topLevel = menuData.items.filter((i) => !i.parentId && i.isActive);
+      if (topLevel.length > 0) {
+        return topLevel.map((group) => ({
+          label: group.label,
+          children: group.children
+            .filter((c) => c.isActive)
+            .map((c) => ({
+              label: c.label,
+              url: c.url || "/",
+              openInNewTab: c.openInNewTab,
+            })),
+        }));
+      }
+    }
+    return HARDCODED_GROUPS;
+  })();
 
   return (
     <footer
@@ -100,71 +185,14 @@ export function Footer() {
             )}
           </div>
 
-          <div>
-            <h4 className="font-semibold mb-4 font-display" style={{ color: "var(--footer-text)" }}>Candidates</h4>
-            <ul className="space-y-2 text-sm">
-              {[
-                { href: "/jobs", text: "Browse Jobs" },
-                { href: "/register", text: "Create Profile" },
-                { href: "/resources", text: "Resource Center" },
-                { href: "/blog", text: "Career Advice" },
-                { href: "/guides/job-seeker", text: "Job Seeker Guide" },
-              ].map(l => (
-                <li key={l.href}>
-                  <Link href={l.href} className="ftl focus-visible:underline focus-visible:outline-none">
-                    {l.text}
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          </div>
-
-          <div>
-            <h4 className="font-semibold mb-4 font-display" style={{ color: "var(--footer-text)" }}>Employers</h4>
-            <ul className="space-y-2 text-sm">
-              {[
-                { href: "/register", text: "Post a Job" },
-                { href: "/pricing", text: "Pricing" },
-                { href: "/resources", text: "Employer Resources" },
-                { href: "/guides/employer", text: "Employer Guide" },
-              ].map(l => (
-                <li key={l.href}>
-                  <Link href={l.href} className="ftl focus-visible:underline focus-visible:outline-none">
-                    {l.text}
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          </div>
-
-          <div>
-            <h4 className="font-semibold mb-4 font-display" style={{ color: "var(--footer-text)" }}>Company</h4>
-            <ul className="space-y-2 text-sm">
-              {[
-                { href: "/about", text: "About Us", external: false },
-                { href: "https://mailgun-form-sender.replit.app", text: "Contact", external: true },
-                { href: "/privacy", text: "Privacy Policy", external: false },
-                { href: "/terms", text: "Terms of Service", external: false },
-              ].map(l => (
-                <li key={l.href}>
-                  {l.external ? (
-                    <a
-                      href={l.href}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="ftl focus-visible:underline focus-visible:outline-none"
-                    >
-                      {l.text}
-                    </a>
-                  ) : (
-                    <Link href={l.href} className="ftl focus-visible:underline focus-visible:outline-none">
-                      {l.text}
-                    </Link>
-                  )}
-                </li>
-              ))}
-            </ul>
-          </div>
+          {footerGroups.map((group) => (
+            <FooterGroup
+              key={group.label}
+              label={group.label}
+              children={group.children}
+              footerText={textColor}
+            />
+          ))}
         </div>
 
         <div className="pt-8 border-t border-white/10 text-sm flex flex-col md:flex-row justify-between items-center" style={{ color: "var(--footer-text)", opacity: 0.7 }}>

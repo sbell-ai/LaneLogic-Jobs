@@ -856,6 +856,41 @@ export const insertSavedJobSchema = createInsertSchema(savedJobs).omit({ id: tru
 export type SavedJob = typeof savedJobs.$inferSelect;
 export type InsertSavedJob = z.infer<typeof insertSavedJobSchema>;
 
+// ── Menus & Menu Items ──────────────────────────────────────────────────────
+export const menus = pgTable("menus", {
+  id: serial("id").primaryKey(),
+  slug: text("slug").notNull().unique(),
+  name: text("name").notNull(),
+  description: text("description"),
+  location: text("location").notNull(),
+  isActive: boolean("is_active").default(true).notNull(),
+  isDefault: boolean("is_default").default(false).notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const menuItems = pgTable("menu_items", {
+  id: serial("id").primaryKey(),
+  menuId: integer("menu_id").notNull().references(() => menus.id, { onDelete: "cascade" }),
+  parentId: integer("parent_id").references((): any => menuItems.id, { onDelete: "cascade" }),
+  label: text("label").notNull(),
+  type: text("type").notNull().default("internal"),
+  url: text("url"),
+  pageId: integer("page_id").references(() => pages.id, { onDelete: "set null" }),
+  openInNewTab: boolean("open_in_new_tab").default(false).notNull(),
+  visibility: text("visibility").notNull().default("always"),
+  sortOrder: integer("sort_order").notNull().default(0),
+  isActive: boolean("is_active").default(true).notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const insertMenuSchema = createInsertSchema(menus).omit({ id: true, createdAt: true, updatedAt: true });
+export const insertMenuItemSchema = createInsertSchema(menuItems).omit({ id: true, createdAt: true });
+export type Menu = typeof menus.$inferSelect;
+export type InsertMenu = z.infer<typeof insertMenuSchema>;
+export type MenuItem = typeof menuItems.$inferSelect;
+export type InsertMenuItem = z.infer<typeof insertMenuItemSchema>;
+
 // Auth requests
 export const loginSchema = z.object({
   email: z.string().email(),

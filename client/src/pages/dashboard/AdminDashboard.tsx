@@ -43,6 +43,7 @@ import EmployerRegistry from "./EmployerRegistry";
 import VerificationInbox from "./VerificationInbox";
 import SeekerVerificationInbox from "./SeekerVerificationInbox";
 import ScheduledAutomations from "./ScheduledAutomations";
+import MenuManagement from "./MenuManagement";
 import { insertResourceSchema, insertBlogPostSchema, insertJobSchema } from "@shared/schema";
 import { INTRO_TRUNCATE_LENGTH } from "@shared/constants";
 import { tokenize } from "@/lib/linkify";
@@ -4206,6 +4207,7 @@ export default function AdminDashboard({ section, subsection }: { section?: stri
       case "seeker-verification": return <SeekerVerificationInbox />;
       case "email-templates": return <EmailTemplatesTab />;
       case "scheduled-automations": return <ScheduledAutomations />;
+      case "menus": return <MenuManagement />;
       default: return <UsersLandingTab />;
     }
   };

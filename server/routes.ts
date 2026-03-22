@@ -569,6 +569,9 @@ export async function registerRoutes(
   const { seekerVerificationRouter } = await import("./routes/seekerVerification");
   app.use(seekerVerificationRouter);
 
+  const { default: menuRouter } = await import("./routes/menuRoutes");
+  app.use("/api", menuRouter);
+
   const { registerAdminImportRoutes } = await import("./adminImportRoutes");
   registerAdminImportRoutes(app);
 

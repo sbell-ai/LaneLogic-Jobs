@@ -44,6 +44,8 @@ The frontend uses React, TypeScript, Wouter for routing, and Tailwind CSS with S
 - **Dynamic Cron Email Engine**: Database-driven engine for scheduled emails, configurable via admin UI, replacing hard-coded cron jobs. Includes security measures for SQL generation.
 - **Email Templates System**: Admin dashboard for managing transactional email templates with a rendering engine, seeding of default templates, and admin CRUD routes.
 - **Apify Job Import Pipeline**: Automates scraping Workday job listings via Apify, including scraper configurations, target management, run history, and field mapping.
+- **Job Alerts (Seeker Search Subscriptions)**: Job seekers can save searches as named alerts. Alerts can be paused/resumed. A cron job runs every 15 minutes to email matching new jobs using a dedicated `job_alert` email template.
+- **Menu Management System**: Database-driven navigation menus (`menus` + `menu_items` tables). 4 default menus seeded (main-nav, footer, mobile, sidebar-custom). Admin drag-and-drop builder at `/dashboard/admin/menus` using `@dnd-kit`. Navbar and Footer render from DB with hardcoded fallbacks. Public endpoint `GET /api/menus/:slug` filters by auth visibility. Full admin CRUD at `/api/admin/menus`.
 
 ## External Dependencies
 - **Cloudflare R2**: Object storage for image uploads.

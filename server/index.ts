@@ -12,6 +12,7 @@ import { sendAlertEmail } from "./alerts/sendAlertEmail.ts";
 import { syncAllRegistries } from "./registry/syncAll";
 import { initEmailCronJobs } from "./cron/scheduledEmails";
 import { initJobAlertCron } from "./cron/jobAlerts";
+import { seedMenus } from "./seedMenus";
 
 const app = express();
 const httpServer = createServer(app);
@@ -167,6 +168,7 @@ async function startServer() {
   await runResourceContentBackfill();
   await seedEmailTemplates();
   await seedEmailCronConfigs();
+  await seedMenus();
   httpServer.listen(
     { port, host: "0.0.0.0", reusePort: true },
     () => {

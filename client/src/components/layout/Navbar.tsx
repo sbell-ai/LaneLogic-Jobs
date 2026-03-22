@@ -3,9 +3,35 @@ import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/use-auth";
 import { useSiteSettings } from "@/hooks/use-settings";
 import { useAuthModal } from "@/components/AuthModal";
-import { Truck, Search, Menu, Briefcase, BookOpen, FileText, CreditCard, LayoutDashboard, LogIn, LogOut, UserPlus, GraduationCap } from "lucide-react";
+import { useMenu } from "@/hooks/use-menu";
+import { Truck, Search, Menu, Briefcase, BookOpen, FileText, CreditCard, LayoutDashboard, LogIn, LogOut, UserPlus, GraduationCap, ExternalLink } from "lucide-react";
 import { useState, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+
+// Mobile menu currently mirrors main-nav. To diverge in future, switch to useMenu('mobile') with its own query.
+
+const ICON_MAP: Record<string, any> = {
+  jobs: Search,
+  employers: Briefcase,
+  resources: BookOpen,
+  blog: FileText,
+  pricing: CreditCard,
+  "user guides": GraduationCap,
+  dashboard: LayoutDashboard,
+};
+
+function getIcon(label: string) {
+  return ICON_MAP[label.toLowerCase()] ?? FileText;
+}
+
+const HARDCODED_LINKS = [
+  { name: "Jobs", path: "/jobs" },
+  { name: "Employers", path: "/employers" },
+  { name: "Resources", path: "/resources" },
+  { name: "Blog", path: "/blog" },
+  { name: "Pricing", path: "/pricing" },
+  { name: "User Guides", path: "/guides" },
+];
 
 export function Navbar() {
   const [location, navigate] = useLocation();
@@ -16,6 +42,25 @@ export function Navbar() {
   const menuRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
   const settings = useSiteSettings();
+  const { data: menuData } = useMenu("main-nav");
+
+  // Build dynamic menu links from DB, falling back to hardcoded
+  const menuLinks: { name: string; path: string }[] = (() => {
+    if (menuData?.items?.length) {
+      const filtered = menuData.items.filter(
+        (item) =>
+          item.isActive &&
+          item.visibility === "always" &&
+          item.url &&
+          !item.url.startsWith("#") &&
+          item.children.length === 0
+      );
+      if (filtered.length > 0) {
+        return filtered.map((item) => ({ name: item.label, path: item.url! }));
+      }
+    }
+    return HARDCODED_LINKS;
+  })();
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
@@ -39,15 +84,6 @@ export function Navbar() {
       navigate("/jobs");
     }
   };
-
-  const menuLinks = [
-    { name: "Jobs", path: "/jobs", icon: Search },
-    { name: "Employers", path: "/employers", icon: Briefcase },
-    { name: "Resources", path: "/resources", icon: BookOpen },
-    { name: "Blog", path: "/blog", icon: FileText },
-    { name: "Pricing", path: "/pricing", icon: CreditCard },
-    { name: "User Guides", path: "/guides", icon: GraduationCap },
-  ];
 
   return (
     <header>
@@ -170,17 +206,20 @@ export function Navbar() {
 
                   <div className="border-t border-border my-1" />
 
-                  {menuLinks.map((link) => (
-                    <Link
-                      key={link.path}
-                      href={link.path}
-                      className={`flex items-center gap-3 px-4 py-2.5 text-sm hover:bg-muted transition-colors ${location === link.path ? "text-primary font-medium" : ""}`}
-                      onClick={() => setMenuOpen(false)}
-                      data-testid={`link-menu-${link.name.toLowerCase()}`}
-                    >
-                      <link.icon size={16} className="text-muted-foreground" /> {link.name}
-                    </Link>
-                  ))}
+                  {menuLinks.map((link) => {
+                    const Icon = getIcon(link.name);
+                    return (
+                      <Link
+                        key={link.path}
+                        href={link.path}
+                        className={`flex items-center gap-3 px-4 py-2.5 text-sm hover:bg-muted transition-colors ${location === link.path ? "text-primary font-medium" : ""}`}
+                        onClick={() => setMenuOpen(false)}
+                        data-testid={`link-menu-${link.name.toLowerCase().replace(/\s+/g, "-")}`}
+                      >
+                        <Icon size={16} className="text-muted-foreground" /> {link.name}
+                      </Link>
+                    );
+                  })}
 
                   {user && (
                     <>
