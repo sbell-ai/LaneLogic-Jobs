@@ -727,6 +727,16 @@ function ApplicantsTab({ userId }: { userId: number }) {
 
   const jobMap = new Map((jobs || []).map((j) => [j.id, j]));
 
+  // Mark unread applications as viewed when data arrives (side-effect belongs in useEffect, not in render)
+  useEffect(() => {
+    myApps.forEach((app) => {
+      if (!app.viewedAt && !markedViewedIds.has(app.id)) {
+        viewMutation.mutate(app.id);
+      }
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [myApps]);
+
   if (isLoading) return <div className="animate-pulse h-32 bg-slate-100 dark:bg-slate-800 rounded-xl" />;
 
   if (myApps.length === 0) {
@@ -751,11 +761,6 @@ function ApplicantsTab({ userId }: { userId: number }) {
     const isUpdating = updatingStatusId === app.id;
     const isMessaging = messagingAppId === app.id;
     const isUnread = !app.viewedAt && !markedViewedIds.has(app.id);
-
-    // Auto-mark as viewed on first render
-    if (isUnread) {
-      viewMutation.mutate(app.id);
-    }
 
     return (
       <div key={app.id} data-testid={`card-applicant-${app.id}`} className="bg-white dark:bg-slate-900 rounded-xl border border-border p-5">
