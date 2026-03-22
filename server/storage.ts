@@ -208,6 +208,14 @@ export interface IStorage {
   getJobImportRuns(sourceId?: number, limit?: number): Promise<JobImportRun[]>;
   getJobImportRun(id: number): Promise<JobImportRun | undefined>;
 
+  deleteJobSource(id: number): Promise<void>;
+  getActiveRunCountForSource(sourceId: number): Promise<number>;
+  getPendingImportTargetsCount(): Promise<number>;
+  bulkUpdateImportTargets(ids: number[], status: string): Promise<number>;
+  getImportTargetsWithSource(sourceId?: number): Promise<(ImportTarget & { sourceName: string; jobCount: number })[]>;
+  getJobImportRunsFiltered(opts: { sourceId?: number; status?: string; dateFrom?: Date; dateTo?: Date; page: number; limit: number }): Promise<{ runs: (JobImportRun & { sourceName: string })[], total: number }>;
+  getJobsForImportRun(runId: number): Promise<{ id: number; title: string; companyName: string | null; status: string | null; createdAt: Date | null; lastImportedAt: Date | null }[]>;
+
   // Apify job upsert
   upsertImportedJob(sourceId: number, importTargetId: number, externalJobId: string, jobData: Partial<InsertJob>): Promise<{ job: Job; action: "created" | "updated" | "skipped" }>;
   expireJobsNotInSet(importTargetId: number, seenExternalJobIds: string[]): Promise<number>;
@@ -989,6 +997,115 @@ export class DatabaseStorage implements IStorage {
       .where(and(eq(jobs.importTargetId, importTargetId), ne(jobs.status, "expired")))
       .returning();
     return rows.length;
+  }
+
+  async deleteJobSource(id: number): Promise<void> {
+    await db.delete(jobSources).where(eq(jobSources.id, id));
+  }
+
+  async getActiveRunCountForSource(sourceId: number): Promise<number> {
+    const [result] = await db.select({ cnt: count() }).from(jobImportRuns).where(
+      and(eq(jobImportRuns.sourceId, sourceId), inArray(jobImportRuns.status, ["queued", "running"]))
+    );
+    return Number(result?.cnt || 0);
+  }
+
+  async getPendingImportTargetsCount(): Promise<number> {
+    const [result] = await db.select({ cnt: count() }).from(importTargets).where(eq(importTargets.status, "pending_review"));
+    return Number(result?.cnt || 0);
+  }
+
+  async bulkUpdateImportTargets(ids: number[], status: string): Promise<number> {
+    if (ids.length === 0) return 0;
+    const rows = await db.update(importTargets).set({ status }).where(inArray(importTargets.id, ids)).returning();
+    return rows.length;
+  }
+
+  async getImportTargetsWithSource(sourceId?: number): Promise<(ImportTarget & { sourceName: string; jobCount: number })[]> {
+    const rows = await db
+      .select({
+        id: importTargets.id,
+        sourceId: importTargets.sourceId,
+        sourceDomain: importTargets.sourceDomain,
+        companyName: importTargets.companyName,
+        employerWebsiteDomain: importTargets.employerWebsiteDomain,
+        status: importTargets.status,
+        firstSeenAt: importTargets.firstSeenAt,
+        lastSeenAt: importTargets.lastSeenAt,
+        sourceName: jobSources.name,
+      })
+      .from(importTargets)
+      .leftJoin(jobSources, eq(importTargets.sourceId, jobSources.id))
+      .where(sourceId !== undefined ? eq(importTargets.sourceId, sourceId) : undefined)
+      .orderBy(desc(importTargets.lastSeenAt));
+
+    const withCounts = await Promise.all(rows.map(async (row) => {
+      const jobCount = await this.getJobCountByImportTarget(row.id);
+      return { ...row, sourceName: row.sourceName ?? "Unknown", jobCount };
+    }));
+    return withCounts;
+  }
+
+  async getJobImportRunsFiltered(opts: { sourceId?: number; status?: string; dateFrom?: Date; dateTo?: Date; page: number; limit: number }): Promise<{ runs: (JobImportRun & { sourceName: string })[], total: number }> {
+    const conditions: any[] = [];
+    if (opts.sourceId !== undefined) conditions.push(eq(jobImportRuns.sourceId, opts.sourceId));
+    if (opts.status) conditions.push(eq(jobImportRuns.status, opts.status));
+    if (opts.dateFrom) conditions.push(sql`${jobImportRuns.createdAt} >= ${opts.dateFrom}`);
+    if (opts.dateTo) conditions.push(sql`${jobImportRuns.createdAt} <= ${opts.dateTo}`);
+
+    const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
+    const offset = (opts.page - 1) * opts.limit;
+
+    const [totalResult] = await db.select({ cnt: count() }).from(jobImportRuns).where(whereClause);
+    const total = Number(totalResult?.cnt || 0);
+
+    const rows = await db
+      .select({
+        id: jobImportRuns.id,
+        sourceId: jobImportRuns.sourceId,
+        status: jobImportRuns.status,
+        startedAt: jobImportRuns.startedAt,
+        finishedAt: jobImportRuns.finishedAt,
+        apifyRunId: jobImportRuns.apifyRunId,
+        apifyDatasetId: jobImportRuns.apifyDatasetId,
+        actorInputJson: jobImportRuns.actorInputJson,
+        statsCreated: jobImportRuns.statsCreated,
+        statsUpdated: jobImportRuns.statsUpdated,
+        statsSkipped: jobImportRuns.statsSkipped,
+        statsExpired: jobImportRuns.statsExpired,
+        warnings: jobImportRuns.warnings,
+        lastError: jobImportRuns.lastError,
+        createdAt: jobImportRuns.createdAt,
+        sourceName: jobSources.name,
+      })
+      .from(jobImportRuns)
+      .leftJoin(jobSources, eq(jobImportRuns.sourceId, jobSources.id))
+      .where(whereClause)
+      .orderBy(desc(jobImportRuns.createdAt))
+      .limit(opts.limit)
+      .offset(offset);
+
+    return {
+      runs: rows.map(r => ({ ...r, sourceName: r.sourceName ?? "Unknown" })),
+      total,
+    };
+  }
+
+  async getJobsForImportRun(runId: number): Promise<{ id: number; title: string; companyName: string | null; status: string | null; createdAt: Date | null; lastImportedAt: Date | null }[]> {
+    const run = await this.getJobImportRun(runId);
+    if (!run || !run.startedAt) return [];
+    const windowEnd = run.finishedAt ?? new Date();
+    const rows = await db
+      .select({ id: jobs.id, title: jobs.title, companyName: jobs.companyName, status: jobs.status, createdAt: jobs.createdAt, lastImportedAt: jobs.lastImportedAt })
+      .from(jobs)
+      .where(and(
+        eq(jobs.sourceId, run.sourceId),
+        sql`${jobs.lastImportedAt} >= ${run.startedAt}`,
+        sql`${jobs.lastImportedAt} <= ${windowEnd}`
+      ))
+      .orderBy(desc(jobs.createdAt))
+      .limit(20);
+    return rows;
   }
 
   async getActiveVerificationRequest(employerId: number): Promise<EmployerVerificationRequest | undefined> {
