@@ -16,7 +16,7 @@ import MarkdownDescription from "@/components/MarkdownDescription";
 import { formatJobLocation } from "@/components/JobFilterSidebar";
 import { VerifiedBadge } from "@/components/VerifiedBadge";
 
-function fmtLoc(job: Job) {
+function fmtLoc(job: EnrichedJob) {
   return formatJobLocation(job);
 }
 

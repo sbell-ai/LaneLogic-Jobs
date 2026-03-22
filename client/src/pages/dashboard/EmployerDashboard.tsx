@@ -682,7 +682,7 @@ function ApplicantsTab({ userId }: { userId: number }) {
     onSuccess: (_: any, id: number) => {
       setMarkedViewedIds((prev) => new Set([...prev, id]));
       queryClient.setQueryData<EnrichedApplication[]>(["/api/employer/applicants"], (prev) =>
-        (prev || []).map((a) => (a.id === id ? { ...a, viewedAt: new Date().toISOString() } as any : a))
+        (prev || []).map((a) => (a.id === id ? { ...a, viewedAt: new Date().toISOString() } : a))
       );
     },
   });
@@ -750,7 +750,7 @@ function ApplicantsTab({ userId }: { userId: number }) {
     const norm = normalizeStatus(app.status);
     const isUpdating = updatingStatusId === app.id;
     const isMessaging = messagingAppId === app.id;
-    const isUnread = !(app as any).viewedAt && !markedViewedIds.has(app.id);
+    const isUnread = !app.viewedAt && !markedViewedIds.has(app.id);
 
     // Auto-mark as viewed on first render
     if (isUnread) {
