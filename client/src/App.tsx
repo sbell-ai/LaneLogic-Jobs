@@ -77,17 +77,24 @@ function EmailVerificationBanner() {
   };
 
   return (
-    <div className="bg-amber-50 dark:bg-amber-900/20 border-b border-amber-200 dark:border-amber-800 px-4 py-2.5 flex items-center justify-between gap-4 text-sm">
-      <p className="text-amber-800 dark:text-amber-200">
-        {resent
-          ? "Verification email sent — check your inbox."
-          : "Please verify your email address. Check your inbox for a verification link."}
-      </p>
+    <div className="w-full bg-gradient-to-r from-primary to-primary/80 px-4 py-2.5 flex items-center justify-between gap-3 text-sm text-primary-foreground">
+      <div className="flex items-center gap-2.5 min-w-0">
+        <span className="text-base shrink-0">✉️</span>
+        <p className="truncate">
+          {resent
+            ? "Verification email sent — check your inbox."
+            : <>
+                <span className="font-semibold">Verify your email</span>
+                <span className="hidden sm:inline"> — check your inbox for a verification link.</span>
+              </>
+          }
+        </p>
+      </div>
       <div className="flex items-center gap-3 shrink-0">
         {!resent && (
           <button
             onClick={handleResend}
-            className="text-amber-700 dark:text-amber-300 font-medium hover:underline"
+            className="font-semibold underline underline-offset-2 hover:opacity-80 transition-opacity whitespace-nowrap"
             data-testid="button-resend-verification"
           >
             Resend
@@ -95,7 +102,7 @@ function EmailVerificationBanner() {
         )}
         <button
           onClick={() => setDismissed(true)}
-          className="text-amber-600 dark:text-amber-400 hover:text-amber-800 dark:hover:text-amber-200"
+          className="opacity-70 hover:opacity-100 transition-opacity text-base leading-none"
           data-testid="button-dismiss-verification-banner"
           aria-label="Dismiss"
         >
