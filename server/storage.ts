@@ -414,7 +414,7 @@ export class DatabaseStorage implements IStorage {
     return blogPost;
   }
   async updateBlogPost(id: number, updates: Partial<InsertBlogPost>): Promise<BlogPost> {
-    const [post] = await db.update(blogPosts).set({ ...updates, updatedAt: new Date() }).where(eq(blogPosts.id, id)).returning();
+    const [post] = await db.update(blogPosts).set(updates).where(eq(blogPosts.id, id)).returning();
     return post;
   }
   async deleteBlogPost(id: number): Promise<void> {

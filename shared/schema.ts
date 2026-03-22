@@ -131,7 +131,7 @@ export const blogPosts = pgTable("blog_posts", {
   imageUrl: text("image_url"),
   isPublished: boolean("is_published").notNull().default(false),
   publishedAt: timestamp("published_at").defaultNow(),
-  updatedAt: timestamp("updated_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow().$onUpdate(() => new Date()),
 });
 
 export const categories = pgTable("categories", {

@@ -1266,7 +1266,11 @@ export async function registerRoutes(
   app.post(api.blog.create.path, async (req, res) => {
     if (!requireAdminSession(req, res)) return;
     try {
-      const input = api.blog.create.input.parse(req.body);
+      const raw = api.blog.create.input.parse(req.body);
+      const input = {
+        ...raw,
+        slug: typeof raw.slug === "string" ? raw.slug.trim() || null : raw.slug ?? null,
+      };
       const post = await storage.createBlogPost(input);
       res.status(201).json(post);
     } catch (err) {
@@ -1358,6 +1362,9 @@ export async function registerRoutes(
       const updates = { ...req.body };
       if (updates.publishedAt && typeof updates.publishedAt === "string") {
         updates.publishedAt = new Date(updates.publishedAt);
+      }
+      if (typeof updates.slug === "string") {
+        updates.slug = updates.slug.trim() || null;
       }
       const post = await storage.updateBlogPost(Number(req.params.id), updates);
       res.json(post);
@@ -2891,8 +2898,8 @@ export async function registerRoutes(
       const publishedBlogs = allBlogs.filter((b) => b.isPublished);
       for (const blog of publishedBlogs) {
         const blogSlug = blog.slug || String(blog.id);
-        const lastmod = (blog as any).updatedAt
-          ? new Date((blog as any).updatedAt).toISOString().split("T")[0]
+        const lastmod = blog.updatedAt
+          ? new Date(blog.updatedAt).toISOString().split("T")[0]
           : blog.publishedAt ? new Date(blog.publishedAt).toISOString().split("T")[0] : now;
         urls.push(`  <url><loc>${canonicalHost}/blog/${blogSlug}</loc><lastmod>${lastmod}</lastmod><changefreq>monthly</changefreq><priority>0.6</priority></url>`);
       }

@@ -1459,7 +1459,7 @@ function BlogTab() {
   });
 
   const openEdit = (p: BlogPost) => {
-    setEditForm({ title: p.title, slug: (p as any).slug || "", content: p.content, category: p.category || "", isPublished: p.isPublished ?? false, imageUrl: p.imageUrl || "" });
+    setEditForm({ title: p.title, slug: p.slug || "", content: p.content, category: p.category || "", isPublished: p.isPublished ?? false, imageUrl: p.imageUrl || "" });
     setSlugEdited(false);
     setEditPost(p);
   };
