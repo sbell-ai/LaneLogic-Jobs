@@ -4,10 +4,14 @@ import { Navbar } from "@/components/layout/Navbar";
 import { Footer } from "@/components/layout/Footer";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import {
-  MapPin, Briefcase, DollarSign, ExternalLink, Clock, Building2, Truck, RotateCcw,
+  MapPin, Briefcase, DollarSign, ExternalLink, Clock, Building2, Truck, RotateCcw, Bell,
 } from "lucide-react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { apiRequest } from "@/lib/queryClient";
 import type { EnrichedJob } from "@shared/schema";
 import { formatDistanceToNow } from "date-fns";
 import { motion } from "framer-motion";
@@ -16,6 +20,90 @@ import {
 } from "@/components/JobFilterSidebar";
 import { useTaxonomy } from "@/hooks/use-taxonomy";
 import { VerifiedBadge } from "@/components/VerifiedBadge";
+import { useAuth } from "@/hooks/use-auth";
+import { useToast } from "@/hooks/use-toast";
+
+function SaveAsAlertDialog({ keyword, category, locationState, jobType }: {
+  keyword?: string;
+  category?: string;
+  locationState?: string;
+  jobType?: string;
+}) {
+  const { user } = useAuth();
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const [open, setOpen] = useState(false);
+  const [alertName, setAlertName] = useState("");
+
+  const createMutation = useMutation({
+    mutationFn: () => apiRequest("POST", "/api/alerts", {
+      name: alertName.trim() || null,
+      keyword: keyword || null,
+      category: category || null,
+      locationState: locationState || null,
+      jobType: jobType || null,
+    }).then(r => r.json()),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/alerts"] });
+      setOpen(false);
+      setAlertName("");
+      toast({ title: "Alert created!", description: "You'll get an email when matching jobs are posted." });
+    },
+    onError: (err: any) => {
+      toast({ title: "Error", description: err.message || "Could not create alert.", variant: "destructive" });
+    },
+  });
+
+  if (!user || user.role !== "job_seeker") return null;
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button variant="outline" size="sm" className="gap-1.5" data-testid="button-save-as-alert">
+          <Bell size={14} /> Save as Alert
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle className="font-display">Save Job Alert</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-4 mt-2">
+          <p className="text-sm text-muted-foreground">
+            Get notified by email whenever a new job matches your current filters.
+          </p>
+          {(keyword || category || locationState || jobType) && (
+            <div className="bg-slate-50 dark:bg-slate-800 rounded-lg px-4 py-3 text-sm space-y-1">
+              {keyword && <p><span className="font-medium">Keyword:</span> {keyword}</p>}
+              {category && <p><span className="font-medium">Category:</span> {category}</p>}
+              {locationState && <p><span className="font-medium">State:</span> {locationState}</p>}
+              {jobType && <p><span className="font-medium">Job type:</span> {jobType}</p>}
+            </div>
+          )}
+          <div>
+            <Label className="text-sm font-medium mb-1.5 block">Alert Name (optional)</Label>
+            <Input
+              value={alertName}
+              onChange={e => setAlertName(e.target.value)}
+              placeholder="e.g. CDL Jobs in Texas"
+              data-testid="input-save-alert-name"
+            />
+          </div>
+          <div className="flex gap-2 justify-end">
+            <Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
+            <Button
+              onClick={() => createMutation.mutate()}
+              disabled={createMutation.isPending}
+              data-testid="button-confirm-save-alert"
+            >
+              <Bell size={14} className="mr-1.5" />
+              {createMutation.isPending ? "Saving…" : "Create Alert"}
+            </Button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
 
 export default function Jobs() {
   const searchString = useSearch();
@@ -61,7 +149,15 @@ export default function Jobs() {
                   </p>
                 </div>
               </div>
-              <MobileFilterButton filters={filters} onClick={() => setMobileFiltersOpen(!mobileFiltersOpen)} />
+              <div className="flex items-center gap-2">
+                <SaveAsAlertDialog
+                  keyword={filters.query || undefined}
+                  category={filters.sectors.length === 1 ? filters.sectors[0] : undefined}
+                  locationState={filters.locationFilter && filters.locationFilter.length === 2 ? filters.locationFilter.toUpperCase() : undefined}
+                  jobType={filters.jobTypes.length === 1 ? filters.jobTypes[0] : undefined}
+                />
+                <MobileFilterButton filters={filters} onClick={() => setMobileFiltersOpen(!mobileFiltersOpen)} />
+              </div>
             </div>
           </div>
         </div>

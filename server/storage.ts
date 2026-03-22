@@ -265,6 +265,7 @@ export interface IStorage {
   deleteJobAlert(id: number, userId: number): Promise<void>;
   getAllJobAlerts(): Promise<JobAlertSubscription[]>;
   updateJobAlertNotifiedAt(id: number, notifiedAt: Date): Promise<void>;
+  updateJobAlert(id: number, userId: number, updates: { isActive?: boolean; name?: string }): Promise<JobAlertSubscription>;
 
   // Email Cron Configs
   getEmailCronConfigs(): Promise<EmailCronConfig[]>;
@@ -1499,6 +1500,14 @@ export class DatabaseStorage implements IStorage {
 
   async updateJobAlertNotifiedAt(id: number, notifiedAt: Date): Promise<void> {
     await db.update(jobAlertSubscriptions).set({ lastNotifiedAt: notifiedAt }).where(eq(jobAlertSubscriptions.id, id));
+  }
+
+  async updateJobAlert(id: number, userId: number, updates: { isActive?: boolean; name?: string }): Promise<JobAlertSubscription> {
+    const [alert] = await db.update(jobAlertSubscriptions)
+      .set(updates)
+      .where(and(eq(jobAlertSubscriptions.id, id), eq(jobAlertSubscriptions.userId, userId)))
+      .returning();
+    return alert;
   }
 
   // ── Email Templates ────────────────────────────────────────────────────────

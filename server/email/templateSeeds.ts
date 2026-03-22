@@ -640,4 +640,47 @@ The {{site_name}} Team
     triggerType: "scheduled",
     triggerEvent: "profile_incomplete_reminder",
   },
+  // ─────────────────────────────────────────────────────────────
+  // JOB ALERTS
+  // ─────────────────────────────────────────────────────────────
+  {
+    slug: "job_alert",
+    name: "Job Alert Digest",
+    subject: "New jobs matching your alert: {{alert_label}}",
+    body: `Hi {{first_name}},
+
+Great news — we found new transportation jobs that match your job alert "{{alert_label}}".
+
+{{job_listings}}
+
+View all matching jobs here:
+{{jobs_url}}
+
+You're receiving this because you set up a job alert on {{site_name}}.
+To manage your alerts, visit your dashboard:
+{{alerts_url}}
+
+The {{site_name}} Team
+{{site_url}}`,
+    variables: [
+      { key: "first_name", description: "Recipient's first name" },
+      { key: "alert_label", description: "Human-readable description of the alert criteria" },
+      { key: "job_listings", description: "Formatted list of matching job titles and companies" },
+      { key: "jobs_url", description: "Link to filtered jobs page" },
+      { key: "alerts_url", description: "Link to the job seeker's alerts dashboard" },
+      { key: "site_name", description: "Your platform name" },
+      { key: "site_url", description: "Root URL of the platform" },
+    ],
+    testVars: {
+      first_name: "Alex",
+      alert_label: "Class A CDL · Full-time · TX",
+      job_listings: "• CDL-A Driver at Swift Transportation (Dallas, TX)\n• OTR Driver at Werner Enterprises (Houston, TX)",
+      jobs_url: "https://lanelogicjobs.com/jobs?q=Class+A+CDL",
+      alerts_url: "https://lanelogicjobs.com/dashboard/alerts",
+      site_name: "LaneLogic Jobs",
+      site_url: "https://lanelogicjobs.com",
+    },
+    triggerType: "manual",
+    triggerEvent: "job_alert",
+  },
 ];

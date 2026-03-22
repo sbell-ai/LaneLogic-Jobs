@@ -884,6 +884,7 @@ function JobAlertsTab() {
   const queryClient = useQueryClient();
   const { getAllCategories } = useTaxonomy();
   const allCategories = getAllCategories();
+  const [name, setName] = useState("");
   const [keyword, setKeyword] = useState("");
   const [category, setCategory] = useState("any");
   const [locationState, setLocationState] = useState("any");
@@ -895,6 +896,7 @@ function JobAlertsTab() {
 
   const createMutation = useMutation({
     mutationFn: () => apiRequest("POST", "/api/alerts", {
+      name: name.trim() || null,
       keyword: keyword.trim() || null,
       category: category === "any" ? null : category,
       locationState: locationState === "any" ? null : locationState,
@@ -902,6 +904,7 @@ function JobAlertsTab() {
     }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/alerts"] });
+      setName("");
       setKeyword("");
       setCategory("any");
       setLocationState("any");
@@ -921,7 +924,20 @@ function JobAlertsTab() {
     },
   });
 
+  const toggleMutation = useMutation({
+    mutationFn: ({ id, isActive }: { id: number; isActive: boolean }) =>
+      apiRequest("PATCH", `/api/alerts/${id}`, { isActive }).then((r) => r.json()),
+    onSuccess: (updated: JobAlertSubscription) => {
+      queryClient.setQueryData<JobAlertSubscription[]>(["/api/alerts"], (prev) =>
+        (prev || []).map((a) => (a.id === updated.id ? updated : a))
+      );
+      toast({ title: updated.isActive ? "Alert resumed" : "Alert paused" });
+    },
+    onError: () => toast({ title: "Error", description: "Could not update alert.", variant: "destructive" }),
+  });
+
   function alertLabel(alert: JobAlertSubscription) {
+    if (alert.name) return alert.name;
     const parts: string[] = [];
     if (alert.keyword) parts.push(`"${alert.keyword}"`);
     if (alert.category) parts.push(alert.category);
@@ -940,10 +956,10 @@ function JobAlertsTab() {
   };
 
   return (
-    <div className="py-6 px-4 md:px-6">
+    <div>
       <div className="mb-6">
-        <h2 className="text-xl font-bold font-display flex items-center gap-2">
-          <Bell size={20} className="text-primary" /> Job Alerts
+        <h2 className="text-2xl font-bold font-display flex items-center gap-2">
+          <Bell size={22} className="text-primary" /> Job Alerts
         </h2>
         <p className="text-sm text-muted-foreground mt-1">
           Get notified by email whenever a new job matches your criteria. Up to 5 active alerts.
@@ -955,6 +971,15 @@ function JobAlertsTab() {
         <Card className="p-5 mb-6 border border-border">
           <h3 className="font-semibold mb-4">Create a New Alert</h3>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="sm:col-span-2">
+              <Label className="text-xs mb-1 block">Alert Name (optional)</Label>
+              <Input
+                value={name}
+                onChange={e => setName(e.target.value)}
+                placeholder="e.g. CDL Jobs in Texas"
+                data-testid="input-alert-name"
+              />
+            </div>
             <div>
               <Label className="text-xs mb-1 block">Keyword (optional)</Label>
               <Input
@@ -1036,28 +1061,46 @@ function JobAlertsTab() {
           {alerts.map(alert => (
             <div
               key={alert.id}
-              className="flex items-center justify-between gap-3 p-4 rounded-xl border border-border bg-white dark:bg-slate-900"
+              className={`flex items-center justify-between gap-3 p-4 rounded-xl border bg-white dark:bg-slate-900 transition-opacity ${alert.isActive ? "border-border" : "border-border opacity-60"}`}
               data-testid={`card-alert-${alert.id}`}
             >
               <div className="flex items-center gap-3 min-w-0">
-                <Bell size={16} className="text-primary shrink-0" />
+                <Bell size={16} className={alert.isActive ? "text-primary shrink-0" : "text-muted-foreground shrink-0"} />
                 <div className="min-w-0">
                   <p className="font-medium text-sm truncate" data-testid={`text-alert-label-${alert.id}`}>{alertLabel(alert)}</p>
-                  {alert.lastNotifiedAt && (
-                    <p className="text-xs text-muted-foreground">Last notified: {format(new Date(alert.lastNotifiedAt), "MMM d, yyyy")}</p>
-                  )}
+                  <div className="flex items-center gap-2 mt-0.5">
+                    {!alert.isActive && (
+                      <span className="text-xs text-muted-foreground italic">Paused</span>
+                    )}
+                    {alert.lastNotifiedAt && (
+                      <p className="text-xs text-muted-foreground">Last sent: {format(new Date(alert.lastNotifiedAt), "MMM d, yyyy")}</p>
+                    )}
+                  </div>
                 </div>
               </div>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="shrink-0 text-destructive hover:text-destructive hover:bg-destructive/10"
-                disabled={deleteMutation.isPending}
-                onClick={() => deleteMutation.mutate(alert.id)}
-                data-testid={`button-delete-alert-${alert.id}`}
-              >
-                <Trash2 size={14} />
-              </Button>
+              <div className="flex items-center gap-2 shrink-0">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="text-muted-foreground hover:text-foreground"
+                  disabled={toggleMutation.isPending}
+                  onClick={() => toggleMutation.mutate({ id: alert.id, isActive: !alert.isActive })}
+                  data-testid={`button-toggle-alert-${alert.id}`}
+                  title={alert.isActive ? "Pause alert" : "Resume alert"}
+                >
+                  {alert.isActive ? <PauseCircle size={14} /> : <Bell size={14} />}
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                  disabled={deleteMutation.isPending}
+                  onClick={() => deleteMutation.mutate(alert.id)}
+                  data-testid={`button-delete-alert-${alert.id}`}
+                >
+                  <Trash2 size={14} />
+                </Button>
+              </div>
             </div>
           ))}
         </div>

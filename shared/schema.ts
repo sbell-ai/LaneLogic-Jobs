@@ -826,12 +826,14 @@ export type InsertEmailCronConfig = z.infer<typeof insertEmailCronConfigSchema>;
 export const jobAlertSubscriptions = pgTable("job_alert_subscriptions", {
   id: serial("id").primaryKey(),
   userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  name: text("name"),
   keyword: text("keyword"),
   category: text("category"),
   subcategory: text("subcategory"),
   locationState: text("location_state"),
   jobType: text("job_type"),
   workLocationType: text("work_location_type"),
+  isActive: boolean("is_active").default(true).notNull(),
   lastNotifiedAt: timestamp("last_notified_at"),
   createdAt: timestamp("created_at").defaultNow(),
 });

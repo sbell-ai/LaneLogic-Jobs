@@ -11,6 +11,7 @@ import { adminRouter } from "./routes/admin.ts";
 import { sendAlertEmail } from "./alerts/sendAlertEmail.ts";
 import { syncAllRegistries } from "./registry/syncAll";
 import { initEmailCronJobs } from "./cron/scheduledEmails";
+import { initJobAlertCron } from "./cron/jobAlerts";
 
 const app = express();
 const httpServer = createServer(app);
@@ -177,6 +178,7 @@ async function startServer() {
   initRegistrySync();
   initImportScheduler();
   initEmailCronJobs();
+  initJobAlertCron();
 }
 
 async function seedSeekerCredentials() {

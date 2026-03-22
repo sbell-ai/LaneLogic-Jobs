@@ -1278,7 +1278,7 @@ export async function registerRoutes(
   app.post("/api/alerts", async (req, res) => {
     if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
     const user = req.user as any;
-    const { keyword, category, subcategory, locationState, jobType, workLocationType } = req.body;
+    const { name, keyword, category, subcategory, locationState, jobType, workLocationType } = req.body;
     // Require at least one filter
     if (!keyword && !category && !locationState && !jobType && !workLocationType) {
       return res.status(400).json({ message: "At least one filter (keyword, category, location, job type) is required" });
@@ -1289,14 +1289,31 @@ export async function registerRoutes(
     }
     const alert = await storage.createJobAlert({
       userId: user.id,
+      name: name || null,
       keyword: keyword || null,
       category: category || null,
       subcategory: subcategory || null,
       locationState: locationState || null,
       jobType: jobType || null,
       workLocationType: workLocationType || null,
+      isActive: true,
     });
     res.status(201).json(alert);
+  });
+
+  // PATCH /api/alerts/:id — update alert (pause/resume, rename)
+  app.patch("/api/alerts/:id", async (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+    const user = req.user as any;
+    const alertId = Number(req.params.id);
+    if (isNaN(alertId)) return res.status(400).json({ message: "Invalid alert id" });
+    const { isActive, name } = req.body;
+    const updates: { isActive?: boolean; name?: string } = {};
+    if (typeof isActive === "boolean") updates.isActive = isActive;
+    if (typeof name === "string") updates.name = name;
+    const alert = await storage.updateJobAlert(alertId, user.id, updates);
+    if (!alert) return res.status(404).json({ message: "Alert not found" });
+    res.json(alert);
   });
 
   // DELETE /api/alerts/:id — delete an alert
