@@ -138,24 +138,46 @@ export default function JobDetail() {
   const siteUrl = "https://lanelogicjobs.com";
   const jobUrl = `${siteUrl}/jobs/${job.id}`;
 
+  const metaTitle = `${job.title}${job.companyName ? ` at ${job.companyName}` : ""}${job.locationState ? ` — ${job.locationState}` : ""} | LaneLogic Jobs`;
+  const metaDescription = (job.description || "")
+    .replace(/<[^>]*>/g, "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 160);
+
+  function parseSalaryField(salaryStr: string): { minValue?: number; maxValue?: number; unitText: string } | null {
+    const match = salaryStr.match(/^([\d.]+)(?:-([\d.]+))?\/(\w+)$/);
+    if (!match) return null;
+    const unitMap: Record<string, string> = { year: "YEAR", month: "MONTH", hour: "HOUR", week: "WEEK" };
+    return {
+      minValue: parseFloat(match[1]),
+      ...(match[2] ? { maxValue: parseFloat(match[2]) } : {}),
+      unitText: unitMap[match[3]] || "YEAR",
+    };
+  }
+
+  const typeMap: Record<string, string> = {
+    full_time: "FULL_TIME", part_time: "PART_TIME", contract: "CONTRACTOR",
+    temporary: "TEMPORARY", seasonal: "TEMPORARY", internship: "INTERN",
+  };
+
+  const parsedSalary = job.salary ? parseSalaryField(job.salary) : null;
+
   const jobSchema: Record<string, unknown> = {
     "@context": "https://schema.org/",
     "@type": "JobPosting",
     "title": job.title,
     "description": job.description || "",
     "identifier": { "@type": "PropertyValue", "name": job.companyName || "LaneLogic Jobs", "value": String(job.id) },
-    "datePosted": job.createdAt ? new Date(job.createdAt).toISOString().split("T")[0] : undefined,
+    "datePosted": job.publishedAt ? new Date(job.publishedAt).toISOString().split("T")[0]
+      : job.createdAt ? new Date(job.createdAt).toISOString().split("T")[0] : undefined,
     "validThrough": job.expiresAt ? new Date(job.expiresAt).toISOString().split("T")[0] : undefined,
-    "employmentType": (() => {
-      const typeMap: Record<string, string> = {
-        full_time: "FULL_TIME", part_time: "PART_TIME", contract: "CONTRACTOR",
-        temporary: "TEMPORARY", seasonal: "TEMPORARY", internship: "INTERN",
-      };
-      return job.jobType ? typeMap[job.jobType] || "OTHER" : undefined;
-    })(),
+    "employmentType": job.jobType ? (typeMap[job.jobType] || "OTHER") : undefined,
+    "directApply": !job.isExternalApply,
     "hiringOrganization": {
       "@type": "Organization",
       "name": job.companyName || "LaneLogic Jobs",
+      ...(job.employerUrl ? { "sameAs": job.employerUrl } : {}),
       ...(job.employerLogo ? { "logo": job.employerLogo } : {}),
     },
     "jobLocation": {
@@ -168,17 +190,36 @@ export default function JobDetail() {
       },
     },
     ...(job.workLocationType === "remote" ? { "jobLocationType": "TELECOMMUTE" } : {}),
-    ...(job.salary ? { "baseSalary": { "@type": "MonetaryAmount", "currency": "USD", "value": { "@type": "QuantitativeValue", "value": job.salary, "unitText": "YEAR" } } } : {}),
+    ...(parsedSalary ? {
+      "baseSalary": {
+        "@type": "MonetaryAmount",
+        "currency": "USD",
+        "value": {
+          "@type": "QuantitativeValue",
+          ...(parsedSalary.maxValue
+            ? { "minValue": parsedSalary.minValue, "maxValue": parsedSalary.maxValue }
+            : { "value": parsedSalary.minValue }),
+          "unitText": parsedSalary.unitText,
+        },
+      },
+    } : {}),
     "url": jobUrl,
-    "applyLink": job.applyUrl || jobUrl,
+    ...(job.applyUrl ? { "applyLink": job.applyUrl } : { "applyLink": jobUrl }),
   };
 
-  // Remove undefined values
   Object.keys(jobSchema).forEach(k => { if (jobSchema[k] === undefined) delete jobSchema[k]; });
 
   return (
     <div className="min-h-screen flex flex-col font-sans">
-      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jobSchema) }} />
+      <title>{metaTitle}</title>
+      <meta name="description" content={metaDescription} />
+      <meta property="og:title" content={metaTitle} />
+      <meta property="og:description" content={metaDescription} />
+      <meta property="og:type" content="website" />
+      <meta property="og:url" content={jobUrl} />
+      {job.isPublished && (
+        <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jobSchema) }} />
+      )}
       <Navbar />
       <main className="flex-grow bg-slate-50 dark:bg-slate-950 py-10">
         <div className="container mx-auto px-4 md:px-6 max-w-4xl">
