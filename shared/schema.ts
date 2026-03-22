@@ -125,11 +125,13 @@ export const blogPosts = pgTable("blog_posts", {
   id: serial("id").primaryKey(),
   authorId: integer("author_id").notNull(),
   title: text("title").notNull(),
+  slug: text("slug").unique(),
   content: text("content").notNull(),
   category: text("category"),
   imageUrl: text("image_url"),
   isPublished: boolean("is_published").notNull().default(false),
   publishedAt: timestamp("published_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
 });
 
 export const categories = pgTable("categories", {
@@ -599,7 +601,9 @@ export const insertUserSchema = createInsertSchema(users).omit({ id: true, creat
 export const insertJobSchema = createInsertSchema(jobs).omit({ id: true, createdAt: true });
 export const insertApplicationSchema = createInsertSchema(applications).omit({ id: true, createdAt: true });
 export const insertResourceSchema = createInsertSchema(resources).omit({ id: true, slug: true, createdAt: true, updatedAt: true });
-export const insertBlogPostSchema = createInsertSchema(blogPosts).omit({ id: true });
+export const insertBlogPostSchema = createInsertSchema(blogPosts).omit({ id: true, updatedAt: true }).extend({
+  slug: z.string().optional().nullable(),
+});
 export const insertResumeSchema = createInsertSchema(resumes).omit({ id: true, createdAt: true });
 export const insertCategorySchema = createInsertSchema(categories).omit({ id: true, createdAt: true });
 export const insertCouponSchema = createInsertSchema(coupons).omit({ id: true, createdAt: true, currentUses: true });

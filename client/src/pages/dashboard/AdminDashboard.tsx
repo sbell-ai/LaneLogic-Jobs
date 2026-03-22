@@ -1399,9 +1399,14 @@ function InviteUserTab({ targetRole }: { targetRole: "job_seeker" | "employer" }
 
 // ─── BLOG TAB ─────────────────────────────────────────────────────────────────
 
+function slugifyTitle(title: string): string {
+  return title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 80);
+}
+
 const blogFormSchema = insertBlogPostSchema.omit({ authorId: true }).extend({
   title: z.string().min(3, "Title required"),
   content: z.string().min(20, "Content must be at least 20 characters"),
+  slug: z.string().optional().nullable(),
 });
 
 function BlogTab() {
@@ -1412,14 +1417,15 @@ function BlogTab() {
   const { data: categories } = useQuery<Category[]>({ queryKey: ["/api/categories"] });
   const [showForm, setShowForm] = useState(false);
   const [editPost, setEditPost] = useState<BlogPost | null>(null);
-  const [editForm, setEditForm] = useState({ title: "", content: "", category: "", isPublished: false as boolean, imageUrl: "" });
+  const [editForm, setEditForm] = useState({ title: "", slug: "", content: "", category: "", isPublished: false as boolean, imageUrl: "" });
+  const [slugEdited, setSlugEdited] = useState(false);
   const [shareBlog, setShareBlog] = useState<BlogPost | null>(null);
 
   const blogCats = (categories || []).filter(c => c.type === "blog");
 
   const form = useForm<z.infer<typeof blogFormSchema>>({
     resolver: zodResolver(blogFormSchema),
-    defaultValues: { title: "", content: "", category: "", imageUrl: "" },
+    defaultValues: { title: "", content: "", category: "", imageUrl: "", slug: "" },
   });
 
   const createMutation = useMutation({
@@ -1453,7 +1459,8 @@ function BlogTab() {
   });
 
   const openEdit = (p: BlogPost) => {
-    setEditForm({ title: p.title, content: p.content, category: p.category || "", isPublished: p.isPublished ?? false, imageUrl: p.imageUrl || "" });
+    setEditForm({ title: p.title, slug: (p as any).slug || "", content: p.content, category: p.category || "", isPublished: p.isPublished ?? false, imageUrl: p.imageUrl || "" });
+    setSlugEdited(false);
     setEditPost(p);
   };
 
@@ -1479,8 +1486,21 @@ function BlogTab() {
               <FormField control={form.control} name="title" render={({ field }) => (
                 <FormItem>
                   <FormLabel>Post Title *</FormLabel>
-                  <FormControl><Input placeholder="e.g. Top CDL Jobs in 2026" data-testid="input-blog-title" {...field} /></FormControl>
+                  <FormControl><Input placeholder="e.g. Top CDL Jobs in 2026" data-testid="input-blog-title" {...field} onChange={e => {
+                    field.onChange(e);
+                    if (!form.getValues("slug") || form.getValues("slug") === slugifyTitle(field.value)) {
+                      form.setValue("slug", slugifyTitle(e.target.value));
+                    }
+                  }} /></FormControl>
                   <FormMessage />
+                </FormItem>
+              )} />
+              <FormField control={form.control} name="slug" render={({ field }) => (
+                <FormItem>
+                  <FormLabel>URL Slug</FormLabel>
+                  <FormControl><Input placeholder="e.g. top-cdl-jobs-2026" data-testid="input-blog-slug" {...field} value={field.value ?? ""} /></FormControl>
+                  <FormMessage />
+                  <p className="text-xs text-muted-foreground">Auto-filled from title. Edit to customise the URL.</p>
                 </FormItem>
               )} />
               {blogCats.length > 0 && (
@@ -1569,7 +1589,22 @@ function BlogTab() {
         <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
           <DialogHeader><DialogTitle>Edit Blog Post</DialogTitle></DialogHeader>
           <div className="space-y-4">
-            <div><Label>Title</Label><Input value={editForm.title} onChange={e => setEditForm(f => ({ ...f, title: e.target.value }))} data-testid="input-edit-blog-title" /></div>
+            <div>
+              <Label>Title</Label>
+              <Input value={editForm.title} onChange={e => {
+                const newTitle = e.target.value;
+                setEditForm(f => ({
+                  ...f,
+                  title: newTitle,
+                  slug: f.slug && (slugEdited || f.slug !== slugifyTitle(f.title)) ? f.slug : slugifyTitle(newTitle),
+                }));
+              }} data-testid="input-edit-blog-title" />
+            </div>
+            <div>
+              <Label>URL Slug</Label>
+              <Input value={editForm.slug} onChange={e => { setSlugEdited(true); setEditForm(f => ({ ...f, slug: e.target.value })); }} data-testid="input-edit-blog-slug" placeholder="e.g. top-cdl-jobs-2026" />
+              <p className="text-xs text-muted-foreground mt-1">Used in the post URL. Leave blank to use the post ID.</p>
+            </div>
             {blogCats.length > 0 && (
               <div>
                 <Label>Category</Label>

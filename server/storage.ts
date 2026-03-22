@@ -81,6 +81,7 @@ export interface IStorage {
   // Blog
   getBlogPosts(): Promise<BlogPost[]>;
   getBlogPost(id: number): Promise<BlogPost | undefined>;
+  getBlogPostBySlug(slug: string): Promise<BlogPost | undefined>;
   createBlogPost(post: InsertBlogPost): Promise<BlogPost>;
   updateBlogPost(id: number, updates: Partial<InsertBlogPost>): Promise<BlogPost>;
   deleteBlogPost(id: number): Promise<void>;
@@ -404,12 +405,16 @@ export class DatabaseStorage implements IStorage {
     const [post] = await db.select().from(blogPosts).where(eq(blogPosts.id, id));
     return post;
   }
+  async getBlogPostBySlug(slug: string): Promise<BlogPost | undefined> {
+    const [post] = await db.select().from(blogPosts).where(eq(blogPosts.slug, slug));
+    return post;
+  }
   async createBlogPost(post: InsertBlogPost): Promise<BlogPost> {
     const [blogPost] = await db.insert(blogPosts).values(post).returning();
     return blogPost;
   }
   async updateBlogPost(id: number, updates: Partial<InsertBlogPost>): Promise<BlogPost> {
-    const [post] = await db.update(blogPosts).set(updates).where(eq(blogPosts.id, id)).returning();
+    const [post] = await db.update(blogPosts).set({ ...updates, updatedAt: new Date() }).where(eq(blogPosts.id, id)).returning();
     return post;
   }
   async deleteBlogPost(id: number): Promise<void> {

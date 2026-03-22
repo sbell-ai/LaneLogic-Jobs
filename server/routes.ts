@@ -1252,7 +1252,11 @@ export async function registerRoutes(
   });
 
   app.get(api.blog.get.path, async (req, res) => {
-    const post = await storage.getBlogPost(Number(req.params.id));
+    const param = req.params.id;
+    const numericId = Number(param);
+    const post = isNaN(numericId)
+      ? await storage.getBlogPostBySlug(param)
+      : (await storage.getBlogPostBySlug(param)) ?? await storage.getBlogPost(numericId);
     if (!post) return res.status(404).json({ message: "Not found" });
     const isAdmin = req.isAuthenticated() && (req.user as any).role === "admin";
     if (!isAdmin && !post.isPublished) return res.status(404).json({ message: "Not found" });
@@ -2886,8 +2890,11 @@ export async function registerRoutes(
       const allBlogs = await storage.getBlogPosts();
       const publishedBlogs = allBlogs.filter((b) => b.isPublished);
       for (const blog of publishedBlogs) {
-        const lastmod = blog.publishedAt ? new Date(blog.publishedAt).toISOString().split("T")[0] : now;
-        urls.push(`  <url><loc>${canonicalHost}/blog/${blog.id}</loc><lastmod>${lastmod}</lastmod><changefreq>monthly</changefreq><priority>0.6</priority></url>`);
+        const blogSlug = blog.slug || String(blog.id);
+        const lastmod = (blog as any).updatedAt
+          ? new Date((blog as any).updatedAt).toISOString().split("T")[0]
+          : blog.publishedAt ? new Date(blog.publishedAt).toISOString().split("T")[0] : now;
+        urls.push(`  <url><loc>${canonicalHost}/blog/${blogSlug}</loc><lastmod>${lastmod}</lastmod><changefreq>monthly</changefreq><priority>0.6</priority></url>`);
       }
 
       const allPages = await storage.getPages();
