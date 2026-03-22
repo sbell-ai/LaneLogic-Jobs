@@ -3704,14 +3704,14 @@ ${urls.join("\n")}
         try {
           const { sendTemplatedEmailByEvent } = await import("./email/sendTemplatedEmail.ts");
           const siteUrl = process.env.CANONICAL_HOST || "https://lanelogicjobs.com";
-          await sendTemplatedEmailByEvent("user_registered_employer", email, {
+          await sendTemplatedEmailByEvent("admin_invite", email, {
             first_name: firstName,
             last_name: lastName,
             email,
-            company_name: "LaneLogic Jobs Admin",
+            temp_password: tempPassword,
+            login_url: `${siteUrl}/login`,
             site_name: "LaneLogic Jobs",
             site_url: siteUrl,
-            dashboard_url: `${siteUrl}/dashboard`,
           });
         } catch {}
       })();

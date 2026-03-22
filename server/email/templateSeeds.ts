@@ -444,6 +444,51 @@ The {{site_name}} Team
   },
 
   // ─────────────────────────────────────────────────────────────
+  // ADMIN INVITE
+  // ─────────────────────────────────────────────────────────────
+  {
+    slug: "admin_invite",
+    name: "Admin Invitation",
+    subject: "You've been invited to manage {{site_name}}",
+    body: `Hi {{first_name}},
+
+You've been invited to join the {{site_name}} admin team.
+
+Here are your login credentials:
+
+  Email: {{email}}
+  Temporary password: {{temp_password}}
+
+Log in here:
+{{login_url}}
+
+You'll be prompted to change your password after your first login. Keep these credentials safe and do not share them.
+
+If you weren't expecting this invitation, please ignore this email or contact us immediately.
+
+The {{site_name}} Team
+{{site_url}}`,
+    variables: [
+      { key: "first_name", description: "New admin's first name" },
+      { key: "email", description: "New admin's email address" },
+      { key: "temp_password", description: "Temporary password for first login" },
+      { key: "login_url", description: "Direct link to the admin login page" },
+      { key: "site_name", description: "Your platform name" },
+      { key: "site_url", description: "Root URL of the platform" },
+    ],
+    testVars: {
+      first_name: "Sam",
+      email: "sam@example.com",
+      temp_password: "Temp-abc123",
+      login_url: "https://lanelogicjobs.com/login",
+      site_name: "LaneLogic Jobs",
+      site_url: "https://lanelogicjobs.com",
+    },
+    triggerType: "event",
+    triggerEvent: "admin_invite",
+  },
+
+  // ─────────────────────────────────────────────────────────────
   // INCOMPLETE PROFILE REMINDER (SCHEDULED)
   // ─────────────────────────────────────────────────────────────
   {
