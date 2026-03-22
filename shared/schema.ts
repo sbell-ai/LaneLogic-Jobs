@@ -616,6 +616,12 @@ export const insertSocialPostSchema = createInsertSchema(socialPosts).omit({ id:
 export type User = typeof users.$inferSelect;
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type Job = typeof jobs.$inferSelect;
+export type EnrichedJob = Job & {
+  employerHasProfile: boolean;
+  employerVerificationStatus: string | null;
+  employerIsRegistered: boolean;
+  employerLogo: string | null;
+};
 export type InsertJob = z.infer<typeof insertJobSchema>;
 export type Application = typeof applications.$inferSelect;
 export type InsertApplication = z.infer<typeof insertApplicationSchema>;

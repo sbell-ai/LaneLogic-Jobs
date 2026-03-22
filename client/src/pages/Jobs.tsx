@@ -8,7 +8,7 @@ import {
   MapPin, Briefcase, DollarSign, ExternalLink, Clock, Building2, Truck, RotateCcw,
 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
-import type { Job } from "@shared/schema";
+import type { EnrichedJob } from "@shared/schema";
 import { formatDistanceToNow } from "date-fns";
 import { motion } from "framer-motion";
 import {
@@ -23,7 +23,7 @@ export default function Jobs() {
   const filters = useJobFilters(params.get("q") || "", params.get("loc") || "");
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
 
-  const { data: jobs, isLoading } = useQuery<Job[]>({
+  const { data: jobs, isLoading } = useQuery<EnrichedJob[]>({
     queryKey: ["/api/jobs"],
   });
 
@@ -34,7 +34,7 @@ export default function Jobs() {
   const grouped = useMemo(() => {
     const groups = new Map<string, typeof filtered>();
     for (const job of filtered) {
-      const key = (job.companyName || "").trim().toLowerCase() || `__noc_${(job as any).employerId}`;
+      const key = (job.companyName || "").trim().toLowerCase() || `__noc_${job.employerId}`;
       if (!groups.has(key)) groups.set(key, []);
       groups.get(key)!.push(job);
     }
@@ -104,7 +104,7 @@ export default function Jobs() {
                   {grouped.map((group, i) => {
                     const job = group[0];
                     const extraCount = group.length - 1;
-                    const employerId = (job as any).employerId as number;
+                    const employerId = job.employerId;
                     return (
                       <motion.div
                         key={job.id}
@@ -117,8 +117,8 @@ export default function Jobs() {
                           className="bg-white dark:bg-slate-900 rounded-2xl border border-border shadow-sm hover:shadow-lg hover:border-primary/40 transition-all duration-200 group h-full flex flex-col"
                         >
                           <Link href={`/jobs/${job.id}`} className="p-5 flex flex-col flex-1 cursor-pointer">
-                            {(job as any).employerLogo ? (
-                              <img src={(job as any).employerLogo} alt={job.companyName || ""} className="w-12 h-12 rounded-xl object-contain bg-white dark:bg-slate-800 border border-border shrink-0 mb-3" data-testid={`img-company-logo-${job.id}`} />
+                            {job.employerLogo ? (
+                              <img src={job.employerLogo} alt={job.companyName || ""} className="w-12 h-12 rounded-xl object-contain bg-white dark:bg-slate-800 border border-border shrink-0 mb-3" data-testid={`img-company-logo-${job.id}`} />
                             ) : (
                               <div className="w-12 h-12 rounded-xl bg-primary flex items-center justify-center text-white font-bold text-lg shrink-0 mb-3" data-testid={`placeholder-company-logo-${job.id}`}>
                                 {(job.title || job.companyName || "J").charAt(0).toUpperCase()}
@@ -131,7 +131,7 @@ export default function Jobs() {
                             {job.companyName && (
                               <p className="text-sm font-medium text-foreground/70 flex items-center gap-1 mt-1">
                                 <Building2 size={13} className="shrink-0" /> <span className="line-clamp-1">{job.companyName}</span>
-                                {(job as any).employerVerificationStatus === "approved" && (
+                                {job.employerVerificationStatus === "approved" && (
                                   <VerifiedBadge type="employer" size="sm" />
                                 )}
                               </p>
@@ -173,7 +173,7 @@ export default function Jobs() {
                               </Button>
                             </div>
                           </Link>
-                          {extraCount > 0 && (job as any).employerHasProfile && (
+                          {extraCount > 0 && job.employerHasProfile && (
                             <Link
                               href={`/employers/${employerId}`}
                               className="mx-5 mb-4 flex items-center gap-1.5 text-xs font-semibold text-primary hover:underline -mt-1"

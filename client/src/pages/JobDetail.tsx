@@ -10,7 +10,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
-import type { Job } from "@shared/schema";
+import type { EnrichedJob } from "@shared/schema";
 import { formatDistanceToNow } from "date-fns";
 import MarkdownDescription from "@/components/MarkdownDescription";
 import { formatJobLocation } from "@/components/JobFilterSidebar";
@@ -27,7 +27,7 @@ export default function JobDetail() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  const { data: job, isLoading } = useQuery<Job>({
+  const { data: job, isLoading } = useQuery<EnrichedJob>({
     queryKey: ["/api/jobs", id],
     queryFn: async () => {
       const res = await fetch(`/api/jobs/${id}`);
@@ -56,7 +56,7 @@ export default function JobDetail() {
     mutationFn: () =>
       apiRequest("POST", "/api/conversations", {
         seekerId: user!.id,
-        employerId: (job as any).employerId,
+        employerId: job!.employerId,
         jobId: Number(id),
       }).then((r) => r.json()),
     onSuccess: (conv: any) => {
@@ -100,8 +100,8 @@ export default function JobDetail() {
   const canMessageEmployer =
     user &&
     user.role === "job_seeker" &&
-    (job as any)?.employerIsRegistered &&
-    (job as any)?.employerVerificationStatus === "verified";
+    job?.employerIsRegistered &&
+    job?.employerVerificationStatus === "verified";
 
   if (isLoading) {
     return (
@@ -156,7 +156,7 @@ export default function JobDetail() {
     "hiringOrganization": {
       "@type": "Organization",
       "name": job.companyName || "LaneLogic Jobs",
-      ...(((job as any).employerLogo) ? { "logo": (job as any).employerLogo } : {}),
+      ...(job.employerLogo ? { "logo": job.employerLogo } : {}),
     },
     "jobLocation": {
       "@type": "Place",
@@ -189,8 +189,8 @@ export default function JobDetail() {
             <div className="p-8 border-b border-border">
               <div className="flex flex-col md:flex-row md:items-start justify-between gap-6">
                 <div className="flex items-start gap-5">
-                  {(job as any).employerLogo ? (
-                    <img src={(job as any).employerLogo} alt={job.companyName || ""} className="w-16 h-16 rounded-2xl object-contain bg-white dark:bg-slate-800 border border-border shrink-0" data-testid="img-company-logo" />
+                  {job.employerLogo ? (
+                    <img src={job.employerLogo} alt={job.companyName || ""} className="w-16 h-16 rounded-2xl object-contain bg-white dark:bg-slate-800 border border-border shrink-0" data-testid="img-company-logo" />
                   ) : (
                     <div className="w-16 h-16 rounded-2xl bg-primary flex items-center justify-center text-white font-bold text-2xl shrink-0" data-testid="placeholder-company-logo">
                       {(job.title || job.companyName || "J").charAt(0).toUpperCase()}
@@ -201,7 +201,7 @@ export default function JobDetail() {
                     {job.companyName && (
                       <p className="text-base font-medium text-foreground/70 flex items-center gap-1.5 mb-2">
                         <Building2 size={15} /> {job.companyName}
-                        {(job as any).employerVerificationStatus === "approved" && (
+                        {job.employerVerificationStatus === "approved" && (
                           <VerifiedBadge type="employer" size="sm" />
                         )}
                       </p>
