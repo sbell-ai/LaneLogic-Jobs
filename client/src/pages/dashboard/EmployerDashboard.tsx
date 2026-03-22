@@ -27,6 +27,8 @@ import { Link, useLocation } from "wouter";
 import { formatDistanceToNow } from "date-fns";
 import { validateCategoryPair } from "@shared/jobTaxonomy";
 import { useTaxonomy } from "@/hooks/use-taxonomy";
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid } from "recharts";
+import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
 
 const JOB_TYPES = ["Full-time", "Part-time", "Contract", "Seasonal", "Owner-Operator", "Lease Purchase", "OTR", "Temporary", "Other"];
 
@@ -1409,11 +1411,32 @@ function ResumeSearchTab() {
   );
 }
 
+type PerJobStat = {
+  jobId: number;
+  title: string;
+  isPublished: boolean;
+  totalApps: number;
+  newApps: number;
+  shortlisted: number;
+  hired: number;
+  daysActive: number;
+  daysUntilExpiry: number | null;
+};
+
+type AnalyticsData = {
+  activeJobs: number;
+  totalJobs: number;
+  totalApps: number;
+  newApps: number;
+  shortlisted: number;
+  hired: number;
+  recentApps: number;
+  dailyBreakdown: { date: string; count: number }[];
+  perJobStats: PerJobStat[];
+};
+
 function AnalyticsTab() {
-  const { data: stats, isLoading } = useQuery<{
-    activeJobs: number; totalJobs: number; totalApps: number;
-    newApps: number; shortlisted: number; hired: number; recentApps: number;
-  }>({ queryKey: ["/api/employer/analytics"] });
+  const { data: stats, isLoading } = useQuery<AnalyticsData>({ queryKey: ["/api/employer/analytics"] });
 
   if (isLoading) return <div className="animate-pulse h-64 bg-slate-100 dark:bg-slate-800 rounded-xl" />;
 
@@ -1426,9 +1449,17 @@ function AnalyticsTab() {
     { label: "Apps (Last 30 Days)", value: stats?.recentApps ?? 0, icon: TrendingUp, color: "text-primary", bg: "bg-primary/5" },
   ];
 
+  const dailyData = (stats?.dailyBreakdown ?? []).map(d => ({
+    date: d.date.slice(5),
+    count: d.count,
+  }));
+
+  const hasAnyApps = (stats?.totalApps ?? 0) > 0;
+
   return (
     <div>
       <h2 className="text-2xl font-bold font-display mb-6 flex items-center gap-2"><BarChart2 size={22} /> Analytics</h2>
+
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 mb-8">
         {cards.map((c) => (
           <div key={c.label} className={`rounded-2xl border border-border p-5 flex flex-col gap-2 ${c.bg}`} data-testid={`stat-${c.label.toLowerCase().replace(/\s+/g, "-")}`}>
@@ -1439,7 +1470,27 @@ function AnalyticsTab() {
           </div>
         ))}
       </div>
-      <div className="bg-white dark:bg-slate-900 rounded-2xl border border-border p-6">
+
+      <div className="bg-white dark:bg-slate-900 rounded-2xl border border-border p-6 mb-6">
+        <h3 className="font-semibold font-display mb-4">Applications — Last 30 Days</h3>
+        {hasAnyApps ? (
+          <div className="h-48" data-testid="chart-daily-applications">
+            <ChartContainer config={{ count: { label: "Applications", color: "hsl(var(--primary))" } }}>
+              <BarChart data={dailyData} margin={{ top: 4, right: 4, left: -24, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                <XAxis dataKey="date" tick={{ fontSize: 10 }} tickLine={false} axisLine={false} interval={6} />
+                <YAxis allowDecimals={false} tick={{ fontSize: 10 }} tickLine={false} axisLine={false} />
+                <ChartTooltip content={<ChartTooltipContent />} />
+                <Bar dataKey="count" name="Applications" fill="var(--color-count)" radius={[3, 3, 0, 0]} />
+              </BarChart>
+            </ChartContainer>
+          </div>
+        ) : (
+          <p className="text-sm text-muted-foreground py-8 text-center">No applications yet. Chart will appear once candidates apply.</p>
+        )}
+      </div>
+
+      <div className="bg-white dark:bg-slate-900 rounded-2xl border border-border p-6 mb-6">
         <h3 className="font-semibold font-display mb-3">Hiring Funnel</h3>
         {[
           { label: "Total Applications", value: stats?.totalApps ?? 0, max: stats?.totalApps ?? 1 },
@@ -1461,6 +1512,61 @@ function AnalyticsTab() {
           </div>
         ))}
       </div>
+
+      {(stats?.perJobStats ?? []).length > 0 && (
+        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-border p-6">
+          <h3 className="font-semibold font-display mb-4">Per-Listing Breakdown</h3>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm" data-testid="table-per-job-stats">
+              <thead>
+                <tr className="text-left text-muted-foreground border-b border-border">
+                  <th className="pb-2 font-medium pr-4">Job Title</th>
+                  <th className="pb-2 font-medium text-center pr-3">Total</th>
+                  <th className="pb-2 font-medium text-center pr-3">Unread</th>
+                  <th className="pb-2 font-medium text-center pr-3">Shortlisted</th>
+                  <th className="pb-2 font-medium text-center pr-3">Hired</th>
+                  <th className="pb-2 font-medium text-center pr-3">Days Active</th>
+                  <th className="pb-2 font-medium text-center">Expires In</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(stats?.perJobStats ?? []).map((j) => (
+                  <tr key={j.jobId} className="border-b border-border/50 hover:bg-muted/30 transition-colors" data-testid={`row-job-stat-${j.jobId}`}>
+                    <td className="py-3 pr-4">
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium truncate max-w-[200px]" title={j.title}>{j.title}</span>
+                        {!j.isPublished && <Badge variant="secondary" className="text-xs shrink-0">Draft</Badge>}
+                      </div>
+                    </td>
+                    <td className="py-3 text-center pr-3 font-semibold">{j.totalApps}</td>
+                    <td className="py-3 text-center pr-3">
+                      {j.newApps > 0 ? (
+                        <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-orange-100 text-orange-700 dark:bg-orange-900 dark:text-orange-300 text-xs font-semibold">{j.newApps}</span>
+                      ) : (
+                        <span className="text-muted-foreground">—</span>
+                      )}
+                    </td>
+                    <td className="py-3 text-center pr-3">{j.shortlisted > 0 ? j.shortlisted : <span className="text-muted-foreground">—</span>}</td>
+                    <td className="py-3 text-center pr-3">{j.hired > 0 ? j.hired : <span className="text-muted-foreground">—</span>}</td>
+                    <td className="py-3 text-center pr-3 text-muted-foreground">{j.daysActive}d</td>
+                    <td className="py-3 text-center">
+                      {j.daysUntilExpiry === null ? (
+                        <span className="text-muted-foreground">—</span>
+                      ) : j.daysUntilExpiry === 0 ? (
+                        <Badge variant="destructive" className="text-xs">Expired</Badge>
+                      ) : j.daysUntilExpiry <= 3 ? (
+                        <Badge variant="outline" className="text-xs text-orange-600 border-orange-300">{j.daysUntilExpiry}d</Badge>
+                      ) : (
+                        <span className="text-muted-foreground">{j.daysUntilExpiry}d</span>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

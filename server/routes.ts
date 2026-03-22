@@ -1048,18 +1048,60 @@ export async function registerRoutes(
     if (user.role !== "employer" && user.role !== "admin") return res.status(403).json({ message: "Forbidden" });
     const [apps, allJobs] = await Promise.all([
       storage.getEmployerApplicationsEnriched(user.id),
-      storage.getJobs({ status: "all" as any }),
+      storage.getJobs(),
     ]);
     const myJobs = allJobs.filter((j: any) => j.employerId === user.id);
-    const activeJobs = myJobs.filter((j: any) => j.status === "active").length;
+    const activeJobs = myJobs.filter((j: any) => j.status === "active" || j.isPublished).length;
     const totalApps = apps.length;
     const newApps = apps.filter((a: any) => !a.viewedAt).length;
     const shortlisted = apps.filter((a: any) => ["shortlisted", "reviewed"].includes(a.status)).length;
     const hired = apps.filter((a: any) => ["hired", "accepted"].includes(a.status)).length;
+
     // Applications in last 30 days
     const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
     const recentApps = apps.filter((a: any) => a.createdAt && new Date(a.createdAt) >= thirtyDaysAgo).length;
-    res.json({ activeJobs, totalJobs: myJobs.length, totalApps, newApps, shortlisted, hired, recentApps });
+
+    // Daily breakdown for bar chart (last 30 days)
+    const today = new Date();
+    today.setHours(23, 59, 59, 999);
+    const dailyMap: Record<string, number> = {};
+    for (let i = 29; i >= 0; i--) {
+      const d = new Date(today);
+      d.setDate(d.getDate() - i);
+      const key = d.toISOString().slice(0, 10);
+      dailyMap[key] = 0;
+    }
+    for (const a of apps) {
+      if (!a.createdAt) continue;
+      const key = new Date(a.createdAt).toISOString().slice(0, 10);
+      if (key in dailyMap) dailyMap[key]++;
+    }
+    const dailyBreakdown = Object.entries(dailyMap).map(([date, count]) => ({ date, count }));
+
+    // Per-job stats
+    const now = Date.now();
+    const perJobStats = myJobs.map((job: any) => {
+      const jobApps = apps.filter((a: any) => a.jobId === job.id);
+      const daysActive = job.createdAt
+        ? Math.max(0, Math.floor((now - new Date(job.createdAt).getTime()) / (1000 * 60 * 60 * 24)))
+        : 0;
+      const daysUntilExpiry = job.expiresAt
+        ? Math.max(0, Math.ceil((new Date(job.expiresAt).getTime() - now) / (1000 * 60 * 60 * 24)))
+        : null;
+      return {
+        jobId: job.id,
+        title: job.title,
+        isPublished: job.isPublished,
+        totalApps: jobApps.length,
+        newApps: jobApps.filter((a: any) => !a.viewedAt).length,
+        shortlisted: jobApps.filter((a: any) => ["shortlisted", "reviewed"].includes(a.status)).length,
+        hired: jobApps.filter((a: any) => ["hired", "accepted"].includes(a.status)).length,
+        daysActive,
+        daysUntilExpiry,
+      };
+    });
+
+    res.json({ activeJobs, totalJobs: myJobs.length, totalApps, newApps, shortlisted, hired, recentApps, dailyBreakdown, perJobStats });
   });
 
   app.post(api.applications.create.path, async (req, res) => {
