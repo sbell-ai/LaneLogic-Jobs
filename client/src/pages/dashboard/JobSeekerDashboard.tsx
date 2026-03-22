@@ -155,7 +155,7 @@ function ApplicationsTab({ userId }: { userId: number }) {
   const { toast } = useToast();
 
   const { data: applications, isLoading: appsLoading } = useQuery<Application[]>({
-    queryKey: ["/api/applications"],
+    queryKey: ["/api/seeker/applications"],
   });
   const { data: allJobs } = useQuery<Job[]>({ queryKey: ["/api/jobs"] });
 
@@ -228,7 +228,7 @@ function ApplicationsTab({ userId }: { userId: number }) {
         canMessage={canMessage}
         onMessage={() => { setMessagingAppId(app.id); messageMutation.mutate(app); }}
         onNotesSaved={(notes) => {
-          queryClient.setQueryData<Application[]>(["/api/applications"], (prev) =>
+          queryClient.setQueryData<Application[]>(["/api/seeker/applications"], (prev) =>
             (prev || []).map((a) => (a.id === app.id ? { ...a, seekerNotes: notes } : a))
           );
         }}

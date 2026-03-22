@@ -1032,6 +1032,15 @@ export async function registerRoutes(
     res.json(safeApps);
   });
 
+  // GET /api/seeker/applications — returns the logged-in seeker's own applications (including viewedAt)
+  app.get("/api/seeker/applications", async (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+    const user = req.user as any;
+    if (user.role !== "job_seeker" && user.role !== "admin") return res.status(403).json({ message: "Forbidden" });
+    const apps = await storage.getApplicationsBySeeker(user.id);
+    res.json(apps);
+  });
+
   // GET /api/employer/analytics — summary stats for employer dashboard
   app.get("/api/employer/analytics", async (req, res) => {
     if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });

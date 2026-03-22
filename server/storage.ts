@@ -69,6 +69,7 @@ export interface IStorage {
 
   // Applications
   getApplications(): Promise<Application[]>;
+  getApplicationsBySeeker(seekerId: number): Promise<Application[]>;
   createApplication(app: InsertApplication): Promise<Application>;
   updateApplication(id: number, updates: Partial<InsertApplication>): Promise<Application>;
   deleteApplication(id: number): Promise<void>;
@@ -390,6 +391,9 @@ export class DatabaseStorage implements IStorage {
   }
   async deleteApplication(id: number): Promise<void> {
     await db.delete(applications).where(eq(applications.id, id));
+  }
+  async getApplicationsBySeeker(seekerId: number): Promise<Application[]> {
+    return db.select().from(applications).where(eq(applications.jobSeekerId, seekerId)).orderBy(desc(applications.createdAt));
   }
   async markApplicationViewed(id: number): Promise<void> {
     await db.update(applications).set({ viewedAt: new Date() } as any).where(and(eq(applications.id, id), sql`viewed_at IS NULL`));
