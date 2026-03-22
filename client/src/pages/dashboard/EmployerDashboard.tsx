@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { DashboardLayout } from "./DashboardLayout";
+import { VerifiedBadge } from "@/components/VerifiedBadge";
 import { useAuth } from "@/hooks/use-auth";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
@@ -16,13 +17,14 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Briefcase, Plus, Trash2, Users, Upload, CreditCard, CheckCircle2, MapPin, Eye, Building2, Phone, Mail, User, MessageSquare, Pencil, ExternalLink, ChevronDown, ChevronRight, StickyNote, Check, Save, Loader2 } from "lucide-react";
+import { Briefcase, Plus, Trash2, Users, Upload, CreditCard, CheckCircle2, MapPin, Eye, Building2, Phone, Mail, User, MessageSquare, Pencil, ExternalLink, ChevronDown, ChevronRight, StickyNote, Check, Save, Loader2, BarChart2, TrendingUp, Bell, Search } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ImageUpload } from "@/components/ui/image-upload";
 import type { Job, Application } from "@shared/schema";
 import { insertJobSchema } from "@shared/schema";
 import { z } from "zod";
 import { Link, useLocation } from "wouter";
+import { formatDistanceToNow } from "date-fns";
 import { validateCategoryPair } from "@shared/jobTaxonomy";
 import { useTaxonomy } from "@/hooks/use-taxonomy";
 
@@ -546,7 +548,7 @@ function MyJobsTab({ userId }: { userId: number }) {
   );
 }
 
-type EnrichedApplication = Application & { seekerName: string; seekerEmail: string; employerNotes?: string | null };
+type EnrichedApplication = Application & { seekerName: string; seekerEmail: string; seekerVerificationStatus?: string | null; employerNotes?: string | null };
 
 const PIPELINE_STATUSES = [
   { value: "new",         label: "New Application", color: "bg-yellow-100 text-yellow-700 border-yellow-200 ring-yellow-400" },
@@ -673,6 +675,17 @@ function ApplicantsTab({ userId }: { userId: number }) {
 
   const [messagingAppId, setMessagingAppId] = useState<number | null>(null);
   const [updatingStatusId, setUpdatingStatusId] = useState<number | null>(null);
+  const [markedViewedIds, setMarkedViewedIds] = useState<Set<number>>(new Set());
+
+  const viewMutation = useMutation({
+    mutationFn: (id: number) => apiRequest("POST", `/api/applications/${id}/viewed`).then((r) => r.json()),
+    onSuccess: (_: any, id: number) => {
+      setMarkedViewedIds((prev) => new Set([...prev, id]));
+      queryClient.setQueryData<EnrichedApplication[]>(["/api/employer/applicants"], (prev) =>
+        (prev || []).map((a) => (a.id === id ? { ...a, viewedAt: new Date().toISOString() } as any : a))
+      );
+    },
+  });
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>(() =>
     Object.fromEntries(GROUP_CONFIG.map((g) => [g.key, g.defaultOpen]))
   );
@@ -737,12 +750,24 @@ function ApplicantsTab({ userId }: { userId: number }) {
     const norm = normalizeStatus(app.status);
     const isUpdating = updatingStatusId === app.id;
     const isMessaging = messagingAppId === app.id;
+    const isUnread = !(app as any).viewedAt && !markedViewedIds.has(app.id);
+
+    // Auto-mark as viewed on first render
+    if (isUnread) {
+      viewMutation.mutate(app.id);
+    }
 
     return (
       <div key={app.id} data-testid={`card-applicant-${app.id}`} className="bg-white dark:bg-slate-900 rounded-xl border border-border p-5">
         <div className="flex items-start justify-between gap-4">
           <div className="flex-1 min-w-0">
-            <p className="font-semibold truncate" data-testid={`text-seeker-name-${app.id}`}>{app.seekerName}</p>
+            <p className="font-semibold flex items-center gap-1.5 flex-wrap" data-testid={`text-seeker-name-${app.id}`}>
+              {isUnread && <span className="inline-block w-2 h-2 rounded-full bg-primary shrink-0" title="New application" data-testid={`dot-unread-${app.id}`} />}
+              <span className="truncate">{app.seekerName}</span>
+              {app.seekerVerificationStatus === "approved" && (
+                <VerifiedBadge type="seeker" size="sm" />
+              )}
+            </p>
             {app.seekerEmail && app.seekerEmail !== app.seekerName && (
               <p className="text-xs text-muted-foreground truncate">{app.seekerEmail}</p>
             )}
@@ -1295,6 +1320,146 @@ function CompanyProfileTab() {
   );
 }
 
+function ResumeSearchTab() {
+  const [keyword, setKeyword] = useState("");
+  const [track, setTrack] = useState("any");
+  const [search, setSearch] = useState({ keyword: "", track: "" });
+
+  const queryKey = ["/api/seeker-search", search.keyword, search.track];
+  const { data: seekers = [], isLoading, isFetching } = useQuery<{
+    id: number; firstName: string | null; lastName: string | null; email: string | null;
+    seekerTrack: string | null; seekerVerificationStatus: string; profileImage: string | null; createdAt: string;
+  }[]>({
+    queryKey,
+    queryFn: () => {
+      const params = new URLSearchParams();
+      if (search.keyword) params.set("keyword", search.keyword);
+      if (search.track && search.track !== "any") params.set("track", search.track);
+      return fetch(`/api/seeker-search?${params}`).then((r) => r.json());
+    },
+    enabled: true,
+  });
+
+  const TRACKS = ["CDL-A Driver","CDL-B Driver","Non-CDL Driver","Dispatcher","Logistics Coordinator","Fleet Manager","Owner-Operator","Unknown"];
+
+  return (
+    <div>
+      <h2 className="text-2xl font-bold font-display mb-6 flex items-center gap-2"><Users size={20} /> Find Candidates</h2>
+      <div className="bg-white dark:bg-slate-900 rounded-2xl border border-border p-5 mb-6">
+        <div className="flex flex-col sm:flex-row gap-3">
+          <Input
+            placeholder="Search by name or track..."
+            value={keyword}
+            onChange={(e) => setKeyword(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter") setSearch({ keyword, track: track === "any" ? "" : track }); }}
+            data-testid="input-seeker-search"
+            className="flex-1"
+          />
+          <select
+            value={track}
+            onChange={(e) => setTrack(e.target.value)}
+            className="border border-border rounded-lg px-3 py-2 text-sm bg-background"
+            data-testid="select-seeker-track"
+          >
+            <option value="any">All Tracks</option>
+            {TRACKS.map((t) => <option key={t} value={t}>{t}</option>)}
+          </select>
+          <Button
+            onClick={() => setSearch({ keyword, track: track === "any" ? "" : track })}
+            data-testid="button-seeker-search"
+          >
+            <Search size={16} className="mr-2" /> Search
+          </Button>
+        </div>
+      </div>
+      {(isLoading || isFetching) && <div className="animate-pulse h-32 bg-slate-100 dark:bg-slate-800 rounded-xl" />}
+      {!isLoading && !isFetching && seekers.length === 0 && (
+        <div className="text-center py-12 text-muted-foreground">No candidates found matching your criteria.</div>
+      )}
+      <div className="space-y-3">
+        {seekers.map((s) => {
+          const name = s.firstName || s.lastName ? [s.firstName, s.lastName].filter(Boolean).join(" ") : "Anonymous Candidate";
+          const initials = name.split(" ").map((n: string) => n[0]).join("").slice(0, 2).toUpperCase();
+          return (
+            <div key={s.id} data-testid={`card-seeker-${s.id}`} className="bg-white dark:bg-slate-900 rounded-xl border border-border p-5 flex items-center gap-4">
+              <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center font-bold text-primary shrink-0">
+                {s.profileImage ? <img src={s.profileImage} className="w-12 h-12 rounded-full object-cover" alt={name} /> : initials}
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="font-semibold truncate" data-testid={`text-seeker-name-search-${s.id}`}>{name}</p>
+                {s.email && <p className="text-xs text-muted-foreground truncate">{s.email}</p>}
+                <div className="flex items-center gap-2 mt-1">
+                  {s.seekerTrack && <Badge variant="outline" className="text-xs">{s.seekerTrack}</Badge>}
+                  {s.seekerVerificationStatus === "approved" && <VerifiedBadge type="seeker" size="sm" />}
+                </div>
+              </div>
+              <span className="text-xs text-muted-foreground shrink-0">
+                {s.createdAt ? formatDistanceToNow(new Date(s.createdAt), { addSuffix: true }) : ""}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function AnalyticsTab() {
+  const { data: stats, isLoading } = useQuery<{
+    activeJobs: number; totalJobs: number; totalApps: number;
+    newApps: number; shortlisted: number; hired: number; recentApps: number;
+  }>({ queryKey: ["/api/employer/analytics"] });
+
+  if (isLoading) return <div className="animate-pulse h-64 bg-slate-100 dark:bg-slate-800 rounded-xl" />;
+
+  const cards = [
+    { label: "Active Listings", value: stats?.activeJobs ?? 0, icon: Briefcase, color: "text-blue-600", bg: "bg-blue-50 dark:bg-blue-950" },
+    { label: "Total Applications", value: stats?.totalApps ?? 0, icon: Users, color: "text-violet-600", bg: "bg-violet-50 dark:bg-violet-950" },
+    { label: "Unread Applications", value: stats?.newApps ?? 0, icon: Bell, color: "text-orange-500", bg: "bg-orange-50 dark:bg-orange-950" },
+    { label: "Shortlisted", value: stats?.shortlisted ?? 0, icon: Eye, color: "text-indigo-600", bg: "bg-indigo-50 dark:bg-indigo-950" },
+    { label: "Hired", value: stats?.hired ?? 0, icon: CheckCircle2, color: "text-green-600", bg: "bg-green-50 dark:bg-green-950" },
+    { label: "Apps (Last 30 Days)", value: stats?.recentApps ?? 0, icon: TrendingUp, color: "text-primary", bg: "bg-primary/5" },
+  ];
+
+  return (
+    <div>
+      <h2 className="text-2xl font-bold font-display mb-6 flex items-center gap-2"><BarChart2 size={22} /> Analytics</h2>
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 mb-8">
+        {cards.map((c) => (
+          <div key={c.label} className={`rounded-2xl border border-border p-5 flex flex-col gap-2 ${c.bg}`} data-testid={`stat-${c.label.toLowerCase().replace(/\s+/g, "-")}`}>
+            <div className={`flex items-center gap-2 text-sm font-medium ${c.color}`}>
+              <c.icon size={16} /> {c.label}
+            </div>
+            <p className="text-3xl font-bold font-display">{c.value}</p>
+          </div>
+        ))}
+      </div>
+      <div className="bg-white dark:bg-slate-900 rounded-2xl border border-border p-6">
+        <h3 className="font-semibold font-display mb-3">Hiring Funnel</h3>
+        {[
+          { label: "Total Applications", value: stats?.totalApps ?? 0, max: stats?.totalApps ?? 1 },
+          { label: "Shortlisted", value: stats?.shortlisted ?? 0, max: stats?.totalApps ?? 1 },
+          { label: "Hired", value: stats?.hired ?? 0, max: stats?.totalApps ?? 1 },
+        ].map((row) => (
+          <div key={row.label} className="mb-4">
+            <div className="flex justify-between text-sm mb-1">
+              <span className="text-muted-foreground">{row.label}</span>
+              <span className="font-semibold">{row.value}</span>
+            </div>
+            <div className="h-2 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
+              <div
+                className="h-full rounded-full bg-primary transition-all"
+                style={{ width: `${row.max > 0 ? Math.round((row.value / row.max) * 100) : 0}%` }}
+                data-testid={`bar-${row.label.toLowerCase().replace(/\s+/g, "-")}`}
+              />
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export default function EmployerDashboard({ section }: { section?: string }) {
   const { user } = useAuth();
   if (!user) return null;
@@ -1302,6 +1467,8 @@ export default function EmployerDashboard({ section }: { section?: string }) {
   const content = () => {
     if (section === "jobs") return <MyJobsTab userId={user.id} />;
     if (section === "applicants") return <ApplicantsTab userId={user.id} />;
+    if (section === "analytics") return <AnalyticsTab />;
+    if (section === "candidates") return <ResumeSearchTab />;
     if (section === "upload") return <CsvUploadTab />;
     if (section === "profile") return <CompanyProfileTab />;
     if (section === "membership") return <EmployerMembershipTab user={user} />;

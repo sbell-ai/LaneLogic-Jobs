@@ -22,6 +22,7 @@ import Employers from "@/pages/Employers";
 import EmployerProfile from "@/pages/EmployerProfile";
 import Contact from "@/pages/Contact";
 import JobsByTypeAndState from "@/pages/JobsByTypeAndState";
+import CityJobsPage from "@/pages/CityJobsPage";
 import ResourceDetail from "@/pages/ResourceDetail";
 import DynamicPage from "@/pages/DynamicPage";
 import GuidePage from "@/pages/GuidePage";
@@ -244,6 +245,7 @@ function Router() {
       <Route path="/register" component={RegisterRedirect} />
 
       <Route path="/jobs" component={Jobs} />
+      <Route path="/jobs/:state/:city" component={CityJobsPage} />
       <Route path="/jobs/:id" component={JobDetailOrSeoPage} />
       <Route path="/employers" component={Employers} />
       <Route path="/employers/:id" component={EmployerProfile} />

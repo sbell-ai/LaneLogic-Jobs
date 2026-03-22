@@ -655,6 +655,7 @@ export async function registerRoutes(
         companyName: string;
         companyLogo: string | null;
         claimed: boolean;
+        verificationStatus: string | null;
         jobCount: number;
         industries: Set<string>;
         locations: Set<string>;
@@ -671,6 +672,7 @@ export async function registerRoutes(
           companyName: name,
           companyLogo: u.companyLogo,
           claimed: true,
+          verificationStatus: u.verificationStatus || null,
           jobCount: 0,
           industries: new Set(),
           locations: new Set(),
@@ -689,6 +691,7 @@ export async function registerRoutes(
             companyName: name,
             companyLogo: null,
             claimed: false,
+            verificationStatus: null,
             jobCount: 0,
             industries: new Set(),
             locations: new Set(),
@@ -709,6 +712,7 @@ export async function registerRoutes(
           companyName: e.companyName,
           companyLogo: e.companyLogo,
           claimed: e.claimed,
+          verificationStatus: e.verificationStatus,
           jobCount: e.jobCount,
           industries: [...e.industries],
           locations: [...e.locations],
@@ -742,6 +746,7 @@ export async function registerRoutes(
         contactPhone: employer.showProfile ? employer.contactPhone : null,
         aboutCompany: employer.aboutCompany,
         claimed: !!employer.companyName,
+        verificationStatus: employer.verificationStatus || null,
         industries,
         locations,
         jobs: jobs.map(j => ({
@@ -780,6 +785,7 @@ export async function registerRoutes(
       ...job,
       employerLogo: employerMap.get(job.employerId)?.companyLogo || null,
       employerHasProfile: employerMap.has(job.employerId),
+      employerVerificationStatus: employerMap.get(job.employerId)?.verificationStatus || null,
     }));
     res.json(enriched);
   });
@@ -905,6 +911,51 @@ export async function registerRoutes(
             console.error("job_posted email failed:", e?.message);
           }
         })();
+
+        // Fire job alert emails for matching subscriptions (fire-and-forget)
+        (async () => {
+          try {
+            const { sendTemplatedEmailByEvent } = await import("./email/sendTemplatedEmail.ts");
+            const alerts = await storage.getAllJobAlerts();
+            const siteUrl = process.env.CANONICAL_HOST || "https://lanelogicjobs.com";
+            const jobTitle = (job.title || "").toLowerCase();
+            const jobDesc = (job.description || "").toLowerCase();
+
+            for (const alert of alerts) {
+              // Match keyword
+              if (alert.keyword) {
+                const kw = alert.keyword.toLowerCase();
+                if (!jobTitle.includes(kw) && !jobDesc.includes(kw)) continue;
+              }
+              // Match category
+              if (alert.category && alert.category !== job.category) continue;
+              // Match subcategory
+              if (alert.subcategory && alert.subcategory !== job.subcategory) continue;
+              // Match locationState
+              if (alert.locationState && alert.locationState !== job.locationState) continue;
+              // Match jobType
+              if (alert.jobType && alert.jobType !== job.jobType) continue;
+              // Match workLocationType
+              if (alert.workLocationType && alert.workLocationType !== job.workLocationType) continue;
+
+              // Passed all filters — notify this subscriber
+              const subscriber = await storage.getUser(alert.userId);
+              if (!subscriber) continue;
+              await sendTemplatedEmailByEvent("job_alert", (subscriber as any).email, {
+                first_name: (subscriber as any).firstName || (subscriber as any).email,
+                job_title: job.title,
+                company_name: job.companyName || "",
+                job_url: `${siteUrl}/jobs/${job.id}`,
+                site_name: "LaneLogic Jobs",
+                site_url: siteUrl,
+                unsubscribe_url: `${siteUrl}/dashboard`,
+              });
+              await storage.updateJobAlertNotifiedAt(alert.id, new Date());
+            }
+          } catch (e: any) {
+            console.error("job_alert emails failed:", e?.message);
+          }
+        })();
       }
     } catch (err) {
       if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
@@ -976,6 +1027,27 @@ export async function registerRoutes(
     // Strip seeker-private notes before returning to employers
     const safeApps = apps.map(({ seekerNotes: _s, ...rest }: any) => rest);
     res.json(safeApps);
+  });
+
+  // GET /api/employer/analytics — summary stats for employer dashboard
+  app.get("/api/employer/analytics", async (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+    const user = req.user as any;
+    if (user.role !== "employer" && user.role !== "admin") return res.status(403).json({ message: "Forbidden" });
+    const [apps, allJobs] = await Promise.all([
+      storage.getEmployerApplicationsEnriched(user.id),
+      storage.getJobs({ status: "all" as any }),
+    ]);
+    const myJobs = allJobs.filter((j: any) => j.employerId === user.id);
+    const activeJobs = myJobs.filter((j: any) => j.status === "active").length;
+    const totalApps = apps.length;
+    const newApps = apps.filter((a: any) => !a.viewedAt).length;
+    const shortlisted = apps.filter((a: any) => ["shortlisted", "reviewed"].includes(a.status)).length;
+    const hired = apps.filter((a: any) => ["hired", "accepted"].includes(a.status)).length;
+    // Applications in last 30 days
+    const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    const recentApps = apps.filter((a: any) => a.createdAt && new Date(a.createdAt) >= thirtyDaysAgo).length;
+    res.json({ activeJobs, totalJobs: myJobs.length, totalApps, newApps, shortlisted, hired, recentApps });
   });
 
   app.post(api.applications.create.path, async (req, res) => {
@@ -1138,6 +1210,23 @@ export async function registerRoutes(
     }
   });
 
+  // POST /api/applications/:id/viewed — employer marks an application as viewed
+  app.post("/api/applications/:id/viewed", async (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+    const user = req.user as any;
+    if (user.role !== "employer" && user.role !== "admin") return res.status(403).json({ message: "Forbidden" });
+    const appId = Number(req.params.id);
+    const existing = await db.query.applications.findFirst({ where: (a, { eq }) => eq(a.id, appId) });
+    if (!existing) return res.status(404).json({ message: "Application not found" });
+    // Verify employer owns the job (unless admin)
+    if (user.role === "employer") {
+      const appJob = await storage.getJob(existing.jobId);
+      if (!appJob || appJob.employerId !== user.id) return res.status(403).json({ message: "Forbidden" });
+    }
+    await storage.markApplicationViewed(appId);
+    res.json({ ok: true });
+  });
+
   // DELETE /api/applications/:id — seeker withdraws their application
   app.delete("/api/applications/:id", async (req, res) => {
     if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
@@ -1174,6 +1263,81 @@ export async function registerRoutes(
         console.error("application_withdrawn email failed:", e?.message);
       }
     })();
+  });
+
+  // ── Job Alert Subscriptions ──────────────────────────────────────────────
+  // GET /api/alerts — list seeker's own alerts
+  app.get("/api/alerts", async (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+    const user = req.user as any;
+    const alerts = await storage.getJobAlerts(user.id);
+    res.json(alerts);
+  });
+
+  // POST /api/alerts — create a new alert
+  app.post("/api/alerts", async (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+    const user = req.user as any;
+    const { keyword, category, subcategory, locationState, jobType, workLocationType } = req.body;
+    // Require at least one filter
+    if (!keyword && !category && !locationState && !jobType && !workLocationType) {
+      return res.status(400).json({ message: "At least one filter (keyword, category, location, job type) is required" });
+    }
+    const existing = await storage.getJobAlerts(user.id);
+    if (existing.length >= 5) {
+      return res.status(400).json({ message: "You can have at most 5 job alerts" });
+    }
+    const alert = await storage.createJobAlert({
+      userId: user.id,
+      keyword: keyword || null,
+      category: category || null,
+      subcategory: subcategory || null,
+      locationState: locationState || null,
+      jobType: jobType || null,
+      workLocationType: workLocationType || null,
+    });
+    res.status(201).json(alert);
+  });
+
+  // DELETE /api/alerts/:id — delete an alert
+  app.delete("/api/alerts/:id", async (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+    const user = req.user as any;
+    const alertId = Number(req.params.id);
+    if (isNaN(alertId)) return res.status(400).json({ message: "Invalid alert id" });
+    await storage.deleteJobAlert(alertId, user.id);
+    res.status(204).end();
+  });
+
+  // Saved Jobs
+  // GET /api/saved-jobs — list seeker's saved jobs (returns SavedJob[] with jobId)
+  app.get("/api/saved-jobs", async (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+    const user = req.user as any;
+    if (user.role !== "job_seeker") return res.status(403).json({ message: "Forbidden" });
+    const saved = await storage.getSavedJobsBySeeker(user.id);
+    res.json(saved);
+  });
+
+  // POST /api/saved-jobs — save a job
+  app.post("/api/saved-jobs", async (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+    const user = req.user as any;
+    if (user.role !== "job_seeker") return res.status(403).json({ message: "Forbidden" });
+    const jobId = Number(req.body.jobId);
+    if (!jobId) return res.status(400).json({ message: "jobId required" });
+    const saved = await storage.saveJob(user.id, jobId);
+    res.json(saved);
+  });
+
+  // DELETE /api/saved-jobs/:jobId — unsave a job
+  app.delete("/api/saved-jobs/:jobId", async (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+    const user = req.user as any;
+    if (user.role !== "job_seeker") return res.status(403).json({ message: "Forbidden" });
+    const jobId = Number(req.params.jobId);
+    await storage.unsaveJob(user.id, jobId);
+    res.status(204).end();
   });
 
   // Resources
@@ -1279,6 +1443,41 @@ export async function registerRoutes(
   });
 
   // Resumes
+  // GET /api/seeker-search — employer discovers seekers who have public profiles
+  app.get("/api/seeker-search", async (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+    const user = req.user as any;
+    if (user.role !== "employer" && user.role !== "admin") return res.status(403).json({ message: "Forbidden" });
+    const { keyword = "", track = "" } = req.query as Record<string, string>;
+    const allUsers = await storage.getUsers();
+    const seekers = allUsers.filter((u: any) => {
+      if (u.role !== "job_seeker") return false;
+      if (!u.showProfile) return false;
+      // keyword match against name/email/seekerTrack
+      if (keyword) {
+        const kw = keyword.toLowerCase();
+        const name = [(u.firstName || ""), (u.lastName || ""), (u.email || "")].join(" ").toLowerCase();
+        const trackStr = (u.seekerTrack || "").toLowerCase();
+        if (!name.includes(kw) && !trackStr.includes(kw)) return false;
+      }
+      // track filter
+      if (track && u.seekerTrack !== track) return false;
+      return true;
+    });
+    // Return sanitized data — no sensitive fields
+    const result = seekers.map((u: any) => ({
+      id: u.id,
+      firstName: u.showName ? u.firstName : null,
+      lastName: u.showName ? u.lastName : null,
+      email: u.showName ? u.email : null,
+      seekerTrack: u.seekerTrack,
+      seekerVerificationStatus: u.seekerVerificationStatus,
+      profileImage: u.profileImage,
+      createdAt: u.createdAt,
+    }));
+    res.json(result);
+  });
+
   app.get(api.resumes.get.path, async (req, res) => {
     if (!req.isAuthenticated() || !req.user) return res.status(401).json({ message: "Unauthorized" });
     const caller = req.user as any;

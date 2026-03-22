@@ -42,6 +42,8 @@ import {
   type Message, type InsertMessage,
   emailTemplates, type EmailTemplate, type InsertEmailTemplate,
   emailCronConfigs, type EmailCronConfig, type InsertEmailCronConfig,
+  jobAlertSubscriptions, type JobAlertSubscription, type InsertJobAlertSubscription,
+  savedJobs, type SavedJob, type InsertSavedJob,
 } from "@shared/schema";
 import { eq, and, sql, desc, asc, isNotNull, gte, lte, gt, ne, notInArray, inArray, count } from "drizzle-orm";
 
@@ -69,6 +71,12 @@ export interface IStorage {
   createApplication(app: InsertApplication): Promise<Application>;
   updateApplication(id: number, updates: Partial<InsertApplication>): Promise<Application>;
   deleteApplication(id: number): Promise<void>;
+  markApplicationViewed(id: number): Promise<void>;
+
+  // Saved Jobs
+  getSavedJobsBySeeker(seekerId: number): Promise<SavedJob[]>;
+  saveJob(seekerId: number, jobId: number): Promise<SavedJob>;
+  unsaveJob(seekerId: number, jobId: number): Promise<void>;
 
   // Resources
   getResources(context?: "admin" | "public"): Promise<Resource[]>;
@@ -241,7 +249,14 @@ export interface IStorage {
   getConversation(conversationId: number): Promise<Conversation | undefined>;
 
   // Employer enriched applicants
-  getEmployerApplicationsEnriched(employerId: number): Promise<(Application & { seekerName: string; seekerEmail: string; employerNotes?: string | null })[]>;
+  getEmployerApplicationsEnriched(employerId: number): Promise<(Application & { seekerName: string; seekerEmail: string; seekerVerificationStatus: string | null; employerNotes?: string | null })[]>;
+
+  // Job Alert Subscriptions
+  getJobAlerts(userId: number): Promise<JobAlertSubscription[]>;
+  createJobAlert(data: InsertJobAlertSubscription): Promise<JobAlertSubscription>;
+  deleteJobAlert(id: number, userId: number): Promise<void>;
+  getAllJobAlerts(): Promise<JobAlertSubscription[]>;
+  updateJobAlertNotifiedAt(id: number, notifiedAt: Date): Promise<void>;
 
   // Email Cron Configs
   getEmailCronConfigs(): Promise<EmailCronConfig[]>;
@@ -351,6 +366,25 @@ export class DatabaseStorage implements IStorage {
   }
   async deleteApplication(id: number): Promise<void> {
     await db.delete(applications).where(eq(applications.id, id));
+  }
+  async markApplicationViewed(id: number): Promise<void> {
+    await db.update(applications).set({ viewedAt: new Date() } as any).where(and(eq(applications.id, id), sql`viewed_at IS NULL`));
+  }
+
+  // Saved Jobs
+  async getSavedJobsBySeeker(seekerId: number): Promise<SavedJob[]> {
+    return db.select().from(savedJobs).where(eq(savedJobs.jobSeekerId, seekerId)).orderBy(desc(savedJobs.createdAt));
+  }
+  async saveJob(seekerId: number, jobId: number): Promise<SavedJob> {
+    const [row] = await db.insert(savedJobs).values({ jobSeekerId: seekerId, jobId }).onConflictDoNothing().returning();
+    if (!row) {
+      const existing = await db.select().from(savedJobs).where(and(eq(savedJobs.jobSeekerId, seekerId), eq(savedJobs.jobId, jobId)));
+      return existing[0];
+    }
+    return row;
+  }
+  async unsaveJob(seekerId: number, jobId: number): Promise<void> {
+    await db.delete(savedJobs).where(and(eq(savedJobs.jobSeekerId, seekerId), eq(savedJobs.jobId, jobId)));
   }
 
   // Resources
@@ -1300,7 +1334,7 @@ export class DatabaseStorage implements IStorage {
     return conv;
   }
 
-  async getEmployerApplicationsEnriched(employerId: number): Promise<(Application & { seekerName: string; seekerEmail: string })[]> {
+  async getEmployerApplicationsEnriched(employerId: number): Promise<(Application & { seekerName: string; seekerEmail: string; seekerVerificationStatus: string | null; employerNotes?: string | null })[]> {
     const myJobs = await db.select({ id: jobs.id }).from(jobs).where(eq(jobs.employerId, employerId));
     const jobIds = myJobs.map((j) => j.id);
     if (jobIds.length === 0) return [];
@@ -1310,7 +1344,7 @@ export class DatabaseStorage implements IStorage {
     const seekers =
       seekerIds.length > 0
         ? await db
-            .select({ id: users.id, email: users.email, firstName: users.firstName, lastName: users.lastName })
+            .select({ id: users.id, email: users.email, firstName: users.firstName, lastName: users.lastName, seekerVerificationStatus: users.seekerVerificationStatus })
             .from(users)
             .where(inArray(users.id, seekerIds))
         : [];
@@ -1324,8 +1358,30 @@ export class DatabaseStorage implements IStorage {
             ? `${seeker.firstName} ${seeker.lastName}`
             : seeker.email
           : `Applicant #${a.jobSeekerId}`;
-      return { ...a, seekerName, seekerEmail: seeker?.email ?? "" };
+      return { ...a, seekerName, seekerEmail: seeker?.email ?? "", seekerVerificationStatus: seeker?.seekerVerificationStatus ?? null };
     });
+  }
+
+  // ── Job Alert Subscriptions ────────────────────────────────────────────────
+  async getJobAlerts(userId: number): Promise<JobAlertSubscription[]> {
+    return await db.select().from(jobAlertSubscriptions).where(eq(jobAlertSubscriptions.userId, userId)).orderBy(desc(jobAlertSubscriptions.createdAt));
+  }
+
+  async createJobAlert(data: InsertJobAlertSubscription): Promise<JobAlertSubscription> {
+    const [alert] = await db.insert(jobAlertSubscriptions).values(data).returning();
+    return alert;
+  }
+
+  async deleteJobAlert(id: number, userId: number): Promise<void> {
+    await db.delete(jobAlertSubscriptions).where(and(eq(jobAlertSubscriptions.id, id), eq(jobAlertSubscriptions.userId, userId)));
+  }
+
+  async getAllJobAlerts(): Promise<JobAlertSubscription[]> {
+    return await db.select().from(jobAlertSubscriptions);
+  }
+
+  async updateJobAlertNotifiedAt(id: number, notifiedAt: Date): Promise<void> {
+    await db.update(jobAlertSubscriptions).set({ lastNotifiedAt: notifiedAt }).where(eq(jobAlertSubscriptions.id, id));
   }
 
   // ── Email Templates ────────────────────────────────────────────────────────

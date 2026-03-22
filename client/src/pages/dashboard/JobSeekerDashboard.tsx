@@ -15,10 +15,12 @@ import { Switch } from "@/components/ui/switch";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Progress } from "@/components/ui/progress";
-import { FileText, Briefcase, CreditCard, Plus, CheckCircle2, Clock, XCircle, AlertCircle, Eye, EyeOff, User, Gauge, ShoppingCart, CalendarClock, Zap, ChevronDown, ChevronRight, MessageSquare, PauseCircle, StickyNote, Save, Check } from "lucide-react";
-import type { Application, Resume, Job } from "@shared/schema";
+import { FileText, Briefcase, CreditCard, Plus, CheckCircle2, Clock, XCircle, AlertCircle, Eye, EyeOff, User, Gauge, ShoppingCart, CalendarClock, Zap, ChevronDown, ChevronRight, MessageSquare, PauseCircle, StickyNote, Save, Check, Bell, Trash2, Search, Bookmark, BookmarkCheck } from "lucide-react";
+import type { Application, Resume, Job, JobAlertSubscription, SavedJob } from "@shared/schema";
 import { Link, useLocation } from "wouter";
 import { formatDistanceToNow, format } from "date-fns";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useTaxonomy } from "@/hooks/use-taxonomy";
 
 const SEEKER_STATUS_MAP: Record<string, { label: string; icon: typeof Clock; color: string; group: string }> = {
   new:         { label: "Application Received", icon: Clock,        color: "bg-yellow-100 text-yellow-700 border-yellow-200", group: "active" },
@@ -79,6 +81,13 @@ function SeekerApplicationCard({
           <p className="text-xs text-muted-foreground mt-1">
             Applied {app.createdAt ? formatDistanceToNow(new Date(app.createdAt), { addSuffix: true }) : "recently"}
           </p>
+          {(app as any).viewedAt ? (
+            <p className="text-xs text-primary font-medium mt-0.5 flex items-center gap-1" data-testid={`text-viewed-${app.id}`}>
+              <Eye size={11} /> Viewed by employer
+            </p>
+          ) : (
+            <p className="text-xs text-muted-foreground/60 mt-0.5" data-testid={`text-not-viewed-${app.id}`}>Not yet viewed</p>
+          )}
         </div>
         <div className="flex items-center gap-2 shrink-0">
           <Badge className={`border ${meta.color} flex items-center gap-1.5 whitespace-nowrap`}>
@@ -788,6 +797,275 @@ function SeekerProfileTab() {
   );
 }
 
+const US_STATES = [
+  "AL","AK","AZ","AR","CA","CO","CT","DE","FL","GA","HI","ID","IL","IN","IA","KS","KY","LA","ME","MD",
+  "MA","MI","MN","MS","MO","MT","NE","NV","NH","NJ","NM","NY","NC","ND","OH","OK","OR","PA","RI","SC",
+  "SD","TN","TX","UT","VT","VA","WA","WV","WI","WY",
+];
+
+function SavedJobsTab() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  const { data: savedJobs = [], isLoading } = useQuery<SavedJob[]>({ queryKey: ["/api/saved-jobs"] });
+  const { data: allJobs = [] } = useQuery<Job[]>({ queryKey: ["/api/jobs"] });
+
+  const unsaveMutation = useMutation({
+    mutationFn: (jobId: number) => apiRequest("DELETE", `/api/saved-jobs/${jobId}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/saved-jobs"] });
+      toast({ title: "Removed from saved jobs" });
+    },
+  });
+
+  const jobMap = new Map(allJobs.map((j) => [j.id, j]));
+
+  if (isLoading) return <div className="animate-pulse h-32 bg-slate-100 dark:bg-slate-800 rounded-xl" />;
+
+  return (
+    <div>
+      <h2 className="text-2xl font-bold font-display mb-6 flex items-center gap-2"><Bookmark size={20} /> Saved Jobs</h2>
+      {savedJobs.length === 0 ? (
+        <div className="text-center py-16 bg-white dark:bg-slate-900 rounded-2xl border border-dashed border-border">
+          <Bookmark className="mx-auto mb-4 text-muted-foreground" size={40} />
+          <h3 className="font-bold font-display text-lg mb-2">No saved jobs yet</h3>
+          <p className="text-muted-foreground mb-4">Save jobs while browsing to revisit them later.</p>
+          <Link href="/jobs"><a className="text-primary underline font-semibold">Browse jobs</a></Link>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {savedJobs.map((saved) => {
+            const job = jobMap.get(saved.jobId);
+            return (
+              <div key={saved.id} data-testid={`card-saved-job-${saved.jobId}`} className="bg-white dark:bg-slate-900 rounded-xl border border-border p-5 flex items-start justify-between gap-4">
+                <div className="flex-1 min-w-0">
+                  {job ? (
+                    <>
+                      <Link href={`/jobs/${job.id}`}>
+                        <a className="font-semibold hover:underline truncate block" data-testid={`link-saved-job-title-${job.id}`}>{job.title}</a>
+                      </Link>
+                      {job.companyName && <p className="text-sm text-muted-foreground truncate">{job.companyName}</p>}
+                      {job.locationCity && <p className="text-xs text-muted-foreground">{job.locationCity}{job.locationState ? `, ${job.locationState}` : ""}</p>}
+                    </>
+                  ) : (
+                    <p className="font-semibold">Job #{saved.jobId}</p>
+                  )}
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Saved {saved.createdAt ? formatDistanceToNow(new Date(saved.createdAt), { addSuffix: true }) : "recently"}
+                  </p>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  {job && (
+                    <Link href={`/jobs/${job.id}`}>
+                      <Button variant="outline" size="sm" data-testid={`button-view-saved-job-${job.id}`}>View</Button>
+                    </Link>
+                  )}
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="text-muted-foreground hover:text-destructive"
+                    onClick={() => unsaveMutation.mutate(saved.jobId)}
+                    disabled={unsaveMutation.isPending}
+                    data-testid={`button-unsave-job-${saved.jobId}`}
+                  >
+                    <Trash2 size={15} />
+                  </Button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function JobAlertsTab() {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const { getAllCategories } = useTaxonomy();
+  const allCategories = getAllCategories();
+  const [keyword, setKeyword] = useState("");
+  const [category, setCategory] = useState("any");
+  const [locationState, setLocationState] = useState("any");
+  const [jobType, setJobType] = useState("any");
+
+  const { data: alerts = [], isLoading } = useQuery<JobAlertSubscription[]>({
+    queryKey: ["/api/alerts"],
+  });
+
+  const createMutation = useMutation({
+    mutationFn: () => apiRequest("POST", "/api/alerts", {
+      keyword: keyword.trim() || null,
+      category: category === "any" ? null : category,
+      locationState: locationState === "any" ? null : locationState,
+      jobType: jobType === "any" ? null : jobType,
+    }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/alerts"] });
+      setKeyword("");
+      setCategory("any");
+      setLocationState("any");
+      setJobType("any");
+      toast({ title: "Alert created", description: "You'll receive an email when a matching job is posted." });
+    },
+    onError: (err: any) => {
+      toast({ title: "Error", description: err.message || "Could not create alert", variant: "destructive" });
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: number) => apiRequest("DELETE", `/api/alerts/${id}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/alerts"] });
+      toast({ title: "Alert removed" });
+    },
+  });
+
+  function alertLabel(alert: JobAlertSubscription) {
+    const parts: string[] = [];
+    if (alert.keyword) parts.push(`"${alert.keyword}"`);
+    if (alert.category) parts.push(alert.category);
+    if (alert.locationState) parts.push(alert.locationState);
+    if (alert.jobType) parts.push(alert.jobType);
+    if (alert.workLocationType) parts.push(alert.workLocationType);
+    return parts.length > 0 ? parts.join(" · ") : "All jobs";
+  }
+
+  const handleCreate = () => {
+    if (!keyword.trim() && category === "any" && locationState === "any" && jobType === "any") {
+      toast({ title: "Add at least one filter", description: "Choose a keyword, category, location, or job type.", variant: "destructive" });
+      return;
+    }
+    createMutation.mutate();
+  };
+
+  return (
+    <div className="py-6 px-4 md:px-6">
+      <div className="mb-6">
+        <h2 className="text-xl font-bold font-display flex items-center gap-2">
+          <Bell size={20} className="text-primary" /> Job Alerts
+        </h2>
+        <p className="text-sm text-muted-foreground mt-1">
+          Get notified by email whenever a new job matches your criteria. Up to 5 active alerts.
+        </p>
+      </div>
+
+      {/* Create Alert Form */}
+      {alerts.length < 5 && (
+        <Card className="p-5 mb-6 border border-border">
+          <h3 className="font-semibold mb-4">Create a New Alert</h3>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <Label className="text-xs mb-1 block">Keyword (optional)</Label>
+              <Input
+                value={keyword}
+                onChange={e => setKeyword(e.target.value)}
+                placeholder="e.g. Class A CDL, dispatcher"
+                data-testid="input-alert-keyword"
+              />
+            </div>
+            <div>
+              <Label className="text-xs mb-1 block">Category (optional)</Label>
+              <Select value={category} onValueChange={setCategory}>
+                <SelectTrigger data-testid="select-alert-category">
+                  <SelectValue placeholder="Any category" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="any">Any category</SelectItem>
+                  {allCategories.map((cat: string) => (
+                    <SelectItem key={cat} value={cat}>{cat}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label className="text-xs mb-1 block">State (optional)</Label>
+              <Select value={locationState} onValueChange={setLocationState}>
+                <SelectTrigger data-testid="select-alert-state">
+                  <SelectValue placeholder="Any state" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="any">Any state</SelectItem>
+                  {US_STATES.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label className="text-xs mb-1 block">Job Type (optional)</Label>
+              <Select value={jobType} onValueChange={setJobType}>
+                <SelectTrigger data-testid="select-alert-jobtype">
+                  <SelectValue placeholder="Any type" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="any">Any type</SelectItem>
+                  <SelectItem value="full_time">Full-time</SelectItem>
+                  <SelectItem value="part_time">Part-time</SelectItem>
+                  <SelectItem value="contract">Contract</SelectItem>
+                  <SelectItem value="temporary">Temporary</SelectItem>
+                  <SelectItem value="seasonal">Seasonal</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <Button
+            className="mt-4"
+            onClick={handleCreate}
+            disabled={createMutation.isPending}
+            data-testid="button-create-alert"
+          >
+            <Bell size={15} className="mr-2" />
+            {createMutation.isPending ? "Creating…" : "Create Alert"}
+          </Button>
+        </Card>
+      )}
+
+      {/* Existing Alerts */}
+      {isLoading ? (
+        <div className="text-sm text-muted-foreground">Loading alerts…</div>
+      ) : alerts.length === 0 ? (
+        <div className="text-center py-12 text-muted-foreground">
+          <Bell size={32} className="mx-auto mb-3 opacity-30" />
+          <p className="font-medium">No alerts yet</p>
+          <p className="text-sm mt-1">Create your first alert above to get notified of new jobs.</p>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {alerts.length >= 5 && (
+            <p className="text-sm text-amber-600 dark:text-amber-400 mb-4">You've reached the maximum of 5 alerts. Delete one to add a new one.</p>
+          )}
+          {alerts.map(alert => (
+            <div
+              key={alert.id}
+              className="flex items-center justify-between gap-3 p-4 rounded-xl border border-border bg-white dark:bg-slate-900"
+              data-testid={`card-alert-${alert.id}`}
+            >
+              <div className="flex items-center gap-3 min-w-0">
+                <Bell size={16} className="text-primary shrink-0" />
+                <div className="min-w-0">
+                  <p className="font-medium text-sm truncate" data-testid={`text-alert-label-${alert.id}`}>{alertLabel(alert)}</p>
+                  {alert.lastNotifiedAt && (
+                    <p className="text-xs text-muted-foreground">Last notified: {format(new Date(alert.lastNotifiedAt), "MMM d, yyyy")}</p>
+                  )}
+                </div>
+              </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="shrink-0 text-destructive hover:text-destructive hover:bg-destructive/10"
+                disabled={deleteMutation.isPending}
+                onClick={() => deleteMutation.mutate(alert.id)}
+                data-testid={`button-delete-alert-${alert.id}`}
+              >
+                <Trash2 size={14} />
+              </Button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function JobSeekerDashboard({ section }: { section?: string }) {
   const { user } = useAuth();
 
@@ -798,6 +1076,8 @@ export default function JobSeekerDashboard({ section }: { section?: string }) {
     if (section === "profile") return <SeekerProfileTab />;
     if (section === "quota") return <QuotaTab />;
     if (section === "membership") return <MembershipTab user={user} />;
+    if (section === "alerts") return <JobAlertsTab />;
+    if (section === "saved") return <SavedJobsTab />;
     return <ApplicationsTab userId={user.id} />;
   };
 

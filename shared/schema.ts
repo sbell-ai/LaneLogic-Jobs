@@ -103,6 +103,7 @@ export const applications = pgTable("applications", {
   employerNotes: text("employer_notes"),
   seekerNotes: text("seeker_notes"),
   createdAt: timestamp("created_at").defaultNow(),
+  viewedAt: timestamp("viewed_at"),
 });
 
 export const resources = pgTable("resources", {
@@ -814,6 +815,38 @@ export const insertEmailCronConfigSchema = createInsertSchema(emailCronConfigs).
 });
 export type EmailCronConfig = typeof emailCronConfigs.$inferSelect;
 export type InsertEmailCronConfig = z.infer<typeof insertEmailCronConfigSchema>;
+
+// ── Job Alert Subscriptions ─────────────────────────────────────────────────
+export const jobAlertSubscriptions = pgTable("job_alert_subscriptions", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  keyword: text("keyword"),
+  category: text("category"),
+  subcategory: text("subcategory"),
+  locationState: text("location_state"),
+  jobType: text("job_type"),
+  workLocationType: text("work_location_type"),
+  lastNotifiedAt: timestamp("last_notified_at"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const insertJobAlertSubscriptionSchema = createInsertSchema(jobAlertSubscriptions).omit({
+  id: true,
+  lastNotifiedAt: true,
+  createdAt: true,
+});
+export type JobAlertSubscription = typeof jobAlertSubscriptions.$inferSelect;
+export type InsertJobAlertSubscription = z.infer<typeof insertJobAlertSubscriptionSchema>;
+
+export const savedJobs = pgTable("saved_jobs", {
+  id: serial("id").primaryKey(),
+  jobSeekerId: integer("job_seeker_id").notNull(),
+  jobId: integer("job_id").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+export const insertSavedJobSchema = createInsertSchema(savedJobs).omit({ id: true, createdAt: true });
+export type SavedJob = typeof savedJobs.$inferSelect;
+export type InsertSavedJob = z.infer<typeof insertSavedJobSchema>;
 
 // Auth requests
 export const loginSchema = z.object({

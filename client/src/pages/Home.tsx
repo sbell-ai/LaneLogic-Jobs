@@ -13,6 +13,7 @@ import {
   JobFilterSidebar, MobileFilterButton, useJobFilters, filterJobs, getActiveFilterCount, clearAllFilters, formatJobLocation,
 } from "@/components/JobFilterSidebar";
 import { useTaxonomy } from "@/hooks/use-taxonomy";
+import { VerifiedBadge } from "@/components/VerifiedBadge";
 
 export default function Home() {
   const [, setLocation] = useLocation();
@@ -209,7 +210,12 @@ export default function Home() {
                             </div>
                             <h3 className="text-base font-bold font-display mb-1 group-hover:text-primary transition-colors line-clamp-1" data-testid={`text-job-title-${job.id}`}>{job.title}</h3>
                             {job.companyName && (
-                              <p className="text-sm text-muted-foreground mb-2">{job.companyName}</p>
+                              <p className="text-sm text-muted-foreground mb-2 flex items-center gap-1.5">
+                                {job.companyName}
+                                {(job as any).employerVerificationStatus === "approved" && (
+                                  <VerifiedBadge type="employer" size="sm" />
+                                )}
+                              </p>
                             )}
                             <div className="flex items-center text-muted-foreground text-xs mb-3">
                               <MapPin size={14} className="mr-1 shrink-0" />

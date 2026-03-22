@@ -3,7 +3,8 @@ import { Navbar } from "@/components/layout/Navbar";
 import { Footer } from "@/components/layout/Footer";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { MapPin, DollarSign, Clock, ExternalLink, CheckCircle2, Briefcase, Building2, Star, MessageSquare } from "lucide-react";
+import { MapPin, DollarSign, Clock, ExternalLink, CheckCircle2, Briefcase, Building2, Star, MessageSquare, Bookmark, BookmarkCheck } from "lucide-react";
+import type { SavedJob } from "@shared/schema";
 import { BackButton } from "@/components/nav/BackButton";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/use-auth";
@@ -13,6 +14,7 @@ import type { Job } from "@shared/schema";
 import { formatDistanceToNow } from "date-fns";
 import MarkdownDescription from "@/components/MarkdownDescription";
 import { formatJobLocation } from "@/components/JobFilterSidebar";
+import { VerifiedBadge } from "@/components/VerifiedBadge";
 
 function fmtLoc(job: Job) {
   return formatJobLocation(job);
@@ -65,6 +67,27 @@ export default function JobDetail() {
     },
   });
 
+  const { data: savedJobs = [] } = useQuery<SavedJob[]>({
+    queryKey: ["/api/saved-jobs"],
+    enabled: !!user && user.role === "job_seeker",
+  });
+  const isSaved = savedJobs.some((s) => s.jobId === Number(id));
+
+  const saveMutation = useMutation({
+    mutationFn: () => apiRequest("POST", "/api/saved-jobs", { jobId: Number(id) }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/saved-jobs"] });
+      toast({ title: "Job saved", description: "Added to your saved jobs." });
+    },
+  });
+  const unsaveMutation = useMutation({
+    mutationFn: () => apiRequest("DELETE", `/api/saved-jobs/${id}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/saved-jobs"] });
+      toast({ title: "Removed", description: "Job removed from saved jobs." });
+    },
+  });
+
   const handleApply = () => {
     if (!user) { setLocation("/login"); return; }
     if (job?.isExternalApply && job.applyUrl) {
@@ -112,8 +135,50 @@ export default function JobDetail() {
 
   const locationStr = fmtLoc(job);
 
+  const siteUrl = "https://lanelogicjobs.com";
+  const jobUrl = `${siteUrl}/jobs/${job.id}`;
+
+  const jobSchema: Record<string, unknown> = {
+    "@context": "https://schema.org/",
+    "@type": "JobPosting",
+    "title": job.title,
+    "description": job.description || "",
+    "identifier": { "@type": "PropertyValue", "name": job.companyName || "LaneLogic Jobs", "value": String(job.id) },
+    "datePosted": job.createdAt ? new Date(job.createdAt).toISOString().split("T")[0] : undefined,
+    "validThrough": job.expiresAt ? new Date(job.expiresAt).toISOString().split("T")[0] : undefined,
+    "employmentType": (() => {
+      const typeMap: Record<string, string> = {
+        full_time: "FULL_TIME", part_time: "PART_TIME", contract: "CONTRACTOR",
+        temporary: "TEMPORARY", seasonal: "TEMPORARY", internship: "INTERN",
+      };
+      return job.jobType ? typeMap[job.jobType] || "OTHER" : undefined;
+    })(),
+    "hiringOrganization": {
+      "@type": "Organization",
+      "name": job.companyName || "LaneLogic Jobs",
+      ...(((job as any).employerLogo) ? { "logo": (job as any).employerLogo } : {}),
+    },
+    "jobLocation": {
+      "@type": "Place",
+      "address": {
+        "@type": "PostalAddress",
+        ...(job.locationCity ? { "addressLocality": job.locationCity } : {}),
+        ...(job.locationState ? { "addressRegion": job.locationState } : {}),
+        "addressCountry": "US",
+      },
+    },
+    ...(job.workLocationType === "remote" ? { "jobLocationType": "TELECOMMUTE" } : {}),
+    ...(job.salary ? { "baseSalary": { "@type": "MonetaryAmount", "currency": "USD", "value": { "@type": "QuantitativeValue", "value": job.salary, "unitText": "YEAR" } } } : {}),
+    "url": jobUrl,
+    "applyLink": job.applyUrl || jobUrl,
+  };
+
+  // Remove undefined values
+  Object.keys(jobSchema).forEach(k => { if (jobSchema[k] === undefined) delete jobSchema[k]; });
+
   return (
     <div className="min-h-screen flex flex-col font-sans">
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jobSchema) }} />
       <Navbar />
       <main className="flex-grow bg-slate-50 dark:bg-slate-950 py-10">
         <div className="container mx-auto px-4 md:px-6 max-w-4xl">
@@ -136,6 +201,9 @@ export default function JobDetail() {
                     {job.companyName && (
                       <p className="text-base font-medium text-foreground/70 flex items-center gap-1.5 mb-2">
                         <Building2 size={15} /> {job.companyName}
+                        {(job as any).employerVerificationStatus === "approved" && (
+                          <VerifiedBadge type="employer" size="sm" />
+                        )}
                       </p>
                     )}
                     <div className="flex flex-wrap gap-3 text-sm text-muted-foreground">
@@ -191,6 +259,18 @@ export default function JobDetail() {
                     >
                       <MessageSquare size={16} />
                       {messageMutation.isPending ? "Opening..." : "Message Employer"}
+                    </Button>
+                  )}
+                  {user?.role === "job_seeker" && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => isSaved ? unsaveMutation.mutate() : saveMutation.mutate()}
+                      disabled={saveMutation.isPending || unsaveMutation.isPending}
+                      data-testid="button-save-job"
+                      className="gap-2"
+                    >
+                      {isSaved ? <><BookmarkCheck size={15} /> Saved</> : <><Bookmark size={15} /> Save Job</>}
                     </Button>
                   )}
                   {!user && (

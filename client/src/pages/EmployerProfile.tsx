@@ -9,6 +9,7 @@ import {
   CheckCircle2, ArrowLeft, ExternalLink, DollarSign
 } from "lucide-react";
 import { formatJobLocation } from "@/components/JobFilterSidebar";
+import { VerifiedBadge } from "@/components/VerifiedBadge";
 
 interface EmployerJob {
   id: number;
@@ -32,6 +33,7 @@ interface EmployerProfile {
   contactPhone: string | null;
   aboutCompany: string | null;
   claimed: boolean;
+  verificationStatus: string | null;
   industries: string[];
   locations: string[];
   jobs: EmployerJob[];
@@ -129,8 +131,11 @@ export default function EmployerProfile() {
                   <h1 className="text-2xl md:text-3xl font-bold font-display" data-testid="text-employer-name">
                     {displayName}
                   </h1>
+                  {employer.verificationStatus === "approved" && (
+                    <VerifiedBadge type="employer" size="md" />
+                  )}
                   {employer.claimed && (
-                    <CheckCircle2 className="h-5 w-5 text-primary shrink-0" title="Verified employer" />
+                    <CheckCircle2 className="h-5 w-5 text-primary shrink-0" title="Claimed profile" />
                   )}
                 </div>
                 <div className="flex items-center gap-1.5 text-muted-foreground text-sm mt-1">

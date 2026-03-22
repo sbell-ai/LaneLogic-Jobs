@@ -7,12 +7,14 @@ import { Badge } from "@/components/ui/badge";
 import { Search, Building2, MapPin, CheckCircle2 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { motion } from "framer-motion";
+import { VerifiedBadge } from "@/components/VerifiedBadge";
 
 interface Employer {
   id: number | null;
   companyName: string;
   companyLogo: string | null;
   claimed: boolean;
+  verificationStatus: string | null;
   jobCount: number;
   industries: string[];
   locations: string[];
@@ -114,8 +116,11 @@ export default function Employers() {
                           )}
                           <div className="min-w-0 flex-1">
                             <div className="flex items-center gap-2">
-                              <h3 className="font-semibold text-lg line-clamp-2" data-testid={`text-employer-name-${emp.companyName.replace(/\s+/g, '-').toLowerCase()}`}>
+                              <h3 className="font-semibold text-lg line-clamp-2 flex items-center gap-1.5 flex-wrap" data-testid={`text-employer-name-${emp.companyName.replace(/\s+/g, '-').toLowerCase()}`}>
                                 {emp.companyName}
+                                {emp.verificationStatus === "approved" && (
+                                  <VerifiedBadge type="employer" size="sm" />
+                                )}
                               </h3>
                               {emp.claimed && (
                                 <CheckCircle2 className="h-4 w-4 text-primary shrink-0" title="Verified employer" />

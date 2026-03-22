@@ -49,8 +49,39 @@ export default function BlogPostPage() {
 
   const isHtml = post.content.trimStart().startsWith("<");
 
+  const siteUrl = "https://lanelogicjobs.com";
+  const postUrl = `${siteUrl}/blog/${id}`;
+  const articleSchema = {
+    "@context": "https://schema.org",
+    "@type": "Article",
+    "headline": post.title,
+    "description": post.content.replace(/<[^>]*>/g, "").slice(0, 200),
+    "image": post.imageUrl || `${siteUrl}/og-default.jpg`,
+    "author": { "@type": "Organization", "name": "LaneLogic Jobs" },
+    "publisher": {
+      "@type": "Organization",
+      "name": "LaneLogic Jobs",
+      "logo": { "@type": "ImageObject", "url": `${siteUrl}/logo.png` },
+    },
+    "datePublished": post.publishedAt ?? post.createdAt,
+    "dateModified": post.updatedAt ?? post.publishedAt ?? post.createdAt,
+    "mainEntityOfPage": { "@type": "WebPage", "@id": postUrl },
+    "url": postUrl,
+  };
+
+  const metaTitle = `${post.title} | LaneLogic Jobs Blog`;
+  const metaDescription = post.content.replace(/<[^>]*>/g, "").replace(/\s+/g, " ").trim().slice(0, 160);
+
   return (
     <div className="min-h-screen flex flex-col font-sans">
+      <title>{metaTitle}</title>
+      <meta name="description" content={metaDescription} />
+      <meta property="og:title" content={metaTitle} />
+      <meta property="og:description" content={metaDescription} />
+      <meta property="og:type" content="article" />
+      <meta property="og:url" content={postUrl} />
+      {post.imageUrl && <meta property="og:image" content={post.imageUrl} />}
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(articleSchema) }} />
       <Navbar />
       <main className="flex-grow bg-slate-50 dark:bg-slate-950 py-10">
         <div className="container mx-auto px-4 md:px-6 max-w-3xl">

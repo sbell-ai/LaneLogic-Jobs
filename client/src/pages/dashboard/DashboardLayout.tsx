@@ -1,7 +1,7 @@
 import { SidebarProvider, SidebarTrigger, Sidebar, SidebarContent, SidebarGroup, SidebarGroupLabel, SidebarGroupContent, SidebarMenu, SidebarMenuItem, SidebarMenuButton } from "@/components/ui/sidebar";
 import { useAuth } from "@/hooks/use-auth";
 import { Link, useLocation } from "wouter";
-import { Briefcase, LayoutDashboard, FileText, LogOut, Users, BookOpen, Upload, CreditCard, UserPlus, PlusCircle, Palette, FileEdit, Tag, Ticket, UserCircle, FilePlus2, Share2, Database, Package, Gauge, ArrowDownToLine, ShieldCheck, MessageSquare, Mail, Clock } from "lucide-react";
+import { Briefcase, LayoutDashboard, FileText, LogOut, Users, BookOpen, Upload, CreditCard, UserPlus, PlusCircle, Palette, FileEdit, Tag, Ticket, UserCircle, FilePlus2, Share2, Database, Package, Gauge, ArrowDownToLine, ShieldCheck, MessageSquare, Mail, Clock, Bell, BarChart2, Bookmark, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -28,6 +28,8 @@ function AppSidebar({ role }: { role: string }) {
     { title: "Applied Jobs", path: "/dashboard/applications", icon: Briefcase },
     { title: "My Resume", path: "/dashboard/resume", icon: FileText },
     { title: "My Profile", path: "/dashboard/profile", icon: UserCircle },
+    { title: "Saved Jobs", path: "/dashboard/saved", icon: Bookmark },
+    { title: "Job Alerts", path: "/dashboard/alerts", icon: Bell },
     { title: "Verification", path: "/seeker/settings/verification", icon: ShieldCheck },
     { title: "Usage & Quota", path: "/dashboard/quota", icon: Gauge },
     { title: "Membership", path: "/dashboard/membership", icon: CreditCard },
@@ -38,6 +40,8 @@ function AppSidebar({ role }: { role: string }) {
     { title: "Overview", path: "/dashboard", icon: LayoutDashboard },
     { title: "My Job Postings", path: "/dashboard/jobs", icon: Briefcase },
     { title: "Applicants", path: "/dashboard/applicants", icon: Users },
+    { title: "Analytics", path: "/dashboard/analytics", icon: BarChart2 },
+    { title: "Find Candidates", path: "/dashboard/candidates", icon: Search },
     { title: "Bulk Upload (CSV)", path: "/dashboard/upload", icon: Upload },
     { title: "Company Profile", path: "/dashboard/profile", icon: UserCircle },
     { title: "Verification", path: "/employer/settings/verification", icon: ShieldCheck },

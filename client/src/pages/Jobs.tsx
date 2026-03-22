@@ -15,6 +15,7 @@ import {
   JobFilterSidebar, MobileFilterButton, useJobFilters, filterJobs, getActiveFilterCount, clearAllFilters, formatJobLocation,
 } from "@/components/JobFilterSidebar";
 import { useTaxonomy } from "@/hooks/use-taxonomy";
+import { VerifiedBadge } from "@/components/VerifiedBadge";
 
 export default function Jobs() {
   const searchString = useSearch();
@@ -130,6 +131,9 @@ export default function Jobs() {
                             {job.companyName && (
                               <p className="text-sm font-medium text-foreground/70 flex items-center gap-1 mt-1">
                                 <Building2 size={13} className="shrink-0" /> <span className="line-clamp-1">{job.companyName}</span>
+                                {(job as any).employerVerificationStatus === "approved" && (
+                                  <VerifiedBadge type="employer" size="sm" />
+                                )}
                               </p>
                             )}
 
