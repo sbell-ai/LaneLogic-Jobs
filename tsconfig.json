@@ -6,10 +6,12 @@
     "moduleResolution": "Bundler",
     "types": ["node"],
     "baseUrl": ".",
+    "skipLibCheck": true,
+    "allowImportingTsExtensions": true,
     "paths": {
       "@shared/*": ["shared/*"]
     }
   },
   "include": ["./**/*.ts"],
-  "exclude": ["../client", "../node_modules", "../dist"]
+  "exclude": ["client", "node_modules", "dist"]
 }

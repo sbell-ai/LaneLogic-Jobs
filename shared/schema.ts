@@ -85,14 +85,14 @@ export const jobs = pgTable("jobs", {
   lastImportedAt: timestamp("last_imported_at"),
   lastAdminEditedAt: timestamp("last_admin_edited_at"),
   rawSourceSnippet: text("raw_source_snippet"),
-}, (table) => [
-  uniqueIndex("jobs_employer_external_key_idx")
+}, (table) => ({
+  jobsEmployerExternalKeyIdx: uniqueIndex("jobs_employer_external_key_idx")
     .on(table.employerId, table.externalJobKey)
     .where(sql`${table.externalJobKey} IS NOT NULL`),
-  uniqueIndex("jobs_source_target_external_idx")
+  jobsSourceTargetExternalIdx: uniqueIndex("jobs_source_target_external_idx")
     .on(table.sourceId, table.importTargetId, table.externalJobId)
     .where(sql`${table.sourceId} IS NOT NULL AND ${table.externalJobId} IS NOT NULL`),
-]);
+}));
 
 export const applications = pgTable("applications", {
   id: serial("id").primaryKey(),
@@ -251,9 +251,9 @@ export const importTargets = pgTable("import_targets", {
   status: text("status").notNull().default("pending_review"),
   firstSeenAt: timestamp("first_seen_at").defaultNow(),
   lastSeenAt: timestamp("last_seen_at").defaultNow(),
-}, (table) => [
-  uniqueIndex("import_targets_source_domain_idx").on(table.sourceId, table.sourceDomain),
-]);
+}, (table) => ({
+  importTargetsSourceDomainIdx: uniqueIndex("import_targets_source_domain_idx").on(table.sourceId, table.sourceDomain),
+}));
 
 export const jobImportRuns = pgTable("job_import_runs", {
   id: serial("id").primaryKey(),
@@ -343,9 +343,9 @@ export const adminProducts = pgTable("admin_products", {
   creditExpiryMonths: integer("credit_expiry_months").default(12),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
-}, (table) => [
-  uniqueIndex("admin_products_notion_page_id_idx").on(table.notionPageId).where(sql`${table.notionPageId} IS NOT NULL`),
-]);
+}, (table) => ({
+  adminProductsNotionPageIdIdx: uniqueIndex("admin_products_notion_page_id_idx").on(table.notionPageId).where(sql`${table.notionPageId} IS NOT NULL`),
+}));
 
 export const adminEntitlements = pgTable("admin_entitlements", {
   id: serial("id").primaryKey(),
@@ -358,9 +358,9 @@ export const adminEntitlements = pgTable("admin_entitlements", {
   status: text("status").notNull().default("Active"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
-}, (table) => [
-  uniqueIndex("admin_entitlements_notion_page_id_idx").on(table.notionPageId).where(sql`${table.notionPageId} IS NOT NULL`),
-]);
+}, (table) => ({
+  adminEntitlementsNotionPageIdIdx: uniqueIndex("admin_entitlements_notion_page_id_idx").on(table.notionPageId).where(sql`${table.notionPageId} IS NOT NULL`),
+}));
 
 export const adminProductOverrides = pgTable("admin_product_overrides", {
   id: serial("id").primaryKey(),
@@ -374,18 +374,18 @@ export const adminProductOverrides = pgTable("admin_product_overrides", {
   notes: text("notes"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
-}, (table) => [
-  uniqueIndex("admin_product_overrides_product_entitlement_idx").on(table.productId, table.entitlementId),
-  uniqueIndex("admin_product_overrides_notion_page_id_idx").on(table.notionPageId).where(sql`${table.notionPageId} IS NOT NULL`),
-]);
+}, (table) => ({
+  adminProductOverridesProductEntitlementIdx: uniqueIndex("admin_product_overrides_product_entitlement_idx").on(table.productId, table.entitlementId),
+  adminProductOverridesNotionPageIdIdx: uniqueIndex("admin_product_overrides_notion_page_id_idx").on(table.notionPageId).where(sql`${table.notionPageId} IS NOT NULL`),
+}));
 
 export const adminProductEntitlements = pgTable("admin_product_entitlements", {
   id: serial("id").primaryKey(),
   productId: integer("product_id").notNull(),
   entitlementId: integer("entitlement_id").notNull(),
-}, (table) => [
-  uniqueIndex("admin_product_entitlements_product_entitlement_idx").on(table.productId, table.entitlementId),
-]);
+}, (table) => ({
+  adminProductEntitlementsProductEntitlementIdx: uniqueIndex("admin_product_entitlements_product_entitlement_idx").on(table.productId, table.entitlementId),
+}));
 
 export const migrationState = pgTable("migration_state", {
   id: serial("id").primaryKey(),
@@ -402,9 +402,9 @@ export const entitlementUsageWindows = pgTable("entitlement_usage_windows", {
   windowStart: timestamp("window_start").notNull(),
   windowEnd: timestamp("window_end").notNull(),
   usedCount: integer("used_count").notNull().default(0),
-}, (table) => [
-  uniqueIndex("entitlement_usage_windows_user_key_start_idx").on(table.userId, table.entitlementKey, table.windowStart),
-]);
+}, (table) => ({
+  entitlementUsageWindowsUserKeyStartIdx: uniqueIndex("entitlement_usage_windows_user_key_start_idx").on(table.userId, table.entitlementKey, table.windowStart),
+}));
 
 export const entitlementCreditGrants = pgTable("entitlement_credit_grants", {
   id: serial("id").primaryKey(),
@@ -439,12 +439,12 @@ export const employerVerificationRequests = pgTable("employer_verification_reque
   submittedAt: timestamp("submitted_at"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
-}, (table) => [
-  uniqueIndex("evr_employer_active_idx")
+}, (table) => ({
+  evrEmployerActiveIdx: uniqueIndex("evr_employer_active_idx")
     .on(table.employerId)
     .where(sql`${table.status} IN ('draft', 'submitted', 'needs_more')`),
-  index("evr_status_idx").on(table.status),
-]);
+  evrStatusIdx: index("evr_status_idx").on(table.status),
+}));
 
 export const employerEvidenceItems = pgTable("employer_evidence_items", {
   id: serial("id").primaryKey(),
@@ -454,9 +454,9 @@ export const employerEvidenceItems = pgTable("employer_evidence_items", {
   excerpt: text("excerpt"),
   claim: text("claim"),
   createdAt: timestamp("created_at").defaultNow(),
-}, (table) => [
-  index("eei_request_idx").on(table.requestId),
-]);
+}, (table) => ({
+  eeiRequestIdx: index("eei_request_idx").on(table.requestId),
+}));
 
 export const insertEmployerVerificationRequestSchema = createInsertSchema(employerVerificationRequests).omit({ id: true, createdAt: true, updatedAt: true });
 export const insertEmployerEvidenceItemSchema = createInsertSchema(employerEvidenceItems).omit({ id: true, createdAt: true });
@@ -489,12 +489,12 @@ export const seekerVerificationRequests = pgTable("seeker_verification_requests"
   submittedAt: timestamp("submitted_at"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
-}, (table) => [
-  uniqueIndex("svr_seeker_active_idx")
+}, (table) => ({
+  svrSeekerActiveIdx: uniqueIndex("svr_seeker_active_idx")
     .on(table.seekerId)
     .where(sql`${table.status} IN ('draft', 'submitted', 'needs_more')`),
-  index("svr_status_idx").on(table.status),
-]);
+  svrStatusIdx: index("svr_status_idx").on(table.status),
+}));
 
 export const seekerCredentialEvidenceItems = pgTable("seeker_credential_evidence_items", {
   id: serial("id").primaryKey(),
@@ -505,9 +505,9 @@ export const seekerCredentialEvidenceItems = pgTable("seeker_credential_evidence
   excerpt: text("excerpt"),
   claim: text("claim"),
   createdAt: timestamp("created_at").defaultNow(),
-}, (table) => [
-  index("scei_request_idx").on(table.requestId),
-]);
+}, (table) => ({
+  sceiRequestIdx: index("scei_request_idx").on(table.requestId),
+}));
 
 export const insertSeekerCredentialRequirementSchema = createInsertSchema(seekerCredentialRequirements).omit({ id: true, createdAt: true });
 export const insertSeekerRequirementRuleSchema = createInsertSchema(seekerRequirementRules).omit({ id: true, createdAt: true });
@@ -521,10 +521,10 @@ export const conversations = pgTable("conversations", {
   jobId: integer("job_id"),
   lastMessageAt: timestamp("last_message_at").defaultNow(),
   createdAt: timestamp("created_at").defaultNow(),
-}, (table) => [
-  index("conv_seeker_idx").on(table.seekerId),
-  index("conv_employer_idx").on(table.employerId),
-]);
+}, (table) => ({
+  convSeekerIdx: index("conv_seeker_idx").on(table.seekerId),
+  convEmployerIdx: index("conv_employer_idx").on(table.employerId),
+}));
 
 export const messages = pgTable("messages", {
   id: serial("id").primaryKey(),
@@ -533,9 +533,9 @@ export const messages = pgTable("messages", {
   content: text("content").notNull(),
   isRead: boolean("is_read").notNull().default(false),
   createdAt: timestamp("created_at").defaultNow(),
-}, (table) => [
-  index("msg_conversation_idx").on(table.conversationId),
-]);
+}, (table) => ({
+  msgConversationIdx: index("msg_conversation_idx").on(table.conversationId),
+}));
 
 export const insertConversationSchema = createInsertSchema(conversations).omit({ id: true, createdAt: true, lastMessageAt: true });
 export const insertMessageSchema = createInsertSchema(messages).omit({ id: true, createdAt: true });
