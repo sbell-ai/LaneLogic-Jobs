@@ -101,7 +101,7 @@ export default function JobDetail() {
     user &&
     user.role === "job_seeker" &&
     job?.employerIsRegistered &&
-    job?.employerVerificationStatus === "verified";
+    job?.employerVerificationStatus === "approved";
 
   if (isLoading) {
     return (

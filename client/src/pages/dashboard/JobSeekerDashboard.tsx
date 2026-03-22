@@ -44,7 +44,7 @@ const SEEKER_GROUPS = [
 function SeekerApplicationCard({
   app, meta, Icon, job, isMessaging, canMessage, onMessage, onNotesSaved,
 }: {
-  app: Application & { seekerNotes?: string | null };
+  app: Application;
   meta: { label: string; color: string };
   Icon: typeof Clock;
   job: Job | undefined;
@@ -54,8 +54,8 @@ function SeekerApplicationCard({
   onNotesSaved: (notes: string) => void;
 }) {
   const { toast } = useToast();
-  const [draft, setDraft] = useState((app as any).seekerNotes ?? "");
-  const saved = (app as any).seekerNotes ?? "";
+  const [draft, setDraft] = useState(app.seekerNotes ?? "");
+  const saved = app.seekerNotes ?? "";
   const isDirty = draft !== saved;
 
   const noteMutation = useMutation({
@@ -81,7 +81,7 @@ function SeekerApplicationCard({
           <p className="text-xs text-muted-foreground mt-1">
             Applied {app.createdAt ? formatDistanceToNow(new Date(app.createdAt), { addSuffix: true }) : "recently"}
           </p>
-          {(app as any).viewedAt ? (
+          {app.viewedAt ? (
             <p className="text-xs text-primary font-medium mt-0.5 flex items-center gap-1" data-testid={`text-viewed-${app.id}`}>
               <Eye size={11} /> Viewed by employer
             </p>
@@ -229,7 +229,7 @@ function ApplicationsTab({ userId }: { userId: number }) {
         onMessage={() => { setMessagingAppId(app.id); messageMutation.mutate(app); }}
         onNotesSaved={(notes) => {
           queryClient.setQueryData<Application[]>(["/api/applications"], (prev) =>
-            (prev || []).map((a) => (a.id === app.id ? { ...a, seekerNotes: notes } as any : a))
+            (prev || []).map((a) => (a.id === app.id ? { ...a, seekerNotes: notes } : a))
           );
         }}
       />
