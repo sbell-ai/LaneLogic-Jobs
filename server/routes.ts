@@ -594,15 +594,14 @@ export async function registerRoutes(
 
   // Users
   app.get(api.users.list.path, async (req, res) => {
+    if (!requireAdminSession(req, res)) return;
     const users = await storage.getUsers();
     res.json(users);
   });
 
   // Admin: create a user directly (invite)
   app.post("/api/admin/users", async (req, res) => {
-    if (!req.isAuthenticated() || (req.user as any).role !== "admin") {
-      return res.status(403).json({ message: "Forbidden" });
-    }
+    if (!requireAdminSession(req, res)) return;
     try {
       const { email, password, role, firstName, lastName, companyName, membershipTier } = req.body;
       if (!email || !password || !role) {
@@ -628,9 +627,15 @@ export async function registerRoutes(
   });
 
   app.put(api.users.update.path, async (req, res) => {
+    if (!req.isAuthenticated() || !req.user) return res.status(401).json({ message: "Unauthorized" });
+    const caller = req.user as any;
+    const targetId = Number(req.params.id);
+    if (caller.role !== "admin" && caller.id !== targetId) {
+      return res.status(403).json({ message: "Forbidden" });
+    }
     try {
       const input = api.users.update.input.parse(req.body);
-      const user = await storage.updateUser(Number(req.params.id), input);
+      const user = await storage.updateUser(targetId, input);
       res.json(user);
     } catch (err) {
       if (err instanceof z.ZodError) {
@@ -919,9 +924,7 @@ export async function registerRoutes(
   });
 
   app.put("/api/jobs-bulk-update", async (req, res) => {
-    if (!req.isAuthenticated() || !req.user || (req.user as any).role !== "admin") {
-      return res.status(403).json({ message: "Admin access required" });
-    }
+    if (!requireAdminSession(req, res)) return;
     try {
       const { ids, updates } = req.body as { ids: number[]; updates: Record<string, any> };
       if (!Array.isArray(ids) || ids.length === 0) return res.status(400).json({ message: "No job IDs provided" });
@@ -957,12 +960,11 @@ export async function registerRoutes(
     }
   });
 
-  // Applications
+  // Applications — admin-only list (employer/seeker views use /api/employer/applicants and /api/seeker/applications)
   app.get(api.applications.list.path, async (req, res) => {
+    if (!requireAdminSession(req, res)) return;
     const apps = await storage.getApplications();
-    // Strip employer-private notes before returning to seekers
-    const safeApps = apps.map(({ employerNotes: _e, ...rest }) => rest);
-    res.json(safeApps);
+    res.json(apps);
   });
 
   // Enriched applicants for the logged-in employer
@@ -1214,13 +1216,13 @@ export async function registerRoutes(
   });
 
   app.post(api.resources.create.path, async (req, res) => {
+    if (!requireAdminSession(req, res)) return;
     try {
       const input = api.resources.create.input.parse(req.body);
       if (input.isPublished && (!input.bodyText || input.bodyText.trim() === "")) {
         return res.status(400).json({ message: "Cannot publish a resource with empty body text" });
       }
       const resource = await storage.createResource(input);
-
       res.status(201).json(resource);
     } catch (err) {
       res.status(400).json({ message: "Validation error" });
@@ -1243,6 +1245,7 @@ export async function registerRoutes(
   });
 
   app.post(api.blog.create.path, async (req, res) => {
+    if (!requireAdminSession(req, res)) return;
     try {
       const input = api.blog.create.input.parse(req.body);
       const post = await storage.createBlogPost(input);
@@ -1254,7 +1257,13 @@ export async function registerRoutes(
 
   // Resumes
   app.get(api.resumes.get.path, async (req, res) => {
-    const userResumes = await storage.getResumes(Number(req.params.jobSeekerId));
+    if (!req.isAuthenticated() || !req.user) return res.status(401).json({ message: "Unauthorized" });
+    const caller = req.user as any;
+    const targetId = Number(req.params.jobSeekerId);
+    if (caller.role !== "admin" && caller.id !== targetId) {
+      return res.status(403).json({ message: "Forbidden" });
+    }
+    const userResumes = await storage.getResumes(targetId);
     res.json(userResumes);
   });
 
@@ -1296,9 +1305,7 @@ export async function registerRoutes(
 
   // Resource update/delete
   app.put("/api/resources/:id", async (req, res) => {
-    if (!req.isAuthenticated() || (req.user as any).role !== "admin") {
-      return res.status(403).json({ message: "Forbidden" });
-    }
+    if (!requireAdminSession(req, res)) return;
     try {
       const updates = { ...req.body };
       if (updates.publishedAt && typeof updates.publishedAt === "string") {
@@ -1320,18 +1327,14 @@ export async function registerRoutes(
   });
 
   app.delete("/api/resources/:id", async (req, res) => {
-    if (!req.isAuthenticated() || (req.user as any).role !== "admin") {
-      return res.status(403).json({ message: "Forbidden" });
-    }
+    if (!requireAdminSession(req, res)) return;
     await storage.deleteResource(Number(req.params.id));
     res.json({ message: "Deleted" });
   });
 
   // Blog update/delete
   app.put("/api/blog/:id", async (req, res) => {
-    if (!req.isAuthenticated() || (req.user as any).role !== "admin") {
-      return res.status(403).json({ message: "Forbidden" });
-    }
+    if (!requireAdminSession(req, res)) return;
     try {
       const updates = { ...req.body };
       if (updates.publishedAt && typeof updates.publishedAt === "string") {
@@ -1345,18 +1348,14 @@ export async function registerRoutes(
   });
 
   app.delete("/api/blog/:id", async (req, res) => {
-    if (!req.isAuthenticated() || (req.user as any).role !== "admin") {
-      return res.status(403).json({ message: "Forbidden" });
-    }
+    if (!requireAdminSession(req, res)) return;
     await storage.deleteBlogPost(Number(req.params.id));
     res.json({ message: "Deleted" });
   });
 
   // User delete
   app.delete("/api/users/:id", async (req, res) => {
-    if (!req.isAuthenticated() || (req.user as any).role !== "admin") {
-      return res.status(403).json({ message: "Forbidden" });
-    }
+    if (!requireAdminSession(req, res)) return;
     await storage.deleteUser(Number(req.params.id));
     res.json({ message: "Deleted" });
   });
@@ -1368,9 +1367,7 @@ export async function registerRoutes(
   });
 
   app.post("/api/categories", async (req, res) => {
-    if (!req.isAuthenticated() || (req.user as any).role !== "admin") {
-      return res.status(403).json({ message: "Forbidden" });
-    }
+    if (!requireAdminSession(req, res)) return;
     try {
       const cat = await storage.createCategory(req.body);
       res.status(201).json(cat);
@@ -1380,26 +1377,20 @@ export async function registerRoutes(
   });
 
   app.delete("/api/categories/:id", async (req, res) => {
-    if (!req.isAuthenticated() || (req.user as any).role !== "admin") {
-      return res.status(403).json({ message: "Forbidden" });
-    }
+    if (!requireAdminSession(req, res)) return;
     await storage.deleteCategory(Number(req.params.id));
     res.json({ message: "Deleted" });
   });
 
   // Coupons
   app.get("/api/coupons", async (req, res) => {
-    if (!req.isAuthenticated() || (req.user as any).role !== "admin") {
-      return res.status(403).json({ message: "Forbidden" });
-    }
+    if (!requireAdminSession(req, res)) return;
     const allCoupons = await storage.getCoupons();
     res.json(allCoupons);
   });
 
   app.post("/api/coupons", async (req, res) => {
-    if (!req.isAuthenticated() || (req.user as any).role !== "admin") {
-      return res.status(403).json({ message: "Forbidden" });
-    }
+    if (!requireAdminSession(req, res)) return;
     try {
       const coupon = await storage.createCoupon(req.body);
       res.status(201).json(coupon);
@@ -1409,9 +1400,7 @@ export async function registerRoutes(
   });
 
   app.put("/api/coupons/:id", async (req, res) => {
-    if (!req.isAuthenticated() || (req.user as any).role !== "admin") {
-      return res.status(403).json({ message: "Forbidden" });
-    }
+    if (!requireAdminSession(req, res)) return;
     try {
       const coupon = await storage.updateCoupon(Number(req.params.id), req.body);
       res.json(coupon);
@@ -1421,9 +1410,7 @@ export async function registerRoutes(
   });
 
   app.delete("/api/coupons/:id", async (req, res) => {
-    if (!req.isAuthenticated() || (req.user as any).role !== "admin") {
-      return res.status(403).json({ message: "Forbidden" });
-    }
+    if (!requireAdminSession(req, res)) return;
     await storage.deleteCoupon(Number(req.params.id));
     res.json({ message: "Deleted" });
   });
@@ -1533,9 +1520,7 @@ export async function registerRoutes(
   }
 
   app.post("/api/pages", async (req, res) => {
-    if (!req.isAuthenticated() || (req.user as any).role !== "admin") {
-      return res.status(403).json({ message: "Forbidden" });
-    }
+    if (!requireAdminSession(req, res)) return;
     const parsed = insertPageSchema.safeParse(req.body);
     if (!parsed.success) {
       return res.status(400).json({ message: "Invalid page data", errors: parsed.error.flatten() });
@@ -1553,9 +1538,7 @@ export async function registerRoutes(
   });
 
   app.put("/api/pages/:id", async (req, res) => {
-    if (!req.isAuthenticated() || (req.user as any).role !== "admin") {
-      return res.status(403).json({ message: "Forbidden" });
-    }
+    if (!requireAdminSession(req, res)) return;
     const parsed = insertPageSchema.partial().safeParse(req.body);
     if (!parsed.success) {
       return res.status(400).json({ message: "Invalid page data", errors: parsed.error.flatten() });
@@ -1574,9 +1557,7 @@ export async function registerRoutes(
   });
 
   app.delete("/api/pages/:id", async (req, res) => {
-    if (!req.isAuthenticated() || (req.user as any).role !== "admin") {
-      return res.status(403).json({ message: "Forbidden" });
-    }
+    if (!requireAdminSession(req, res)) return;
     await storage.deletePage(Number(req.params.id));
     res.json({ message: "Deleted" });
   });
@@ -1600,9 +1581,7 @@ export async function registerRoutes(
   }, async (req, res) => {
     let run: any = null;
     try {
-      if (!req.isAuthenticated() || !req.user || (req.user as any).role !== "admin") {
-        return res.status(403).json({ message: "Admin access required" });
-      }
+      if (!requireAdminSession(req, res)) return;
       if (!req.file) {
         return res.status(400).json({ message: "No file uploaded" });
       }
@@ -1743,9 +1722,7 @@ export async function registerRoutes(
 
   // Admin: upload / update a company logo by company name
   app.post("/api/admin/employer-logo", (req, res, next) => {
-    if (!req.isAuthenticated() || !req.user || (req.user as any).role !== "admin") {
-      return res.status(403).json({ message: "Admin access required" });
-    }
+    if (!requireAdminSession(req, res)) return;
     next();
   }, imageUpload.single("file"), async (req, res) => {
     if (!req.file) {
@@ -1788,9 +1765,7 @@ export async function registerRoutes(
   });
 
   app.put("/api/admin/taxonomy", async (req, res) => {
-    if (!req.isAuthenticated() || !req.user || (req.user as any).role !== "admin") {
-      return res.status(403).json({ message: "Admin access required" });
-    }
+    if (!requireAdminSession(req, res)) return;
     const { taxonomy } = req.body as { taxonomy: TaxonomyData };
     if (!taxonomy || typeof taxonomy !== "object" || Array.isArray(taxonomy)) {
       return res.status(400).json({ message: "taxonomy must be an object" });
@@ -1818,10 +1793,7 @@ export async function registerRoutes(
 
   // ── Email Template Admin Routes ──────────────────────────────────────────────
   const adminOnly = (req: any, res: any, next: any) => {
-    if (!req.isAuthenticated() || !req.user || (req.user as any).role !== "admin") {
-      return res.status(403).json({ message: "Admin access required" });
-    }
-    next();
+    if (requireAdminSession(req, res)) next();
   };
 
   app.get("/api/admin/email-templates", adminOnly, async (_req, res) => {
@@ -2188,9 +2160,7 @@ export async function registerRoutes(
   });
 
   app.post("/api/admin/jobs/migrate-paragraphize", async (req, res) => {
-    if (!req.isAuthenticated() || !req.user || (req.user as any).role !== "admin") {
-      return res.status(403).json({ message: "Admin access required" });
-    }
+    if (!requireAdminSession(req, res)) return;
     try {
       const allJobs = await db.select({ id: jobs.id, description: jobs.description }).from(jobs);
       let updated = 0;
@@ -2239,9 +2209,7 @@ export async function registerRoutes(
   };
 
   app.post("/api/admin/jobs/migrate-categories", async (req, res) => {
-    if (!req.isAuthenticated() || !req.user || (req.user as any).role !== "admin") {
-      return res.status(403).json({ message: "Admin access required" });
-    }
+    if (!requireAdminSession(req, res)) return;
     try {
       const allJobs = await db.select({ id: jobs.id, category: jobs.category }).from(jobs);
       let mapped = 0;
@@ -2275,9 +2243,7 @@ export async function registerRoutes(
   });
 
   app.post("/api/admin/migrate-uploads-to-r2", async (req, res) => {
-    if (!req.isAuthenticated() || !req.user || (req.user as any).role !== "admin") {
-      return res.status(403).json({ message: "Admin access required" });
-    }
+    if (!requireAdminSession(req, res)) return;
     if (!isR2Configured()) {
       return res.status(400).json({ message: "R2 is not configured. Set R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_BUCKET_NAME, and R2_PUBLIC_URL." });
     }
@@ -2341,26 +2307,20 @@ export async function registerRoutes(
   });
 
   app.get("/api/admin/jobs/import/runs", async (req, res) => {
-    if (!req.isAuthenticated() || !req.user || (req.user as any).role !== "admin") {
-      return res.status(403).json({ message: "Admin access required" });
-    }
+    if (!requireAdminSession(req, res)) return;
     const runs = await storage.getImportRuns();
     res.json(runs);
   });
 
   app.get("/api/admin/jobs/import/:runId", async (req, res) => {
-    if (!req.isAuthenticated() || !req.user || (req.user as any).role !== "admin") {
-      return res.status(403).json({ message: "Admin access required" });
-    }
+    if (!requireAdminSession(req, res)) return;
     const run = await storage.getImportRun(Number(req.params.runId));
     if (!run) return res.status(404).json({ message: "Import run not found" });
     res.json(run);
   });
 
   app.get("/api/admin/jobs/import/:runId/error-report", async (req, res) => {
-    if (!req.isAuthenticated() || !req.user || (req.user as any).role !== "admin") {
-      return res.status(403).json({ message: "Admin access required" });
-    }
+    if (!requireAdminSession(req, res)) return;
     const artifact = await storage.getImportArtifact(Number(req.params.runId), "error_report.csv");
     if (!artifact) return res.status(404).json({ message: "Error report not found" });
     res.set("Content-Type", "text/csv");
@@ -2571,9 +2531,7 @@ export async function registerRoutes(
   });
 
   app.put("/api/settings", async (req, res) => {
-    if (!req.isAuthenticated() || (req.user as any).role !== "admin") {
-      return res.status(403).json({ message: "Forbidden" });
-    }
+    if (!requireAdminSession(req, res)) return;
     try {
       const body = req.body;
       const footerFields = ["footerTextColor", "footerLinkColor", "footerLinkHoverColor", "footerBgColor", "pageBackgroundColor"];
@@ -3023,7 +2981,7 @@ ${urls.join("\n")}
   });
 
   app.get("/api/admin/social-posts/webhook-status", async (req, res) => {
-    if (!req.isAuthenticated() || (req.user as any).role !== "admin") return res.status(403).json({ message: "Forbidden" });
+    if (!requireAdminSession(req, res)) return;
     const anyConfigured = !!(ZAPIER_WEBHOOK_URL || Object.values(ZAPIER_PLATFORM_URLS).some(Boolean));
     res.json({
       configured: anyConfigured,
@@ -3037,7 +2995,7 @@ ${urls.join("\n")}
   });
 
   app.get("/api/admin/social-posts", async (req, res) => {
-    if (!req.isAuthenticated() || (req.user as any).role !== "admin") return res.status(403).json({ message: "Forbidden" });
+    if (!requireAdminSession(req, res)) return;
     const filters: { status?: string; entityType?: string } = {};
     if (typeof req.query.status === "string") filters.status = req.query.status;
     if (typeof req.query.entityType === "string") filters.entityType = req.query.entityType;
@@ -3046,7 +3004,7 @@ ${urls.join("\n")}
   });
 
   app.post("/api/admin/social-posts", async (req, res) => {
-    if (!req.isAuthenticated() || (req.user as any).role !== "admin") return res.status(403).json({ message: "Forbidden" });
+    if (!requireAdminSession(req, res)) return;
     try {
       const { entityType, entityId, platforms, scheduledAt, copyMaster, imageUrl } = req.body;
       let entity: any;
@@ -3102,7 +3060,7 @@ ${urls.join("\n")}
   });
 
   app.patch("/api/admin/social-posts/:id", async (req, res) => {
-    if (!req.isAuthenticated() || (req.user as any).role !== "admin") return res.status(403).json({ message: "Forbidden" });
+    if (!requireAdminSession(req, res)) return;
     try {
       const post = await storage.getSocialPost(Number(req.params.id));
       if (!post) return res.status(404).json({ message: "Social post not found" });
@@ -3290,12 +3248,12 @@ ${urls.join("\n")}
   }
 
   app.post("/api/admin/social-posts/:id/queue", async (req, res) => {
-    if (!req.isAuthenticated() || (req.user as any).role !== "admin") return res.status(403).json({ message: "Forbidden" });
+    if (!requireAdminSession(req, res)) return;
     await queueSocialPost(Number(req.params.id), req, res);
   });
 
   app.post("/api/admin/social-posts/:id/retry", async (req, res) => {
-    if (!req.isAuthenticated() || (req.user as any).role !== "admin") return res.status(403).json({ message: "Forbidden" });
+    if (!requireAdminSession(req, res)) return;
     const post = await storage.getSocialPost(Number(req.params.id));
     if (!post) return res.status(404).json({ message: "Social post not found" });
     if (post.status !== "failed") return res.status(409).json({ message: `Retry is only available for failed posts. Current status: "${post.status}".` });
@@ -3303,7 +3261,7 @@ ${urls.join("\n")}
   });
 
   app.post("/api/admin/social-posts/:id/cancel", async (req, res) => {
-    if (!req.isAuthenticated() || (req.user as any).role !== "admin") return res.status(403).json({ message: "Forbidden" });
+    if (!requireAdminSession(req, res)) return;
     const post = await storage.getSocialPost(Number(req.params.id));
     if (!post) return res.status(404).json({ message: "Social post not found" });
     if (post.status !== "draft" && post.status !== "queued") {
@@ -3314,7 +3272,7 @@ ${urls.join("\n")}
   });
 
   app.delete("/api/admin/social-posts/:id", async (req, res) => {
-    if (!req.isAuthenticated() || (req.user as any).role !== "admin") return res.status(403).json({ message: "Forbidden" });
+    if (!requireAdminSession(req, res)) return;
     const post = await storage.getSocialPost(Number(req.params.id));
     if (!post) return res.status(404).json({ message: "Social post not found" });
     if (post.status === "sent") {
@@ -3325,7 +3283,7 @@ ${urls.join("\n")}
   });
 
   app.post("/api/admin/social-posts/test-webhook", async (req, res) => {
-    if (!req.isAuthenticated() || (req.user as any).role !== "admin") return res.status(403).json({ message: "Forbidden" });
+    if (!requireAdminSession(req, res)) return;
 
     const PLATFORM_TEST_COPY: Record<string, string> = {
       twitter: "This is a test post from LaneLogic Jobs admin. [X/Twitter]",
