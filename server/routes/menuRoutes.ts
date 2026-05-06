@@ -12,7 +12,7 @@ const router = Router();
 // Returns a menu with its items, nested, filtered by visibility based on auth.
 router.get("/menus/:slug", async (req: Request, res: Response) => {
   try {
-    const menu = await storage.getMenuBySlug(req.params.slug);
+    const menu = await storage.getMenuBySlug(req.params.slug as string);
     if (!menu || !menu.isActive) {
       return res.status(404).json({ error: "Menu not found" });
     }
@@ -36,7 +36,7 @@ router.get("/menus/:slug", async (req: Request, res: Response) => {
       const pgRows = await db.select({ id: pages.id, slug: pages.slug }).from(pages).where(
         pageIds.length === 1 ? eq(pages.id, pageIds[0]) : eq(pages.id, pageIds[0])
       );
-      pageRows.forEach((p) => { pageMap[p.id] = `/pages/${p.slug}`; });
+      pgRows.forEach((p) => { pageMap[p.id] = `/pages/${p.slug}`; });
     }
 
     // Nest items
@@ -81,7 +81,7 @@ router.post("/admin/menus", async (req: Request, res: Response) => {
   try {
     const parsed = insertMenuSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
-    const slugTaken = await storage.menuSlugExists(parsed.data.slug);
+    const slugTaken = await storage.menuSlugExists((parsed.data as any).slug);
     if (slugTaken) return res.status(409).json({ error: "Slug already in use" });
     const menu = await storage.createMenu(parsed.data);
     res.status(201).json(menu);

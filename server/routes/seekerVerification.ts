@@ -163,7 +163,7 @@ seekerVerificationRouter.get("/api/seeker/verification/requirements", async (req
 seekerVerificationRouter.get("/api/seeker/verification/request", async (req, res) => {
   if (!requireSeekerSession(req, res)) return;
   try {
-    const request = await storage.getLatestSeekerVerificationRequest(req.user.id);
+    const request = await storage.getLatestSeekerVerificationRequest((req.user as any).id);
     if (!request) {
       return res.json({ request: null, evidence: [] });
     }
@@ -178,7 +178,7 @@ seekerVerificationRouter.get("/api/seeker/verification/request", async (req, res
 seekerVerificationRouter.post("/api/seeker/verification/request/get-or-create", async (req, res) => {
   if (!requireSeekerSession(req, res)) return;
   try {
-    const request = await storage.getOrCreateSeekerVerificationRequest(req.user.id);
+    const request = await storage.getOrCreateSeekerVerificationRequest((req.user as any).id);
     const user = req.user as any;
     const jobId = req.body?.jobId ? Number(req.body.jobId) : null;
     let jobTags: string[] = [];
@@ -199,7 +199,7 @@ seekerVerificationRouter.post("/api/seeker/verification/request/get-or-create", 
     if (keys.length > 0) {
       await storage.appendRequirementsSnapshot(request.id, keys);
     }
-    const updated = await storage.getActiveSeekerVerificationRequest(req.user.id);
+    const updated = await storage.getActiveSeekerVerificationRequest((req.user as any).id);
     const evidence = await storage.getSeekerEvidenceItemsByRequest(request.id);
     res.json({ request: updated || request, evidence });
   } catch (err) {
@@ -257,7 +257,7 @@ seekerVerificationRouter.post("/api/seeker/verification/evidence", async (req, r
   if (!requireSeekerSession(req, res)) return;
   try {
     const parsed = seekerEvidenceSchema.parse(req.body);
-    const request = await storage.getActiveSeekerVerificationRequest(req.user.id);
+    const request = await storage.getActiveSeekerVerificationRequest((req.user as any).id);
     if (!request || request.id !== parsed.requestId) {
       return res.status(400).json({ ok: false, error: "invalid_request", message: "No active verification request found" });
     }
@@ -283,7 +283,7 @@ seekerVerificationRouter.post("/api/seeker/verification/evidence", async (req, r
 seekerVerificationRouter.post("/api/seeker/verification/request/submit", async (req, res) => {
   if (!requireSeekerSession(req, res)) return;
   try {
-    const request = await storage.getActiveSeekerVerificationRequest(req.user.id);
+    const request = await storage.getActiveSeekerVerificationRequest((req.user as any).id);
     if (!request) {
       return res.status(400).json({ ok: false, error: "no_request", message: "No active verification request found" });
     }
@@ -396,7 +396,7 @@ seekerVerificationRouter.post("/api/seeker/cdl-non-domiciled", async (req, res) 
   if (!requireSeekerSession(req, res)) return;
   try {
     const { cdlIsNonDomiciled } = z.object({ cdlIsNonDomiciled: z.boolean() }).parse(req.body);
-    await storage.updateUser(req.user.id, { cdlIsNonDomiciled } as any);
+    await storage.updateUser((req.user as any).id, { cdlIsNonDomiciled } as any);
     res.json({ ok: true, cdlIsNonDomiciled });
   } catch (err) {
     if (err instanceof z.ZodError) {

@@ -51,7 +51,7 @@ export async function upsertAdminFromNotionSnapshots(
     const activeEntNotionIds = feSnapshot.rows.map((e) => e.notionPageId);
     const archiveEntResult = await tx
       .update(adminEntitlements)
-      .set({ status: "Archived", updatedAt: new Date() })
+      .set({ status: "Archived", updatedAt: new Date() } as any)
       .where(
         and(
           isNotNull(adminEntitlements.notionPageId),
@@ -78,7 +78,7 @@ export async function upsertAdminFromNotionSnapshots(
     const activeProdNotionIds = ppSnapshot.rows.map((p) => p.notionPageId);
     const archiveProdResult = await tx
       .update(adminProducts)
-      .set({ status: "Archived", updatedAt: new Date() })
+      .set({ status: "Archived", updatedAt: new Date() } as any)
       .where(
         and(
           isNotNull(adminProducts.notionPageId),
@@ -111,7 +111,7 @@ export async function upsertAdminFromNotionSnapshots(
 
     const archiveOvrResult = await tx
       .update(adminProductOverrides)
-      .set({ status: "Archived", updatedAt: new Date() })
+      .set({ status: "Archived", updatedAt: new Date() } as any)
       .where(
         and(
           isNotNull(adminProductOverrides.notionPageId),
@@ -158,7 +158,7 @@ async function upsertEntitlement(
   if (existingByNotion) {
     await tx
       .update(adminEntitlements)
-      .set(updateFields)
+      .set(updateFields as any)
       .where(eq(adminEntitlements.id, existingByNotion.id));
     result.entitlements.updated++;
     return existingByNotion.id;
@@ -178,7 +178,7 @@ async function upsertEntitlement(
   if (existingByKey) {
     await tx
       .update(adminEntitlements)
-      .set({ ...updateFields, notionPageId: ent.notionPageId })
+      .set({ ...updateFields, notionPageId: ent.notionPageId } as any)
       .where(eq(adminEntitlements.id, existingByKey.id));
     result.entitlements.updated++;
     return existingByKey.id;
@@ -200,10 +200,10 @@ async function upsertEntitlement(
       unit: ent.unit || null,
       defaultValue: ent.defaultValue || null,
       status: ent.status || "Active",
-    })
+    } as any)
     .onConflictDoUpdate({
       target: adminEntitlements.key,
-      set: { ...updateFields, notionPageId: ent.notionPageId },
+      set: { ...updateFields, notionPageId: ent.notionPageId } as any,
     })
     .returning();
 
@@ -261,7 +261,7 @@ async function upsertProduct(
   if (existingByNotion) {
     await tx
       .update(adminProducts)
-      .set({ ...values, updatedAt: new Date() })
+      .set({ ...values, updatedAt: new Date() } as any)
       .where(eq(adminProducts.id, existingByNotion.id));
     result.products.updated++;
     dbId = existingByNotion.id;
@@ -286,14 +286,14 @@ async function upsertProduct(
           ...values,
           notionPageId: prod.notionPageId,
           updatedAt: new Date(),
-        })
+        } as any)
         .where(eq(adminProducts.id, legacyByStripe.id));
       result.products.updated++;
       dbId = legacyByStripe.id;
     } else {
       const [created] = await tx
         .insert(adminProducts)
-        .values({ ...values, notionPageId: prod.notionPageId })
+        .values({ ...values, notionPageId: prod.notionPageId } as any)
         .returning();
       result.products.created++;
       dbId = created.id;
@@ -343,7 +343,7 @@ async function upsertOverride(
   if (existingByNotion) {
     await tx
       .update(adminProductOverrides)
-      .set({ ...values, updatedAt: new Date() })
+      .set({ ...values, updatedAt: new Date() } as any)
       .where(eq(adminProductOverrides.id, existingByNotion.id));
     result.overrides.updated++;
     return;
@@ -368,7 +368,7 @@ async function upsertOverride(
         ...values,
         notionPageId: ovr.notionPageId,
         updatedAt: new Date(),
-      })
+      } as any)
       .where(eq(adminProductOverrides.id, legacyByPair.id));
     result.overrides.updated++;
     return;
@@ -388,14 +388,14 @@ async function upsertOverride(
 
     await tx
       .insert(adminProductOverrides)
-      .values({ ...values, notionPageId: ovr.notionPageId })
+      .values({ ...values, notionPageId: ovr.notionPageId } as any)
       .onConflictDoUpdate({
         target: [adminProductOverrides.productId, adminProductOverrides.entitlementId],
         set: {
           ...values,
           notionPageId: ovr.notionPageId,
           updatedAt: new Date(),
-        },
+        } as any,
       });
 
     if (existingByPair) {

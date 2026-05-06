@@ -323,7 +323,7 @@ export class DatabaseStorage implements IStorage {
     return await db.select().from(users);
   }
   async createUser(insertUser: InsertUser): Promise<User> {
-    const [user] = await db.insert(users).values(insertUser).returning();
+    const [user] = await db.insert(users).values(insertUser as any).returning();
     return user;
   }
   async findOrCreateEmployerByCompanyName(companyName: string): Promise<User> {
@@ -349,7 +349,7 @@ export class DatabaseStorage implements IStorage {
     }
     const [created] = await db
       .insert(users)
-      .values({ email, password: "", role: "employer", companyName: normalized, membershipTier: "free" })
+      .values({ email, password: "", role: "employer", companyName: normalized, membershipTier: "free" } as any)
       .returning();
     return created;
   }
@@ -370,7 +370,7 @@ export class DatabaseStorage implements IStorage {
     return job;
   }
   async createJob(insertJob: InsertJob): Promise<Job> {
-    const [job] = await db.insert(jobs).values(insertJob).returning();
+    const [job] = await db.insert(jobs).values(insertJob as any).returning();
     return job;
   }
   async updateJob(id: number, updates: Partial<InsertJob>): Promise<Job> {
@@ -447,12 +447,12 @@ export class DatabaseStorage implements IStorage {
     }
   }
   async createResource(resource: InsertResource): Promise<Resource> {
-    const slug = await this.generateUniqueResourceSlug(resource.title);
-    const [res] = await db.insert(resources).values({ ...resource, slug }).returning();
+    const slug = await this.generateUniqueResourceSlug((resource as any).title);
+    const [res] = await db.insert(resources).values({ ...resource, slug } as any).returning();
     return res;
   }
   async updateResource(id: number, updates: Partial<InsertResource>): Promise<Resource> {
-    const [res] = await db.update(resources).set({ ...updates, updatedAt: new Date() }).where(eq(resources.id, id)).returning();
+    const [res] = await db.update(resources).set({ ...updates, updatedAt: new Date() } as any).where(eq(resources.id, id)).returning();
     return res;
   }
   async deleteResource(id: number): Promise<void> {
@@ -472,11 +472,11 @@ export class DatabaseStorage implements IStorage {
     return post;
   }
   async createBlogPost(post: InsertBlogPost): Promise<BlogPost> {
-    const [blogPost] = await db.insert(blogPosts).values(post).returning();
+    const [blogPost] = await db.insert(blogPosts).values(post as any).returning();
     return blogPost;
   }
   async updateBlogPost(id: number, updates: Partial<InsertBlogPost>): Promise<BlogPost> {
-    const [post] = await db.update(blogPosts).set(updates).where(eq(blogPosts.id, id)).returning();
+    const [post] = await db.update(blogPosts).set(updates as any).where(eq(blogPosts.id, id)).returning();
     return post;
   }
   async deleteBlogPost(id: number): Promise<void> {
@@ -488,7 +488,7 @@ export class DatabaseStorage implements IStorage {
     return await db.select().from(resumes).where(eq(resumes.jobSeekerId, jobSeekerId));
   }
   async createResume(resume: InsertResume): Promise<Resume> {
-    const [res] = await db.insert(resumes).values(resume).returning();
+    const [res] = await db.insert(resumes).values(resume as any).returning();
     return res;
   }
 
@@ -497,7 +497,7 @@ export class DatabaseStorage implements IStorage {
     return await db.select().from(categories);
   }
   async createCategory(category: InsertCategory): Promise<Category> {
-    const [cat] = await db.insert(categories).values(category).returning();
+    const [cat] = await db.insert(categories).values(category as any).returning();
     return cat;
   }
   async deleteCategory(id: number): Promise<void> {
@@ -517,7 +517,7 @@ export class DatabaseStorage implements IStorage {
     return coupon;
   }
   async createCoupon(coupon: InsertCoupon): Promise<Coupon> {
-    const [c] = await db.insert(coupons).values(coupon).returning();
+    const [c] = await db.insert(coupons).values(coupon as any).returning();
     return c;
   }
   async updateCoupon(id: number, updates: Partial<InsertCoupon>): Promise<Coupon> {
@@ -529,7 +529,7 @@ export class DatabaseStorage implements IStorage {
   }
   async incrementCouponUses(id: number): Promise<void> {
     await db.update(coupons)
-      .set({ currentUses: sql`${coupons.currentUses} + 1` })
+      .set({ currentUses: sql`${coupons.currentUses} + 1` } as any)
       .where(eq(coupons.id, id));
   }
 
@@ -546,11 +546,11 @@ export class DatabaseStorage implements IStorage {
     return page;
   }
   async createPage(page: InsertPage): Promise<Page> {
-    const [p] = await db.insert(pages).values(page).returning();
+    const [p] = await db.insert(pages).values(page as any).returning();
     return p;
   }
   async updatePage(id: number, updates: Partial<InsertPage>): Promise<Page> {
-    const [p] = await db.update(pages).set({ ...updates, updatedAt: new Date() }).where(eq(pages.id, id)).returning();
+    const [p] = await db.update(pages).set({ ...updates, updatedAt: new Date() } as any).where(eq(pages.id, id)).returning();
     return p;
   }
   async deletePage(id: number): Promise<void> {
@@ -563,15 +563,15 @@ export class DatabaseStorage implements IStorage {
       and(eq(jobs.employerId, employerId), eq(jobs.externalJobKey, externalJobKey))
     );
     if (existing.length > 0) {
-      const { employerId: _eid, externalJobKey: _ek, ...updates } = job;
-      const [updated] = await db.update(jobs).set(updates).where(eq(jobs.id, existing[0].id)).returning();
+      const { employerId: _eid, externalJobKey: _ek, ...updates } = job as any;
+      const [updated] = await db.update(jobs).set(updates as any).where(eq(jobs.id, existing[0].id)).returning();
       return updated;
     }
-    const [created] = await db.insert(jobs).values(job).returning();
+    const [created] = await db.insert(jobs).values(job as any).returning();
     return created;
   }
   async createImportRun(run: InsertImportRun): Promise<ImportRun> {
-    const [r] = await db.insert(importRuns).values(run).returning();
+    const [r] = await db.insert(importRuns).values(run as any).returning();
     return r;
   }
   async updateImportRun(id: number, updates: Partial<InsertImportRun>): Promise<ImportRun> {
@@ -586,7 +586,7 @@ export class DatabaseStorage implements IStorage {
     return await db.select().from(importRuns).orderBy(desc(importRuns.uploadedAt));
   }
   async createImportArtifact(artifact: InsertImportArtifact): Promise<ImportArtifact> {
-    const [a] = await db.insert(importArtifacts).values(artifact).returning();
+    const [a] = await db.insert(importArtifacts).values(artifact as any).returning();
     return a;
   }
   async getImportArtifact(runId: number, filename: string): Promise<ImportArtifact | undefined> {
@@ -598,7 +598,7 @@ export class DatabaseStorage implements IStorage {
 
   // Social Posts
   async createSocialPost(data: InsertSocialPost): Promise<SocialPost> {
-    const [post] = await db.insert(socialPosts).values(data).returning();
+    const [post] = await db.insert(socialPosts).values(data as any).returning();
     return post;
   }
   async getSocialPost(id: number): Promise<SocialPost | undefined> {
@@ -615,7 +615,7 @@ export class DatabaseStorage implements IStorage {
     return await db.select().from(socialPosts).orderBy(desc(socialPosts.createdAt));
   }
   async updateSocialPost(id: number, updates: Partial<InsertSocialPost>): Promise<SocialPost> {
-    const [post] = await db.update(socialPosts).set({ ...updates, updatedAt: new Date() }).where(eq(socialPosts.id, id)).returning();
+    const [post] = await db.update(socialPosts).set({ ...updates, updatedAt: new Date() } as any).where(eq(socialPosts.id, id)).returning();
     return post;
   }
   async deleteSocialPost(id: number): Promise<void> {
@@ -635,7 +635,7 @@ export class DatabaseStorage implements IStorage {
       return row.settings;
     } else {
       const [row] = await db.update(siteSettings)
-        .set({ settings, updatedAt: new Date() })
+        .set({ settings, updatedAt: new Date() } as any)
         .where(eq(siteSettings.id, rows[0].id))
         .returning();
       return row.settings;
@@ -650,11 +650,11 @@ export class DatabaseStorage implements IStorage {
     return p;
   }
   async createAdminProduct(product: InsertAdminProduct): Promise<AdminProduct> {
-    const [p] = await db.insert(adminProducts).values(product).returning();
+    const [p] = await db.insert(adminProducts).values(product as any).returning();
     return p;
   }
   async updateAdminProduct(id: number, updates: Partial<InsertAdminProduct>): Promise<AdminProduct> {
-    const [p] = await db.update(adminProducts).set({ ...updates, updatedAt: new Date() }).where(eq(adminProducts.id, id)).returning();
+    const [p] = await db.update(adminProducts).set({ ...updates, updatedAt: new Date() } as any).where(eq(adminProducts.id, id)).returning();
     return p;
   }
   async deleteAdminProduct(id: number): Promise<void> {
@@ -672,11 +672,11 @@ export class DatabaseStorage implements IStorage {
     return e;
   }
   async createAdminEntitlement(entitlement: InsertAdminEntitlement): Promise<AdminEntitlement> {
-    const [e] = await db.insert(adminEntitlements).values(entitlement).returning();
+    const [e] = await db.insert(adminEntitlements).values(entitlement as any).returning();
     return e;
   }
   async updateAdminEntitlement(id: number, updates: Partial<InsertAdminEntitlement>): Promise<AdminEntitlement> {
-    const [e] = await db.update(adminEntitlements).set({ ...updates, updatedAt: new Date() }).where(eq(adminEntitlements.id, id)).returning();
+    const [e] = await db.update(adminEntitlements).set({ ...updates, updatedAt: new Date() } as any).where(eq(adminEntitlements.id, id)).returning();
     return e;
   }
   async deleteAdminEntitlement(id: number): Promise<void> {
@@ -697,11 +697,11 @@ export class DatabaseStorage implements IStorage {
     return o;
   }
   async createAdminProductOverride(override: InsertAdminProductOverride): Promise<AdminProductOverride> {
-    const [o] = await db.insert(adminProductOverrides).values(override).returning();
+    const [o] = await db.insert(adminProductOverrides).values(override as any).returning();
     return o;
   }
   async updateAdminProductOverride(id: number, updates: Partial<InsertAdminProductOverride>): Promise<AdminProductOverride> {
-    const [o] = await db.update(adminProductOverrides).set({ ...updates, updatedAt: new Date() }).where(eq(adminProductOverrides.id, id)).returning();
+    const [o] = await db.update(adminProductOverrides).set({ ...updates, updatedAt: new Date() } as any).where(eq(adminProductOverrides.id, id)).returning();
     return o;
   }
   async deleteAdminProductOverride(id: number): Promise<void> {
@@ -727,12 +727,12 @@ export class DatabaseStorage implements IStorage {
     return m;
   }
   async setMigrationState(state: InsertMigrationState): Promise<MigrationState> {
-    const existing = await this.getMigrationState(state.key);
+    const existing = await this.getMigrationState((state as any).key);
     if (existing) {
-      const [m] = await db.update(migrationState).set(state).where(eq(migrationState.key, state.key)).returning();
+      const [m] = await db.update(migrationState).set(state as any).where(eq(migrationState.key, (state as any).key)).returning();
       return m;
     }
-    const [m] = await db.insert(migrationState).values(state).returning();
+    const [m] = await db.insert(migrationState).values(state as any).returning();
     return m;
   }
 
@@ -837,11 +837,11 @@ export class DatabaseStorage implements IStorage {
     return s;
   }
   async createJobSource(source: InsertJobSource): Promise<JobSource> {
-    const [s] = await db.insert(jobSources).values(source).returning();
+    const [s] = await db.insert(jobSources).values(source as any).returning();
     return s;
   }
   async updateJobSource(id: number, updates: Partial<InsertJobSource>): Promise<JobSource> {
-    const [s] = await db.update(jobSources).set({ ...updates, updatedAt: new Date() }).where(eq(jobSources.id, id)).returning();
+    const [s] = await db.update(jobSources).set({ ...updates, updatedAt: new Date() } as any).where(eq(jobSources.id, id)).returning();
     return s;
   }
   async getActiveJobSourcesDueForPoll(): Promise<JobSource[]> {
@@ -854,7 +854,7 @@ export class DatabaseStorage implements IStorage {
   }
   async claimJobSourceForRun(sourceId: number): Promise<boolean> {
     const rows = await db.update(jobSources)
-      .set({ lastRunAt: new Date() })
+      .set({ lastRunAt: new Date() } as any)
       .where(
         and(
           eq(jobSources.id, sourceId),
@@ -893,7 +893,7 @@ export class DatabaseStorage implements IStorage {
       status: "pending_review",
       firstSeenAt: new Date(),
       lastSeenAt: new Date(),
-    }).returning();
+    } as any).returning();
     return t;
   }
   async updateImportTarget(id: number, updates: Partial<InsertImportTarget>): Promise<ImportTarget> {
@@ -909,7 +909,7 @@ export class DatabaseStorage implements IStorage {
 
   // Job Import Runs
   async createJobImportRun(run: InsertJobImportRun): Promise<JobImportRun> {
-    const [r] = await db.insert(jobImportRuns).values(run).returning();
+    const [r] = await db.insert(jobImportRuns).values(run as any).returning();
     return r;
   }
   async updateJobImportRun(id: number, updates: Partial<InsertJobImportRun>): Promise<JobImportRun> {
@@ -928,7 +928,8 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Apify job upsert (idempotent)
-  async upsertImportedJob(sourceId: number, importTargetId: number, externalJobId: string, jobData: Partial<InsertJob>): Promise<{ job: Job; action: "created" | "updated" | "skipped" }> {
+  async upsertImportedJob(sourceId: number, importTargetId: number, externalJobId: string, _jobData: Partial<InsertJob>): Promise<{ job: Job; action: "created" | "updated" | "skipped" }> {
+    const jobData = _jobData as any;
     const [existing] = await db.select().from(jobs).where(
       and(
         eq(jobs.sourceId, sourceId),
@@ -965,7 +966,7 @@ export class DatabaseStorage implements IStorage {
         importedAt: now,
         lastImportedAt: now,
         rawSourceSnippet: jobData.rawSourceSnippet,
-      } as InsertJob).returning();
+      } as any).returning();
       return { job, action: "created" };
     }
 
@@ -1005,7 +1006,7 @@ export class DatabaseStorage implements IStorage {
       conditions.push(notInArray(jobs.externalJobId, seenExternalJobIds));
     }
     const rows = await db.update(jobs)
-      .set({ status: "expired", isPublished: false })
+      .set({ status: "expired", isPublished: false } as any)
       .where(and(...conditions))
       .returning();
     return rows.length;
@@ -1013,7 +1014,7 @@ export class DatabaseStorage implements IStorage {
 
   async expireJobsByImportTarget(importTargetId: number): Promise<number> {
     const rows = await db.update(jobs)
-      .set({ status: "expired", isPublished: false })
+      .set({ status: "expired", isPublished: false } as any)
       .where(and(eq(jobs.importTargetId, importTargetId), ne(jobs.status, "expired")))
       .returning();
     return rows.length;
@@ -1037,7 +1038,7 @@ export class DatabaseStorage implements IStorage {
 
   async bulkUpdateImportTargets(ids: number[], status: string): Promise<number> {
     if (ids.length === 0) return 0;
-    const rows = await db.update(importTargets).set({ status }).where(inArray(importTargets.id, ids)).returning();
+    const rows = await db.update(importTargets).set({ status } as any).where(inArray(importTargets.id, ids)).returning();
     return rows.length;
   }
 
@@ -1151,7 +1152,7 @@ export class DatabaseStorage implements IStorage {
     if (existing) return existing;
     try {
       const [req] = await db.insert(employerVerificationRequests)
-        .values({ employerId, status: "draft" })
+        .values({ employerId, status: "draft" } as any)
         .returning();
       return req;
     } catch (err: any) {
@@ -1199,7 +1200,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createEvidenceItem(item: InsertEmployerEvidenceItem): Promise<EmployerEvidenceItem> {
-    const [evidence] = await db.insert(employerEvidenceItems).values(item).returning();
+    const [evidence] = await db.insert(employerEvidenceItems).values(item as any).returning();
     return evidence;
   }
 
@@ -1211,7 +1212,7 @@ export class DatabaseStorage implements IStorage {
 
   async updateEmployerVerificationStatus(employerId: number, status: string): Promise<User> {
     const [user] = await db.update(users)
-      .set({ verificationStatus: status })
+      .set({ verificationStatus: status } as any)
       .where(eq(users.id, employerId))
       .returning();
     return user;
@@ -1224,8 +1225,8 @@ export class DatabaseStorage implements IStorage {
 
   async upsertSeekerCredentialRequirement(req: InsertSeekerCredentialRequirement): Promise<SeekerCredentialRequirement> {
     const [result] = await db.insert(seekerCredentialRequirements)
-      .values(req)
-      .onConflictDoUpdate({ target: seekerCredentialRequirements.key, set: { label: req.label, description: req.description ?? null, category: req.category ?? "license" } })
+      .values(req as any)
+      .onConflictDoUpdate({ target: seekerCredentialRequirements.key, set: { label: (req as any).label, description: (req as any).description ?? null, category: (req as any).category ?? "license" } as any })
       .returning();
     return result;
   }
@@ -1237,13 +1238,13 @@ export class DatabaseStorage implements IStorage {
   async upsertSeekerRequirementRule(rule: InsertSeekerRequirementRule): Promise<SeekerRequirementRule> {
     const existing = await db.select().from(seekerRequirementRules)
       .where(and(
-        eq(seekerRequirementRules.requirementKey, rule.requirementKey),
-        eq(seekerRequirementRules.conditionType, rule.conditionType),
-        eq(seekerRequirementRules.conditionValue, rule.conditionValue)
+        eq(seekerRequirementRules.requirementKey, (rule as any).requirementKey),
+        eq(seekerRequirementRules.conditionType, (rule as any).conditionType),
+        eq(seekerRequirementRules.conditionValue, (rule as any).conditionValue)
       ))
       .limit(1);
     if (existing.length > 0) return existing[0];
-    const [result] = await db.insert(seekerRequirementRules).values(rule).returning();
+    const [result] = await db.insert(seekerRequirementRules).values(rule as any).returning();
     return result;
   }
 
@@ -1270,7 +1271,7 @@ export class DatabaseStorage implements IStorage {
     if (existing) return existing;
     try {
       const [req] = await db.insert(seekerVerificationRequests)
-        .values({ seekerId, status: "draft" })
+        .values({ seekerId, status: "draft" } as any)
         .returning();
       return req;
     } catch (err: any) {
@@ -1341,7 +1342,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createSeekerEvidenceItem(item: InsertSeekerCredentialEvidenceItem): Promise<SeekerCredentialEvidenceItem> {
-    const [evidence] = await db.insert(seekerCredentialEvidenceItems).values(item).returning();
+    const [evidence] = await db.insert(seekerCredentialEvidenceItems).values(item as any).returning();
     return evidence;
   }
 
@@ -1353,7 +1354,7 @@ export class DatabaseStorage implements IStorage {
 
   async updateSeekerVerificationStatus(seekerId: number, status: string): Promise<User> {
     const [user] = await db.update(users)
-      .set({ seekerVerificationStatus: status })
+      .set({ seekerVerificationStatus: status } as any)
       .where(eq(users.id, seekerId))
       .returning();
     return user;
@@ -1369,7 +1370,7 @@ export class DatabaseStorage implements IStorage {
       .limit(1);
     if (existing.length > 0) return existing[0];
     const [conv] = await db.insert(conversations)
-      .values({ seekerId, employerId, jobId: jobId ?? null })
+      .values({ seekerId, employerId, jobId: jobId ?? null } as any)
       .returning();
     return conv;
   }
@@ -1424,17 +1425,17 @@ export class DatabaseStorage implements IStorage {
 
   async createMessage(conversationId: number, senderId: number, content: string): Promise<Message> {
     const [msg] = await db.insert(messages)
-      .values({ conversationId, senderId, content, isRead: false })
+      .values({ conversationId, senderId, content, isRead: false } as any)
       .returning();
     await db.update(conversations)
-      .set({ lastMessageAt: new Date() })
+      .set({ lastMessageAt: new Date() } as any)
       .where(eq(conversations.id, conversationId));
     return msg;
   }
 
   async markConversationRead(conversationId: number, userId: number): Promise<void> {
     await db.update(messages)
-      .set({ isRead: true })
+      .set({ isRead: true } as any)
       .where(and(
         eq(messages.conversationId, conversationId),
         eq(messages.isRead, false),
@@ -1505,7 +1506,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createJobAlert(data: InsertJobAlertSubscription): Promise<JobAlertSubscription> {
-    const [alert] = await db.insert(jobAlertSubscriptions).values(data).returning();
+    const [alert] = await db.insert(jobAlertSubscriptions).values(data as any).returning();
     return alert;
   }
 
@@ -1518,12 +1519,12 @@ export class DatabaseStorage implements IStorage {
   }
 
   async updateJobAlertNotifiedAt(id: number, notifiedAt: Date): Promise<void> {
-    await db.update(jobAlertSubscriptions).set({ lastNotifiedAt: notifiedAt }).where(eq(jobAlertSubscriptions.id, id));
+    await db.update(jobAlertSubscriptions).set({ lastNotifiedAt: notifiedAt } as any).where(eq(jobAlertSubscriptions.id, id));
   }
 
   async updateJobAlert(id: number, userId: number, updates: { isActive?: boolean; name?: string }): Promise<JobAlertSubscription> {
     const [alert] = await db.update(jobAlertSubscriptions)
-      .set(updates)
+      .set(updates as any)
       .where(and(eq(jobAlertSubscriptions.id, id), eq(jobAlertSubscriptions.userId, userId)))
       .returning();
     return alert;
@@ -1545,14 +1546,14 @@ export class DatabaseStorage implements IStorage {
     if (existing) {
       const [updated] = await db
         .update(emailTemplates)
-        .set({ ...data, updatedAt: now })
+        .set({ ...data, updatedAt: now } as any)
         .where(eq(emailTemplates.slug, slug))
         .returning();
       return updated;
     }
     const [created] = await db
       .insert(emailTemplates)
-      .values({ slug, name: data.name ?? slug, subject: data.subject ?? "", body: data.body ?? "", variables: data.variables ?? [], isActive: data.isActive ?? true, ...data })
+      .values({ slug, name: (data as any).name ?? slug, subject: (data as any).subject ?? "", body: (data as any).body ?? "", variables: (data as any).variables ?? [], isActive: (data as any).isActive ?? true, ...data } as any)
       .returning();
     return created;
   }
@@ -1573,14 +1574,14 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createEmailCronConfig(config: InsertEmailCronConfig): Promise<EmailCronConfig> {
-    const [c] = await db.insert(emailCronConfigs).values({ ...config, updatedAt: new Date() }).returning();
+    const [c] = await db.insert(emailCronConfigs).values({ ...config, updatedAt: new Date() } as any).returning();
     return c;
   }
 
   async updateEmailCronConfig(id: number, updates: Partial<InsertEmailCronConfig>): Promise<EmailCronConfig> {
     const [c] = await db
       .update(emailCronConfigs)
-      .set({ ...updates, updatedAt: new Date() })
+      .set({ ...updates, updatedAt: new Date() } as any)
       .where(eq(emailCronConfigs.id, id))
       .returning();
     return c;
@@ -1593,7 +1594,7 @@ export class DatabaseStorage implements IStorage {
   async touchEmailCronConfigLastRun(id: number): Promise<void> {
     await db
       .update(emailCronConfigs)
-      .set({ lastRunAt: new Date(), updatedAt: new Date() })
+      .set({ lastRunAt: new Date(), updatedAt: new Date() } as any)
       .where(eq(emailCronConfigs.id, id));
   }
 
@@ -1618,13 +1619,13 @@ export class DatabaseStorage implements IStorage {
   async inviteAdminUser(email: string, firstName: string, lastName: string, tempPassword: string, permissions: string[] | null): Promise<User> {
     const [user] = await db
       .insert(users)
-      .values({ email, password: tempPassword, role: "admin", membershipTier: "free", firstName, lastName, permissions: permissions as any })
+      .values({ email, password: tempPassword, role: "admin", membershipTier: "free", firstName, lastName, permissions: permissions as any } as any)
       .returning();
     return user;
   }
 
   async updateAdminUserRole(id: number, role: string): Promise<User> {
-    const [user] = await db.update(users).set({ role }).where(eq(users.id, id)).returning();
+    const [user] = await db.update(users).set({ role } as any).where(eq(users.id, id)).returning();
     return user;
   }
 
@@ -1644,14 +1645,14 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createMenu(data: InsertMenu): Promise<Menu> {
-    const [menu] = await db.insert(menus).values(data).returning();
+    const [menu] = await db.insert(menus).values(data as any).returning();
     return menu;
   }
 
   async updateMenu(id: number, data: Partial<InsertMenu>): Promise<Menu> {
     const [menu] = await db
       .update(menus)
-      .set({ ...data, updatedAt: new Date() })
+      .set({ ...data, updatedAt: new Date() } as any)
       .where(eq(menus.id, id))
       .returning();
     return menu;
@@ -1670,7 +1671,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createMenuItem(data: InsertMenuItem): Promise<MenuItem> {
-    const [item] = await db.insert(menuItems).values(data).returning();
+    const [item] = await db.insert(menuItems).values(data as any).returning();
     return item;
   }
 
@@ -1686,7 +1687,7 @@ export class DatabaseStorage implements IStorage {
   async reorderMenuItems(items: { id: number; sortOrder: number; parentId: number | null }[]): Promise<void> {
     await Promise.all(
       items.map(({ id, sortOrder, parentId }) =>
-        db.update(menuItems).set({ sortOrder, parentId }).where(eq(menuItems.id, id))
+        db.update(menuItems).set({ sortOrder, parentId } as any).where(eq(menuItems.id, id))
       )
     );
   }

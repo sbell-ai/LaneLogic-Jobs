@@ -20,7 +20,7 @@ function requireEmployerSession(req: any, res: any): boolean {
 employerVerificationRouter.post("/api/employer/verification/request/get-or-create", async (req, res) => {
   if (!requireEmployerSession(req, res)) return;
   try {
-    const request = await storage.getOrCreateVerificationRequest(req.user.id);
+    const request = await storage.getOrCreateVerificationRequest((req.user as any).id);
     const evidence = await storage.getEvidenceItemsByRequest(request.id);
     res.json({ request, evidence });
   } catch (err) {
@@ -32,7 +32,7 @@ employerVerificationRouter.post("/api/employer/verification/request/get-or-creat
 employerVerificationRouter.get("/api/employer/verification/request", async (req, res) => {
   if (!requireEmployerSession(req, res)) return;
   try {
-    const request = await storage.getLatestVerificationRequest(req.user.id);
+    const request = await storage.getLatestVerificationRequest((req.user as any).id);
     if (!request) {
       return res.json({ request: null, evidence: [] });
     }
@@ -73,7 +73,7 @@ employerVerificationRouter.post("/api/employer/verification/evidence", async (re
   if (!requireEmployerSession(req, res)) return;
   try {
     const parsed = evidenceSchema.parse(req.body);
-    const request = await storage.getActiveVerificationRequest(req.user.id);
+    const request = await storage.getActiveVerificationRequest((req.user as any).id);
     if (!request || request.id !== parsed.requestId) {
       return res.status(400).json({ ok: false, error: "invalid_request", message: "No active verification request found" });
     }
@@ -94,7 +94,7 @@ employerVerificationRouter.post("/api/employer/verification/evidence", async (re
 employerVerificationRouter.post("/api/employer/verification/request/submit", async (req, res) => {
   if (!requireEmployerSession(req, res)) return;
   try {
-    const request = await storage.getActiveVerificationRequest(req.user.id);
+    const request = await storage.getActiveVerificationRequest((req.user as any).id);
     if (!request) {
       return res.status(400).json({ ok: false, error: "no_request", message: "No active verification request found" });
     }

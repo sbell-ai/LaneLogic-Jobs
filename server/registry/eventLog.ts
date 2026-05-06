@@ -22,12 +22,12 @@ export async function logRegistryEvent(args: {
       registryName: args.registryName,
       eventType: args.eventType,
       severity: args.severity,
-      validationRuleId: args.validationRuleId ?? null,
-      rowUrl: args.rowUrl ?? null,
-      reason: args.reason ?? null,
-      activeSnapshotId: args.activeSnapshotId ?? null,
-      lastKnownGoodSnapshotId: args.lastKnownGoodSnapshotId ?? null,
-      details: args.details ?? {},
+      ...(args.validationRuleId !== undefined && { validationRuleId: args.validationRuleId }),
+      ...(args.rowUrl !== undefined && { rowUrl: args.rowUrl }),
+      ...(args.reason !== undefined && { reason: args.reason }),
+      ...(args.activeSnapshotId !== undefined && { activeSnapshotId: args.activeSnapshotId }),
+      ...(args.lastKnownGoodSnapshotId !== undefined && { lastKnownGoodSnapshotId: args.lastKnownGoodSnapshotId }),
+      ...(args.details !== undefined && { details: args.details }),
     })
     .returning();
 

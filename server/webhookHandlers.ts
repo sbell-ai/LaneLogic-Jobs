@@ -26,7 +26,7 @@ export class WebhookHandlers {
           if (result.fulfilled) {
             console.log(`[Webhook] Top-up fulfilled: ${result.type}`, result);
           } else {
-            console.warn(`[Webhook] Top-up not fulfilled: ${result.reason}`);
+            console.warn(`[Webhook] Top-up not fulfilled: ${(result as any).reason}`);
           }
         }
       }

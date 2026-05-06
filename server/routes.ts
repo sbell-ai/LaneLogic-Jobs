@@ -398,7 +398,7 @@ export async function registerRoutes(
   app.post(api.auth.register.path, async (req, res) => {
     try {
       const input = api.auth.register.input.parse(req.body);
-      const existing = await storage.getUserByEmail(input.email);
+      const existing = await storage.getUserByEmail((input as any).email);
       if (existing) {
         return res.status(400).json({ message: "Email already exists" });
       }
@@ -894,7 +894,7 @@ export async function registerRoutes(
       res.json(job);
 
       // Fire job_posted email when isPublished flips false→true
-      if (!existingJob.isPublished && input.isPublished) {
+      if (!existingJob.isPublished && (input as any).isPublished) {
         (async () => {
           try {
             const { sendTemplatedEmailByEvent } = await import("./email/sendTemplatedEmail.ts");
@@ -1113,7 +1113,7 @@ export async function registerRoutes(
       const input = api.applications.create.input.parse(req.body);
 
       if (user.role === "job_seeker") {
-        input.jobSeekerId = user.id;
+        (input as any).jobSeekerId = user.id;
 
         const txResult = await storage.runTransaction(async (tx) => {
           const result = await consumeEntitlement(user, "applications_per_month", { sourceEvent: "application", tx });
@@ -1134,7 +1134,7 @@ export async function registerRoutes(
 
         let verificationWarning: string | undefined;
         try {
-          const job = await storage.getJob(input.jobId);
+          const job = await storage.getJob((input as any).jobId);
           if (job) {
             const jobTags = (job.tags || []).filter((t): t is string => !!t);
             let employerCategory: string | null = null;
@@ -1233,14 +1233,14 @@ export async function registerRoutes(
       const { seekerNotes: _s, ...employerView } = appData as any;
       res.json(employerView);
       // Fire-and-forget status change email
-      if (input.status) {
+      if ((input as any).status) {
         (async () => {
           try {
             const { sendTemplatedEmailByEvent } = await import("./email/sendTemplatedEmail.ts");
             const updatedApp = await db.query.applications.findFirst({ where: (a, { eq }) => eq(a.id, appId) });
             if (!updatedApp) return;
             const [seekerUser, appJob] = await Promise.all([
-              storage.getUser(updatedApp.seekerId),
+              storage.getUser((updatedApp as any).seekerId),
               storage.getJob(updatedApp.jobId),
             ]);
             if (!seekerUser || !appJob) return;
@@ -1250,7 +1250,7 @@ export async function registerRoutes(
               first_name: (seekerUser as any).firstName || (seekerUser as any).email,
               job_title: appJob.title,
               company_name: employer ? ((employer as any).companyName || [(employer as any).firstName, (employer as any).lastName].filter(Boolean).join(" ")) : "the company",
-              new_status: input.status,
+              new_status: (input as any).status,
               application_id: String(appId),
               site_url: siteUrl,
               dashboard_url: `${siteUrl}/dashboard`,
@@ -1469,7 +1469,7 @@ export async function registerRoutes(
     if (!requireAdminSession(req, res)) return;
     try {
       const input = api.resources.create.input.parse(req.body);
-      if (input.isPublished && (!input.bodyText || input.bodyText.trim() === "")) {
+      if ((input as any).isPublished && (!(input as any).bodyText || (input as any).bodyText.trim() === "")) {
         return res.status(400).json({ message: "Cannot publish a resource with empty body text" });
       }
       const resource = await storage.createResource(input);
@@ -1568,7 +1568,7 @@ export async function registerRoutes(
       const input = api.resumes.create.input.parse(req.body);
       const user = req.user as any;
 
-      input.jobSeekerId = user.id;
+      (input as any).jobSeekerId = user.id;
 
       const entitlements = await resolveUserEntitlements(user);
       const ent = entitlements?.["resumes_per_month"];
@@ -1822,7 +1822,7 @@ export async function registerRoutes(
       return res.status(400).json({ message: "Invalid page data", errors: parsed.error.flatten() });
     }
     try {
-      const data = { ...parsed.data, content: sanitizeHtml(parsed.data.content) };
+      const data = { ...parsed.data, content: sanitizeHtml((parsed.data as any).content) };
       const page = await storage.createPage(data);
       res.json(page);
     } catch (err: any) {
@@ -1840,7 +1840,7 @@ export async function registerRoutes(
       return res.status(400).json({ message: "Invalid page data", errors: parsed.error.flatten() });
     }
     try {
-      const data = parsed.data.content !== undefined ? { ...parsed.data, content: sanitizeHtml(parsed.data.content) } : parsed.data;
+      const data = (parsed.data as any).content !== undefined ? { ...parsed.data, content: sanitizeHtml((parsed.data as any).content) } : parsed.data;
       const page = await storage.updatePage(Number(req.params.id), data);
       if (!page) return res.status(404).json({ message: "Page not found" });
       res.json(page);
@@ -2138,7 +2138,7 @@ export async function registerRoutes(
       if (!t) return res.status(404).json({ message: "Template not found" });
       const { DEFAULT_TEMPLATES } = await import("./email/templateSeeds.ts");
       const seed = DEFAULT_TEMPLATES.find(s => s.slug === req.params.slug);
-      res.json({ ...t, hasActiveTrigger: seed?.hasActiveTrigger ?? true });
+      res.json({ ...t, hasActiveTrigger: (seed as any)?.hasActiveTrigger ?? true });
     } catch (err: any) {
       res.status(500).json({ message: err.message });
     }
@@ -2274,7 +2274,7 @@ export async function registerRoutes(
     try {
       const parsed = insertEmailCronConfigSchema.safeParse(req.body);
       if (!parsed.success) return res.status(400).json({ message: "Invalid input", errors: parsed.error.flatten() });
-      const joinErr = validateCronRecipientJoin(parsed.data.recipientJoin);
+      const joinErr = validateCronRecipientJoin((parsed.data as any).recipientJoin);
       if (joinErr) return res.status(400).json({ message: joinErr });
       const config = await storage.createEmailCronConfig(parsed.data);
       res.status(201).json(config);
@@ -2288,7 +2288,7 @@ export async function registerRoutes(
       const id = Number(req.params.id);
       const parsed = insertEmailCronConfigSchema.partial().safeParse(req.body);
       if (!parsed.success) return res.status(400).json({ message: "Invalid input", errors: parsed.error.flatten() });
-      const joinErr = validateCronRecipientJoin(parsed.data.recipientJoin);
+      const joinErr = validateCronRecipientJoin((parsed.data as any).recipientJoin);
       if (joinErr) return res.status(400).json({ message: joinErr });
       const config = await storage.updateEmailCronConfig(id, parsed.data);
       res.json(config);
@@ -2516,7 +2516,7 @@ export async function registerRoutes(
         const normalized = normalizeCategory(job.category);
         if (normalized) {
           if (normalized !== job.category) {
-            await db.update(jobs).set({ category: normalized }).where(eq(jobs.id, job.id));
+            await db.update(jobs).set({ category: normalized } as any).where(eq(jobs.id, job.id));
             mapped++;
           } else {
             unchanged++;
@@ -2525,10 +2525,10 @@ export async function registerRoutes(
         }
         const legacyMapping = LEGACY_CATEGORY_MAP[job.category.toLowerCase()];
         if (legacyMapping !== undefined) {
-          await db.update(jobs).set({ category: legacyMapping }).where(eq(jobs.id, job.id));
+          await db.update(jobs).set({ category: legacyMapping } as any).where(eq(jobs.id, job.id));
           if (legacyMapping) mapped++; else cleared++;
         } else {
-          await db.update(jobs).set({ category: null }).where(eq(jobs.id, job.id));
+          await db.update(jobs).set({ category: null } as any).where(eq(jobs.id, job.id));
           cleared++;
         }
       }
@@ -2578,7 +2578,7 @@ export async function registerRoutes(
           }
         }
         if (settingsChanged) {
-          await storage.updateSiteSettings(settingsData);
+          await storage.updateSiteSettings(settingsData as any);
         }
       }
       const allUsers = await storage.getUsers();
@@ -2772,7 +2772,7 @@ export async function registerRoutes(
       });
 
       if (!result.fulfilled) {
-        return res.status(400).json({ message: result.reason });
+        return res.status(400).json({ message: (result as any).reason });
       }
 
       fulfilledSessions.add(sessionId);
@@ -4087,7 +4087,7 @@ async function seedDatabase() {
       authorId: admin.id,
       title: "The Future of Transportation Jobs",
       content: "As automation increases, the role of the driver is changing..."
-    });
+    } as any);
 
     await storage.createResource({
       title: "Resume Tips for Truck Drivers",

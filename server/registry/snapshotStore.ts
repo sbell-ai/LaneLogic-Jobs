@@ -21,10 +21,8 @@ export async function writeRegistrySnapshot(args: {
       contentHash: args.contentHash,
       payload: args.payload,
       rowUrls: args.rowUrls,
-      validRowCount: args.validRowCount,
-      invalidRowCount: args.invalidRowCount,
-      isLastKnownGood: false,
-      isActive: false,
+      ...(args.validRowCount !== undefined && { validRowCount: args.validRowCount }),
+      ...(args.invalidRowCount !== undefined && { invalidRowCount: args.invalidRowCount }),
     })
     .returning();
 
@@ -73,7 +71,7 @@ export async function setLastKnownGoodSnapshot(args: {
 }) {
   await db
     .update(schema.registrySnapshots)
-    .set({ isLastKnownGood: false })
+    .set({ isLastKnownGood: false } as any)
     .where(
       and(
         eq(schema.registrySnapshots.environment, args.environment),
@@ -84,7 +82,7 @@ export async function setLastKnownGoodSnapshot(args: {
 
   await db
     .update(schema.registrySnapshots)
-    .set({ isLastKnownGood: true })
+    .set({ isLastKnownGood: true } as any)
     .where(eq(schema.registrySnapshots.id, args.snapshotId));
 }
 
@@ -95,7 +93,7 @@ export async function setActiveSnapshot(args: {
 }) {
   await db
     .update(schema.registrySnapshots)
-    .set({ isActive: false })
+    .set({ isActive: false } as any)
     .where(
       and(
         eq(schema.registrySnapshots.environment, args.environment),
@@ -106,6 +104,6 @@ export async function setActiveSnapshot(args: {
 
   await db
     .update(schema.registrySnapshots)
-    .set({ isActive: true })
+    .set({ isActive: true } as any)
     .where(eq(schema.registrySnapshots.id, args.snapshotId));
 }
