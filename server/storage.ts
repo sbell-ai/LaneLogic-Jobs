@@ -1,14 +1,5 @@
 import { db } from "./db";
 import {
-  users, jobs, applications, resources, blogPosts, resumes, siteSettings, categories, coupons, pages,
-  importRuns, importArtifacts, socialPosts,
-  adminProducts, adminEntitlements, adminProductOverrides, adminProductEntitlements, migrationState,
-  entitlementUsageWindows, entitlementCreditGrants, entitlementCreditConsumptions,
-  jobSources, importTargets, jobImportRuns,
-  employerVerificationRequests, employerEvidenceItems,
-  seekerCredentialRequirements, seekerRequirementRules,
-  seekerVerificationRequests, seekerCredentialEvidenceItems,
-  conversations, messages,
   type User, type InsertUser, type Job, type InsertJob,
   type Application, type InsertApplication,
   type Resource, type InsertResource,
@@ -28,7 +19,7 @@ import {
   type EntitlementUsageWindow, type InsertEntitlementUsageWindow,
   type EntitlementCreditGrant, type InsertEntitlementCreditGrant,
   type EntitlementCreditConsumption, type InsertEntitlementCreditConsumption,
-  type SiteSettingsData, DEFAULT_SETTINGS,
+  type SiteSettingsData,
   type JobSource, type InsertJobSource,
   type ImportTarget, type InsertImportTarget,
   type JobImportRun, type InsertJobImportRun,
@@ -40,13 +31,46 @@ import {
   type SeekerCredentialEvidenceItem, type InsertSeekerCredentialEvidenceItem,
   type Conversation, type InsertConversation,
   type Message, type InsertMessage,
-  emailTemplates, type EmailTemplate, type InsertEmailTemplate,
-  emailCronConfigs, type EmailCronConfig, type InsertEmailCronConfig,
-  jobAlertSubscriptions, type JobAlertSubscription, type InsertJobAlertSubscription,
-  savedJobs, type SavedJob, type InsertSavedJob,
-  menus, menuItems, type Menu, type InsertMenu, type MenuItem, type InsertMenuItem,
+  type EmailTemplate, type InsertEmailTemplate,
+  type EmailCronConfig, type InsertEmailCronConfig,
+  type JobAlertSubscription, type InsertJobAlertSubscription,
+  type SavedJob, type InsertSavedJob,
+  type Menu, type InsertMenu, type MenuItem, type InsertMenuItem,
 } from "@shared/schema";
-import { eq, and, sql, desc, asc, isNotNull, gte, lte, gt, ne, notInArray, inArray, count } from "drizzle-orm";
+
+import { userStorage } from "./storage/users";
+import { jobStorage } from "./storage/jobs";
+import { applicationStorage } from "./storage/applications";
+import { savedJobStorage } from "./storage/savedJobs";
+import { resourceStorage } from "./storage/resources";
+import { blogStorage } from "./storage/blog";
+import { resumeStorage } from "./storage/resumes";
+import { categoryStorage } from "./storage/categories";
+import { couponStorage } from "./storage/coupons";
+import { pageStorage } from "./storage/pages";
+import { importRunStorage } from "./storage/importRuns";
+import { socialPostStorage } from "./storage/socialPosts";
+import { siteSettingsStorage } from "./storage/siteSettings";
+import { emailTemplateStorage } from "./storage/emailTemplates";
+import { adminProductStorage } from "./storage/adminProducts";
+import { adminEntitlementStorage } from "./storage/adminEntitlements";
+import { adminOverrideStorage } from "./storage/adminOverrides";
+import { adminProductEntitlementStorage } from "./storage/adminProductEntitlements";
+import { migrationStateStorage } from "./storage/migrationState";
+import { entitlementUsageStorage } from "./storage/entitlementUsage";
+import { entitlementCreditStorage } from "./storage/entitlementCredits";
+import { jobSourceStorage } from "./storage/jobSources";
+import { importTargetStorage } from "./storage/importTargets";
+import { jobImportRunStorage } from "./storage/jobImportRuns";
+import { apifyJobStorage } from "./storage/apifyJobs";
+import { employerVerificationStorage } from "./storage/employerVerification";
+import { seekerVerificationStorage } from "./storage/seekerVerification";
+import { messagingStorage } from "./storage/messaging";
+import { enrichedApplicantStorage } from "./storage/enrichedApplicants";
+import { jobAlertStorage } from "./storage/jobAlerts";
+import { emailCronStorage } from "./storage/emailCron";
+import { adminProfileStorage } from "./storage/adminProfile";
+import { menuStorage } from "./storage/menus";
 
 export interface IStorage {
   // Users
@@ -303,1400 +327,257 @@ export interface IStorage {
 
 export class DatabaseStorage implements IStorage {
   // Users
-  async getUser(id: number): Promise<User | undefined> {
-    const [user] = await db.select().from(users).where(eq(users.id, id));
-    return user;
-  }
-  async getUserByEmail(email: string): Promise<User | undefined> {
-    const [user] = await db.select().from(users).where(eq(users.email, email));
-    return user;
-  }
-  async getUserByEmailVerificationToken(token: string): Promise<User | undefined> {
-    const [user] = await db.select().from(users).where(eq(users.emailVerificationToken, token));
-    return user;
-  }
-  async getUserByPasswordResetToken(token: string): Promise<User | undefined> {
-    const [user] = await db.select().from(users).where(eq(users.passwordResetToken, token));
-    return user;
-  }
-  async getUsers(): Promise<User[]> {
-    return await db.select().from(users);
-  }
-  async createUser(insertUser: InsertUser): Promise<User> {
-    const [user] = await db.insert(users).values(insertUser as any).returning();
-    return user;
-  }
-  async findOrCreateEmployerByCompanyName(companyName: string): Promise<User> {
-    const normalized = companyName.trim();
-    const [existing] = await db
-      .select()
-      .from(users)
-      .where(
-        and(
-          eq(users.role, "employer"),
-          sql`lower(${users.companyName}) = lower(${normalized})`
-        )
-      )
-      .limit(1);
-    if (existing) return existing;
-    const slug = normalized.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 40);
-    const baseEmail = `employer+${slug}@auto.lanelogicjobs.com`;
-    let email = baseEmail;
-    let suffix = 1;
-    while (await this.getUserByEmail(email)) {
-      email = `employer+${slug}-${suffix}@auto.lanelogicjobs.com`;
-      suffix++;
-    }
-    const [created] = await db
-      .insert(users)
-      .values({ email, password: "", role: "employer", companyName: normalized, membershipTier: "free" } as any)
-      .returning();
-    return created;
-  }
-  async updateUser(id: number, updates: Partial<InsertUser>): Promise<User> {
-    const [user] = await db.update(users).set(updates).where(eq(users.id, id)).returning();
-    return user;
-  }
-  async deleteUser(id: number): Promise<void> {
-    await db.delete(users).where(eq(users.id, id));
-  }
+  getUser = userStorage.getUser;
+  getUserByEmail = userStorage.getUserByEmail;
+  getUserByEmailVerificationToken = userStorage.getUserByEmailVerificationToken;
+  getUserByPasswordResetToken = userStorage.getUserByPasswordResetToken;
+  getUsers = userStorage.getUsers;
+  createUser = userStorage.createUser;
+  findOrCreateEmployerByCompanyName = userStorage.findOrCreateEmployerByCompanyName;
+  updateUser = userStorage.updateUser;
+  deleteUser = userStorage.deleteUser;
 
   // Jobs
-  async getJobs(): Promise<Job[]> {
-    return await db.select().from(jobs).orderBy(desc(jobs.createdAt));
-  }
-  async getJob(id: number): Promise<Job | undefined> {
-    const [job] = await db.select().from(jobs).where(eq(jobs.id, id));
-    return job;
-  }
-  async createJob(insertJob: InsertJob): Promise<Job> {
-    const [job] = await db.insert(jobs).values(insertJob as any).returning();
-    return job;
-  }
-  async updateJob(id: number, updates: Partial<InsertJob>): Promise<Job> {
-    const [job] = await db.update(jobs).set(updates).where(eq(jobs.id, id)).returning();
-    return job;
-  }
-  async deleteJob(id: number): Promise<void> {
-    await db.delete(jobs).where(eq(jobs.id, id));
-  }
+  getJobs = jobStorage.getJobs;
+  getJob = jobStorage.getJob;
+  createJob = jobStorage.createJob;
+  updateJob = jobStorage.updateJob;
+  deleteJob = jobStorage.deleteJob;
 
   // Applications
-  async getApplications(): Promise<Application[]> {
-    return await db.select().from(applications);
-  }
-  async updateApplication(id: number, updates: Partial<InsertApplication>): Promise<Application> {
-    const [app] = await db.update(applications).set(updates).where(eq(applications.id, id)).returning();
-    return app;
-  }
-  async deleteApplication(id: number): Promise<void> {
-    await db.delete(applications).where(eq(applications.id, id));
-  }
-  async getApplicationsBySeeker(seekerId: number): Promise<Application[]> {
-    return db.select().from(applications).where(eq(applications.jobSeekerId, seekerId)).orderBy(desc(applications.createdAt));
-  }
-  async markApplicationViewed(id: number): Promise<void> {
-    await db.update(applications).set({ viewedAt: new Date() } as any).where(and(eq(applications.id, id), sql`viewed_at IS NULL`));
-  }
+  getApplications = applicationStorage.getApplications;
+  updateApplication = applicationStorage.updateApplication;
+  deleteApplication = applicationStorage.deleteApplication;
+  getApplicationsBySeeker = applicationStorage.getApplicationsBySeeker;
+  markApplicationViewed = applicationStorage.markApplicationViewed;
+  createApplication = applicationStorage.createApplication;
 
   // Saved Jobs
-  async getSavedJobsBySeeker(seekerId: number): Promise<SavedJob[]> {
-    return db.select().from(savedJobs).where(eq(savedJobs.jobSeekerId, seekerId)).orderBy(desc(savedJobs.createdAt));
-  }
-  async saveJob(seekerId: number, jobId: number): Promise<SavedJob> {
-    const [row] = await db.insert(savedJobs).values({ jobSeekerId: seekerId, jobId }).onConflictDoNothing().returning();
-    if (!row) {
-      const existing = await db.select().from(savedJobs).where(and(eq(savedJobs.jobSeekerId, seekerId), eq(savedJobs.jobId, jobId)));
-      return existing[0];
-    }
-    return row;
-  }
-  async unsaveJob(seekerId: number, jobId: number): Promise<void> {
-    await db.delete(savedJobs).where(and(eq(savedJobs.jobSeekerId, seekerId), eq(savedJobs.jobId, jobId)));
-  }
+  getSavedJobsBySeeker = savedJobStorage.getSavedJobsBySeeker;
+  saveJob = savedJobStorage.saveJob;
+  unsaveJob = savedJobStorage.unsaveJob;
 
   // Resources
-  async getResources(context: "admin" | "public" = "public"): Promise<Resource[]> {
-    if (context === "admin") {
-      return await db.select().from(resources).orderBy(desc(resources.updatedAt));
-    }
-    return await db.select().from(resources)
-      .where(eq(resources.isPublished, true))
-      .orderBy(desc(resources.publishedAt), desc(resources.id));
-  }
-  async getResource(id: number): Promise<Resource | undefined> {
-    const [res] = await db.select().from(resources).where(eq(resources.id, id));
-    return res;
-  }
-  async getResourceBySlug(slug: string): Promise<Resource | undefined> {
-    const [res] = await db.select().from(resources).where(eq(resources.slug, slug));
-    return res;
-  }
-  private async generateUniqueResourceSlug(title: string): Promise<string> {
-    let base = title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 80);
-    if (!base || /^\d+$/.test(base)) {
-      base = base ? `resource-${base}` : "resource";
-    }
-    let slug = base;
-    let suffix = 2;
-    while (true) {
-      const existing = await this.getResourceBySlug(slug);
-      if (!existing) return slug;
-      slug = `${base}-${suffix}`;
-      suffix++;
-    }
-  }
-  async createResource(resource: InsertResource): Promise<Resource> {
-    const slug = await this.generateUniqueResourceSlug((resource as any).title);
-    const [res] = await db.insert(resources).values({ ...resource, slug } as any).returning();
-    return res;
-  }
-  async updateResource(id: number, updates: Partial<InsertResource>): Promise<Resource> {
-    const [res] = await db.update(resources).set({ ...updates, updatedAt: new Date() } as any).where(eq(resources.id, id)).returning();
-    return res;
-  }
-  async deleteResource(id: number): Promise<void> {
-    await db.delete(resources).where(eq(resources.id, id));
-  }
+  getResources = resourceStorage.getResources;
+  getResource = resourceStorage.getResource;
+  getResourceBySlug = resourceStorage.getResourceBySlug;
+  createResource = resourceStorage.createResource;
+  updateResource = resourceStorage.updateResource;
+  deleteResource = resourceStorage.deleteResource;
 
   // Blog
-  async getBlogPosts(): Promise<BlogPost[]> {
-    return await db.select().from(blogPosts);
-  }
-  async getBlogPost(id: number): Promise<BlogPost | undefined> {
-    const [post] = await db.select().from(blogPosts).where(eq(blogPosts.id, id));
-    return post;
-  }
-  async getBlogPostBySlug(slug: string): Promise<BlogPost | undefined> {
-    const [post] = await db.select().from(blogPosts).where(eq(blogPosts.slug, slug));
-    return post;
-  }
-  async createBlogPost(post: InsertBlogPost): Promise<BlogPost> {
-    const [blogPost] = await db.insert(blogPosts).values(post as any).returning();
-    return blogPost;
-  }
-  async updateBlogPost(id: number, updates: Partial<InsertBlogPost>): Promise<BlogPost> {
-    const [post] = await db.update(blogPosts).set(updates as any).where(eq(blogPosts.id, id)).returning();
-    return post;
-  }
-  async deleteBlogPost(id: number): Promise<void> {
-    await db.delete(blogPosts).where(eq(blogPosts.id, id));
-  }
+  getBlogPosts = blogStorage.getBlogPosts;
+  getBlogPost = blogStorage.getBlogPost;
+  getBlogPostBySlug = blogStorage.getBlogPostBySlug;
+  createBlogPost = blogStorage.createBlogPost;
+  updateBlogPost = blogStorage.updateBlogPost;
+  deleteBlogPost = blogStorage.deleteBlogPost;
 
   // Resumes
-  async getResumes(jobSeekerId: number): Promise<Resume[]> {
-    return await db.select().from(resumes).where(eq(resumes.jobSeekerId, jobSeekerId));
-  }
-  async createResume(resume: InsertResume): Promise<Resume> {
-    const [res] = await db.insert(resumes).values(resume as any).returning();
-    return res;
-  }
+  getResumes = resumeStorage.getResumes;
+  createResume = resumeStorage.createResume;
 
   // Categories
-  async getCategories(): Promise<Category[]> {
-    return await db.select().from(categories);
-  }
-  async createCategory(category: InsertCategory): Promise<Category> {
-    const [cat] = await db.insert(categories).values(category as any).returning();
-    return cat;
-  }
-  async deleteCategory(id: number): Promise<void> {
-    await db.delete(categories).where(eq(categories.id, id));
-  }
+  getCategories = categoryStorage.getCategories;
+  createCategory = categoryStorage.createCategory;
+  deleteCategory = categoryStorage.deleteCategory;
 
   // Coupons
-  async getCoupons(): Promise<Coupon[]> {
-    return await db.select().from(coupons);
-  }
-  async getCoupon(id: number): Promise<Coupon | undefined> {
-    const [coupon] = await db.select().from(coupons).where(eq(coupons.id, id));
-    return coupon;
-  }
-  async getCouponByCode(code: string): Promise<Coupon | undefined> {
-    const [coupon] = await db.select().from(coupons).where(eq(coupons.code, code));
-    return coupon;
-  }
-  async createCoupon(coupon: InsertCoupon): Promise<Coupon> {
-    const [c] = await db.insert(coupons).values(coupon as any).returning();
-    return c;
-  }
-  async updateCoupon(id: number, updates: Partial<InsertCoupon>): Promise<Coupon> {
-    const [c] = await db.update(coupons).set(updates).where(eq(coupons.id, id)).returning();
-    return c;
-  }
-  async deleteCoupon(id: number): Promise<void> {
-    await db.delete(coupons).where(eq(coupons.id, id));
-  }
-  async incrementCouponUses(id: number): Promise<void> {
-    await db.update(coupons)
-      .set({ currentUses: sql`${coupons.currentUses} + 1` } as any)
-      .where(eq(coupons.id, id));
-  }
+  getCoupons = couponStorage.getCoupons;
+  getCoupon = couponStorage.getCoupon;
+  getCouponByCode = couponStorage.getCouponByCode;
+  createCoupon = couponStorage.createCoupon;
+  updateCoupon = couponStorage.updateCoupon;
+  deleteCoupon = couponStorage.deleteCoupon;
+  incrementCouponUses = couponStorage.incrementCouponUses;
 
   // Pages
-  async getPages(): Promise<Page[]> {
-    return await db.select().from(pages).orderBy(desc(pages.createdAt));
-  }
-  async getPage(id: number): Promise<Page | undefined> {
-    const [page] = await db.select().from(pages).where(eq(pages.id, id));
-    return page;
-  }
-  async getPageBySlug(slug: string): Promise<Page | undefined> {
-    const [page] = await db.select().from(pages).where(eq(pages.slug, slug));
-    return page;
-  }
-  async createPage(page: InsertPage): Promise<Page> {
-    const [p] = await db.insert(pages).values(page as any).returning();
-    return p;
-  }
-  async updatePage(id: number, updates: Partial<InsertPage>): Promise<Page> {
-    const [p] = await db.update(pages).set({ ...updates, updatedAt: new Date() } as any).where(eq(pages.id, id)).returning();
-    return p;
-  }
-  async deletePage(id: number): Promise<void> {
-    await db.delete(pages).where(eq(pages.id, id));
-  }
+  getPages = pageStorage.getPages;
+  getPage = pageStorage.getPage;
+  getPageBySlug = pageStorage.getPageBySlug;
+  createPage = pageStorage.createPage;
+  updatePage = pageStorage.updatePage;
+  deletePage = pageStorage.deletePage;
 
   // Import Runs
-  async upsertJobByExternalKey(employerId: number, externalJobKey: string, job: InsertJob): Promise<Job> {
-    const existing = await db.select().from(jobs).where(
-      and(eq(jobs.employerId, employerId), eq(jobs.externalJobKey, externalJobKey))
-    );
-    if (existing.length > 0) {
-      const { employerId: _eid, externalJobKey: _ek, ...updates } = job as any;
-      const [updated] = await db.update(jobs).set(updates as any).where(eq(jobs.id, existing[0].id)).returning();
-      return updated;
-    }
-    const [created] = await db.insert(jobs).values(job as any).returning();
-    return created;
-  }
-  async createImportRun(run: InsertImportRun): Promise<ImportRun> {
-    const [r] = await db.insert(importRuns).values(run as any).returning();
-    return r;
-  }
-  async updateImportRun(id: number, updates: Partial<InsertImportRun>): Promise<ImportRun> {
-    const [r] = await db.update(importRuns).set(updates).where(eq(importRuns.id, id)).returning();
-    return r;
-  }
-  async getImportRun(id: number): Promise<ImportRun | undefined> {
-    const [r] = await db.select().from(importRuns).where(eq(importRuns.id, id));
-    return r;
-  }
-  async getImportRuns(): Promise<ImportRun[]> {
-    return await db.select().from(importRuns).orderBy(desc(importRuns.uploadedAt));
-  }
-  async createImportArtifact(artifact: InsertImportArtifact): Promise<ImportArtifact> {
-    const [a] = await db.insert(importArtifacts).values(artifact as any).returning();
-    return a;
-  }
-  async getImportArtifact(runId: number, filename: string): Promise<ImportArtifact | undefined> {
-    const [a] = await db.select().from(importArtifacts).where(
-      and(eq(importArtifacts.runId, runId), eq(importArtifacts.filename, filename))
-    );
-    return a;
-  }
+  upsertJobByExternalKey = importRunStorage.upsertJobByExternalKey;
+  createImportRun = importRunStorage.createImportRun;
+  updateImportRun = importRunStorage.updateImportRun;
+  getImportRun = importRunStorage.getImportRun;
+  getImportRuns = importRunStorage.getImportRuns;
+  createImportArtifact = importRunStorage.createImportArtifact;
+  getImportArtifact = importRunStorage.getImportArtifact;
 
   // Social Posts
-  async createSocialPost(data: InsertSocialPost): Promise<SocialPost> {
-    const [post] = await db.insert(socialPosts).values(data as any).returning();
-    return post;
-  }
-  async getSocialPost(id: number): Promise<SocialPost | undefined> {
-    const [post] = await db.select().from(socialPosts).where(eq(socialPosts.id, id));
-    return post;
-  }
-  async listSocialPosts(filters?: { status?: string; entityType?: string }): Promise<SocialPost[]> {
-    const conditions = [];
-    if (filters?.status) conditions.push(eq(socialPosts.status, filters.status));
-    if (filters?.entityType) conditions.push(eq(socialPosts.entityType, filters.entityType));
-    if (conditions.length > 0) {
-      return await db.select().from(socialPosts).where(and(...conditions)).orderBy(desc(socialPosts.createdAt));
-    }
-    return await db.select().from(socialPosts).orderBy(desc(socialPosts.createdAt));
-  }
-  async updateSocialPost(id: number, updates: Partial<InsertSocialPost>): Promise<SocialPost> {
-    const [post] = await db.update(socialPosts).set({ ...updates, updatedAt: new Date() } as any).where(eq(socialPosts.id, id)).returning();
-    return post;
-  }
-  async deleteSocialPost(id: number): Promise<void> {
-    await db.delete(socialPosts).where(eq(socialPosts.id, id));
-  }
+  createSocialPost = socialPostStorage.createSocialPost;
+  getSocialPost = socialPostStorage.getSocialPost;
+  listSocialPosts = socialPostStorage.listSocialPosts;
+  updateSocialPost = socialPostStorage.updateSocialPost;
+  deleteSocialPost = socialPostStorage.deleteSocialPost;
 
   // Site Settings
-  async getSiteSettings(): Promise<SiteSettingsData> {
-    const rows = await db.select().from(siteSettings).limit(1);
-    if (rows.length === 0) return { ...DEFAULT_SETTINGS };
-    return rows[0].settings;
-  }
-  async updateSiteSettings(settings: SiteSettingsData): Promise<SiteSettingsData> {
-    const rows = await db.select().from(siteSettings).limit(1);
-    if (rows.length === 0) {
-      const [row] = await db.insert(siteSettings).values({ settings }).returning();
-      return row.settings;
-    } else {
-      const [row] = await db.update(siteSettings)
-        .set({ settings, updatedAt: new Date() } as any)
-        .where(eq(siteSettings.id, rows[0].id))
-        .returning();
-      return row.settings;
-    }
-  }
+  getSiteSettings = siteSettingsStorage.getSiteSettings;
+  updateSiteSettings = siteSettingsStorage.updateSiteSettings;
+
+  // Email Templates
+  getEmailTemplates = emailTemplateStorage.getEmailTemplates;
+  getEmailTemplateBySlug = emailTemplateStorage.getEmailTemplateBySlug;
+  upsertEmailTemplate = emailTemplateStorage.upsertEmailTemplate;
+
   // Admin Products
-  async getAdminProducts(): Promise<AdminProduct[]> {
-    return await db.select().from(adminProducts).orderBy(desc(adminProducts.createdAt));
-  }
-  async getAdminProduct(id: number): Promise<AdminProduct | undefined> {
-    const [p] = await db.select().from(adminProducts).where(eq(adminProducts.id, id));
-    return p;
-  }
-  async createAdminProduct(product: InsertAdminProduct): Promise<AdminProduct> {
-    const [p] = await db.insert(adminProducts).values(product as any).returning();
-    return p;
-  }
-  async updateAdminProduct(id: number, updates: Partial<InsertAdminProduct>): Promise<AdminProduct> {
-    const [p] = await db.update(adminProducts).set({ ...updates, updatedAt: new Date() } as any).where(eq(adminProducts.id, id)).returning();
-    return p;
-  }
-  async deleteAdminProduct(id: number): Promise<void> {
-    await db.delete(adminProductEntitlements).where(eq(adminProductEntitlements.productId, id));
-    await db.delete(adminProductOverrides).where(eq(adminProductOverrides.productId, id));
-    await db.delete(adminProducts).where(eq(adminProducts.id, id));
-  }
+  getAdminProducts = adminProductStorage.getAdminProducts;
+  getAdminProduct = adminProductStorage.getAdminProduct;
+  createAdminProduct = adminProductStorage.createAdminProduct;
+  updateAdminProduct = adminProductStorage.updateAdminProduct;
+  deleteAdminProduct = adminProductStorage.deleteAdminProduct;
 
   // Admin Entitlements
-  async getAdminEntitlements(): Promise<AdminEntitlement[]> {
-    return await db.select().from(adminEntitlements).orderBy(desc(adminEntitlements.createdAt));
-  }
-  async getAdminEntitlement(id: number): Promise<AdminEntitlement | undefined> {
-    const [e] = await db.select().from(adminEntitlements).where(eq(adminEntitlements.id, id));
-    return e;
-  }
-  async createAdminEntitlement(entitlement: InsertAdminEntitlement): Promise<AdminEntitlement> {
-    const [e] = await db.insert(adminEntitlements).values(entitlement as any).returning();
-    return e;
-  }
-  async updateAdminEntitlement(id: number, updates: Partial<InsertAdminEntitlement>): Promise<AdminEntitlement> {
-    const [e] = await db.update(adminEntitlements).set({ ...updates, updatedAt: new Date() } as any).where(eq(adminEntitlements.id, id)).returning();
-    return e;
-  }
-  async deleteAdminEntitlement(id: number): Promise<void> {
-    await db.delete(adminProductOverrides).where(eq(adminProductOverrides.entitlementId, id));
-    await db.delete(adminProductEntitlements).where(eq(adminProductEntitlements.entitlementId, id));
-    await db.delete(adminEntitlements).where(eq(adminEntitlements.id, id));
-  }
+  getAdminEntitlements = adminEntitlementStorage.getAdminEntitlements;
+  getAdminEntitlement = adminEntitlementStorage.getAdminEntitlement;
+  createAdminEntitlement = adminEntitlementStorage.createAdminEntitlement;
+  updateAdminEntitlement = adminEntitlementStorage.updateAdminEntitlement;
+  deleteAdminEntitlement = adminEntitlementStorage.deleteAdminEntitlement;
 
   // Admin Product Overrides
-  async getAdminProductOverrides(productId?: number): Promise<AdminProductOverride[]> {
-    if (productId !== undefined) {
-      return await db.select().from(adminProductOverrides).where(eq(adminProductOverrides.productId, productId));
-    }
-    return await db.select().from(adminProductOverrides);
-  }
-  async getAdminProductOverride(id: number): Promise<AdminProductOverride | undefined> {
-    const [o] = await db.select().from(adminProductOverrides).where(eq(adminProductOverrides.id, id));
-    return o;
-  }
-  async createAdminProductOverride(override: InsertAdminProductOverride): Promise<AdminProductOverride> {
-    const [o] = await db.insert(adminProductOverrides).values(override as any).returning();
-    return o;
-  }
-  async updateAdminProductOverride(id: number, updates: Partial<InsertAdminProductOverride>): Promise<AdminProductOverride> {
-    const [o] = await db.update(adminProductOverrides).set({ ...updates, updatedAt: new Date() } as any).where(eq(adminProductOverrides.id, id)).returning();
-    return o;
-  }
-  async deleteAdminProductOverride(id: number): Promise<void> {
-    await db.delete(adminProductOverrides).where(eq(adminProductOverrides.id, id));
-  }
+  getAdminProductOverrides = adminOverrideStorage.getAdminProductOverrides;
+  getAdminProductOverride = adminOverrideStorage.getAdminProductOverride;
+  createAdminProductOverride = adminOverrideStorage.createAdminProductOverride;
+  updateAdminProductOverride = adminOverrideStorage.updateAdminProductOverride;
+  deleteAdminProductOverride = adminOverrideStorage.deleteAdminProductOverride;
 
   // Admin Product Entitlements (join table)
-  async getAdminProductEntitlements(productId: number): Promise<AdminProductEntitlement[]> {
-    return await db.select().from(adminProductEntitlements).where(eq(adminProductEntitlements.productId, productId));
-  }
-  async setAdminProductEntitlements(productId: number, entitlementIds: number[]): Promise<void> {
-    await db.delete(adminProductEntitlements).where(eq(adminProductEntitlements.productId, productId));
-    if (entitlementIds.length > 0) {
-      await db.insert(adminProductEntitlements).values(
-        entitlementIds.map(eid => ({ productId, entitlementId: eid }))
-      );
-    }
-  }
+  getAdminProductEntitlements = adminProductEntitlementStorage.getAdminProductEntitlements;
+  setAdminProductEntitlements = adminProductEntitlementStorage.setAdminProductEntitlements;
 
   // Migration State
-  async getMigrationState(key: string): Promise<MigrationState | undefined> {
-    const [m] = await db.select().from(migrationState).where(eq(migrationState.key, key));
-    return m;
-  }
-  async setMigrationState(state: InsertMigrationState): Promise<MigrationState> {
-    const existing = await this.getMigrationState((state as any).key);
-    if (existing) {
-      const [m] = await db.update(migrationState).set(state as any).where(eq(migrationState.key, (state as any).key)).returning();
-      return m;
-    }
-    const [m] = await db.insert(migrationState).values(state as any).returning();
-    return m;
-  }
+  getMigrationState = migrationStateStorage.getMigrationState;
+  setMigrationState = migrationStateStorage.setMigrationState;
 
   // Entitlement Usage Windows
-  async getOrCreateUsageWindow(userId: number, entitlementKey: string, windowStart: Date, windowEnd: Date, txDb: any = db): Promise<EntitlementUsageWindow> {
-    const [w] = await txDb.insert(entitlementUsageWindows).values({
-      userId, entitlementKey, windowStart, windowEnd, usedCount: 0
-    }).onConflictDoNothing().returning();
-    if (w) return w;
-    const [existing] = await txDb.select().from(entitlementUsageWindows).where(
-      and(
-        eq(entitlementUsageWindows.userId, userId),
-        eq(entitlementUsageWindows.entitlementKey, entitlementKey),
-        eq(entitlementUsageWindows.windowStart, windowStart)
-      )
-    );
-    return existing;
-  }
-
-  async incrementUsageWindow(windowId: number, txDb: any = db): Promise<EntitlementUsageWindow> {
-    const [w] = await txDb.update(entitlementUsageWindows)
-      .set({ usedCount: sql`${entitlementUsageWindows.usedCount} + 1` })
-      .where(eq(entitlementUsageWindows.id, windowId))
-      .returning();
-    return w;
-  }
-
-  async incrementUsageWindowAtomic(windowId: number, maxCount: number, txDb: any = db): Promise<EntitlementUsageWindow | null> {
-    const rows = await txDb.update(entitlementUsageWindows)
-      .set({ usedCount: sql`${entitlementUsageWindows.usedCount} + 1` })
-      .where(and(
-        eq(entitlementUsageWindows.id, windowId),
-        sql`${entitlementUsageWindows.usedCount} < ${maxCount}`
-      ))
-      .returning();
-    return rows.length > 0 ? rows[0] : null;
-  }
+  getOrCreateUsageWindow = entitlementUsageStorage.getOrCreateUsageWindow;
+  incrementUsageWindow = entitlementUsageStorage.incrementUsageWindow;
+  incrementUsageWindowAtomic = entitlementUsageStorage.incrementUsageWindowAtomic;
 
   // Entitlement Credit Grants
-  async createCreditGrant(grant: InsertEntitlementCreditGrant, txDb: any = db): Promise<EntitlementCreditGrant> {
-    const [g] = await txDb.insert(entitlementCreditGrants).values(grant).returning();
-    return g;
-  }
+  createCreditGrant = entitlementCreditStorage.createCreditGrant;
+  getActiveCreditGrants = entitlementCreditStorage.getActiveCreditGrants;
+  consumeCreditFromGrant = entitlementCreditStorage.consumeCreditFromGrant;
+  createCreditConsumption = entitlementCreditStorage.createCreditConsumption;
+  getUserCreditSummary = entitlementCreditStorage.getUserCreditSummary;
+  getCreditGrantByPaymentIntent = entitlementCreditStorage.getCreditGrantByPaymentIntent;
 
-  async getActiveCreditGrants(userId: number, entitlementKey: string, txDb: any = db): Promise<EntitlementCreditGrant[]> {
-    const now = new Date();
-    return await txDb.select().from(entitlementCreditGrants).where(
-      and(
-        eq(entitlementCreditGrants.userId, userId),
-        eq(entitlementCreditGrants.entitlementKey, entitlementKey),
-        eq(entitlementCreditGrants.status, "Active"),
-        gt(entitlementCreditGrants.amountRemaining, 0),
-        gt(entitlementCreditGrants.expiresAt, now)
-      )
-    ).orderBy(asc(entitlementCreditGrants.expiresAt), asc(entitlementCreditGrants.grantedAt));
-  }
+  // Job Sources
+  getJobSources = jobSourceStorage.getJobSources;
+  getJobSource = jobSourceStorage.getJobSource;
+  createJobSource = jobSourceStorage.createJobSource;
+  updateJobSource = jobSourceStorage.updateJobSource;
+  getActiveJobSourcesDueForPoll = jobSourceStorage.getActiveJobSourcesDueForPoll;
+  claimJobSourceForRun = jobSourceStorage.claimJobSourceForRun;
+  deleteJobSource = jobSourceStorage.deleteJobSource;
+  getActiveRunCountForSource = jobSourceStorage.getActiveRunCountForSource;
 
-  async consumeCreditFromGrant(grantId: number, amount: number, txDb: any = db): Promise<EntitlementCreditGrant> {
-    const [g] = await txDb.update(entitlementCreditGrants)
-      .set({ amountRemaining: sql`${entitlementCreditGrants.amountRemaining} - ${amount}` })
-      .where(and(
-        eq(entitlementCreditGrants.id, grantId),
-        gte(entitlementCreditGrants.amountRemaining, amount)
-      ))
-      .returning();
-    return g;
-  }
+  // Import Targets
+  getImportTargets = importTargetStorage.getImportTargets;
+  getImportTarget = importTargetStorage.getImportTarget;
+  upsertImportTarget = importTargetStorage.upsertImportTarget;
+  updateImportTarget = importTargetStorage.updateImportTarget;
+  getJobCountByImportTarget = importTargetStorage.getJobCountByImportTarget;
+  getPendingImportTargetsCount = importTargetStorage.getPendingImportTargetsCount;
+  bulkUpdateImportTargets = importTargetStorage.bulkUpdateImportTargets;
+  getImportTargetsWithSource = importTargetStorage.getImportTargetsWithSource;
 
-  async createCreditConsumption(consumption: InsertEntitlementCreditConsumption, txDb: any = db): Promise<EntitlementCreditConsumption> {
-    const [c] = await txDb.insert(entitlementCreditConsumptions).values(consumption).returning();
-    return c;
-  }
+  // Job Import Runs
+  createJobImportRun = jobImportRunStorage.createJobImportRun;
+  updateJobImportRun = jobImportRunStorage.updateJobImportRun;
+  getJobImportRuns = jobImportRunStorage.getJobImportRuns;
+  getJobImportRun = jobImportRunStorage.getJobImportRun;
+  getJobImportRunsFiltered = jobImportRunStorage.getJobImportRunsFiltered;
+  getJobsForImportRun = jobImportRunStorage.getJobsForImportRun;
 
-  async getUserCreditSummary(userId: number, entitlementKey: string, txDb: any = db): Promise<{ totalRemaining: number; grants: EntitlementCreditGrant[] }> {
-    const grants = await this.getActiveCreditGrants(userId, entitlementKey, txDb);
-    const totalRemaining = grants.reduce((sum, g) => sum + g.amountRemaining, 0);
-    return { totalRemaining, grants };
-  }
+  // Apify job upsert
+  upsertImportedJob = apifyJobStorage.upsertImportedJob;
+  expireJobsNotInSet = apifyJobStorage.expireJobsNotInSet;
+  expireJobsByImportTarget = apifyJobStorage.expireJobsByImportTarget;
 
-  async getCreditGrantByPaymentIntent(paymentIntentId: string, txDb: any = db): Promise<EntitlementCreditGrant | undefined> {
-    const [g] = await txDb.select().from(entitlementCreditGrants).where(
-      eq(entitlementCreditGrants.stripePaymentIntentId, paymentIntentId)
-    );
-    return g;
-  }
+  // Employer Verification
+  getActiveVerificationRequest = employerVerificationStorage.getActiveVerificationRequest;
+  getLatestVerificationRequest = employerVerificationStorage.getLatestVerificationRequest;
+  getOrCreateVerificationRequest = employerVerificationStorage.getOrCreateVerificationRequest;
+  getVerificationRequestsByStatus = employerVerificationStorage.getVerificationRequestsByStatus;
+  updateVerificationRequestStatus = employerVerificationStorage.updateVerificationRequestStatus;
+  createEvidenceItem = employerVerificationStorage.createEvidenceItem;
+  getEvidenceItemsByRequest = employerVerificationStorage.getEvidenceItemsByRequest;
+  updateEmployerVerificationStatus = employerVerificationStorage.updateEmployerVerificationStatus;
 
-  async createApplication(insertApp: InsertApplication, txDb: any = db): Promise<Application> {
-    const [app] = await txDb.insert(applications).values(insertApp).returning();
-    return app;
-  }
+  // Seeker Credential Verification
+  getSeekerCredentialRequirements = seekerVerificationStorage.getSeekerCredentialRequirements;
+  upsertSeekerCredentialRequirement = seekerVerificationStorage.upsertSeekerCredentialRequirement;
+  getSeekerRequirementRules = seekerVerificationStorage.getSeekerRequirementRules;
+  upsertSeekerRequirementRule = seekerVerificationStorage.upsertSeekerRequirementRule;
+  getActiveSeekerVerificationRequest = seekerVerificationStorage.getActiveSeekerVerificationRequest;
+  getLatestSeekerVerificationRequest = seekerVerificationStorage.getLatestSeekerVerificationRequest;
+  getOrCreateSeekerVerificationRequest = seekerVerificationStorage.getOrCreateSeekerVerificationRequest;
+  appendRequirementsSnapshot = seekerVerificationStorage.appendRequirementsSnapshot;
+  getSeekerVerificationRequestsByStatus = seekerVerificationStorage.getSeekerVerificationRequestsByStatus;
+  updateSeekerVerificationRequestStatus = seekerVerificationStorage.updateSeekerVerificationRequestStatus;
+  createSeekerEvidenceItem = seekerVerificationStorage.createSeekerEvidenceItem;
+  getSeekerEvidenceItemsByRequest = seekerVerificationStorage.getSeekerEvidenceItemsByRequest;
+  updateSeekerVerificationStatus = seekerVerificationStorage.updateSeekerVerificationStatus;
+
+  // Messaging
+  getOrCreateConversation = messagingStorage.getOrCreateConversation;
+  getConversations = messagingStorage.getConversations;
+  getMessages = messagingStorage.getMessages;
+  createMessage = messagingStorage.createMessage;
+  markConversationRead = messagingStorage.markConversationRead;
+  getUnreadMessageCount = messagingStorage.getUnreadMessageCount;
+  getConversationUnreadCount = messagingStorage.getConversationUnreadCount;
+  getConversation = messagingStorage.getConversation;
+
+  // Employer enriched applicants
+  getEmployerApplicationsEnriched = enrichedApplicantStorage.getEmployerApplicationsEnriched;
+
+  // Job Alert Subscriptions
+  getJobAlerts = jobAlertStorage.getJobAlerts;
+  createJobAlert = jobAlertStorage.createJobAlert;
+  deleteJobAlert = jobAlertStorage.deleteJobAlert;
+  getAllJobAlerts = jobAlertStorage.getAllJobAlerts;
+  updateJobAlertNotifiedAt = jobAlertStorage.updateJobAlertNotifiedAt;
+  updateJobAlert = jobAlertStorage.updateJobAlert;
+
+  // Email Cron Configs
+  getEmailCronConfigs = emailCronStorage.getEmailCronConfigs;
+  getEmailCronConfig = emailCronStorage.getEmailCronConfig;
+  getEmailCronConfigByName = emailCronStorage.getEmailCronConfigByName;
+  createEmailCronConfig = emailCronStorage.createEmailCronConfig;
+  updateEmailCronConfig = emailCronStorage.updateEmailCronConfig;
+  deleteEmailCronConfig = emailCronStorage.deleteEmailCronConfig;
+  touchEmailCronConfigLastRun = emailCronStorage.touchEmailCronConfigLastRun;
+
+  // Admin Profile
+  getAdminUsers = adminProfileStorage.getAdminUsers;
+  updateLastLoginAt = adminProfileStorage.updateLastLoginAt;
+  getNotificationPreferences = adminProfileStorage.getNotificationPreferences;
+  updateNotificationPreferences = adminProfileStorage.updateNotificationPreferences;
+  inviteAdminUser = adminProfileStorage.inviteAdminUser;
+  updateAdminUserRole = adminProfileStorage.updateAdminUserRole;
+
+  // Menus
+  getMenus = menuStorage.getMenus;
+  getMenuById = menuStorage.getMenuById;
+  getMenuBySlug = menuStorage.getMenuBySlug;
+  createMenu = menuStorage.createMenu;
+  updateMenu = menuStorage.updateMenu;
+  deleteMenu = menuStorage.deleteMenu;
+  getMenuItems = menuStorage.getMenuItems;
+  createMenuItem = menuStorage.createMenuItem;
+  updateMenuItem = menuStorage.updateMenuItem;
+  deleteMenuItem = menuStorage.deleteMenuItem;
+  reorderMenuItems = menuStorage.reorderMenuItems;
+  menuSlugExists = menuStorage.menuSlugExists;
 
   async runTransaction<T>(fn: (tx: any) => Promise<T>): Promise<T> {
     return db.transaction(fn);
-  }
-
-  // Job Sources
-  async getJobSources(): Promise<JobSource[]> {
-    return await db.select().from(jobSources).orderBy(desc(jobSources.createdAt));
-  }
-  async getJobSource(id: number): Promise<JobSource | undefined> {
-    const [s] = await db.select().from(jobSources).where(eq(jobSources.id, id));
-    return s;
-  }
-  async createJobSource(source: InsertJobSource): Promise<JobSource> {
-    const [s] = await db.insert(jobSources).values(source as any).returning();
-    return s;
-  }
-  async updateJobSource(id: number, updates: Partial<InsertJobSource>): Promise<JobSource> {
-    const [s] = await db.update(jobSources).set({ ...updates, updatedAt: new Date() } as any).where(eq(jobSources.id, id)).returning();
-    return s;
-  }
-  async getActiveJobSourcesDueForPoll(): Promise<JobSource[]> {
-    return await db.select().from(jobSources).where(
-      and(
-        eq(jobSources.status, "active"),
-        sql`(${jobSources.lastRunAt} IS NULL OR ${jobSources.lastRunAt} < NOW() - (${jobSources.pollIntervalMinutes} || ' minutes')::interval)`
-      )
-    );
-  }
-  async claimJobSourceForRun(sourceId: number): Promise<boolean> {
-    const rows = await db.update(jobSources)
-      .set({ lastRunAt: new Date() } as any)
-      .where(
-        and(
-          eq(jobSources.id, sourceId),
-          eq(jobSources.status, "active"),
-          sql`(${jobSources.lastRunAt} IS NULL OR ${jobSources.lastRunAt} < NOW() - (${jobSources.pollIntervalMinutes} || ' minutes')::interval)`
-        )
-      )
-      .returning();
-    return rows.length > 0;
-  }
-
-  // Import Targets
-  async getImportTargets(sourceId?: number): Promise<ImportTarget[]> {
-    if (sourceId !== undefined) {
-      return await db.select().from(importTargets).where(eq(importTargets.sourceId, sourceId)).orderBy(desc(importTargets.lastSeenAt));
-    }
-    return await db.select().from(importTargets).orderBy(desc(importTargets.lastSeenAt));
-  }
-  async getImportTarget(id: number): Promise<ImportTarget | undefined> {
-    const [t] = await db.select().from(importTargets).where(eq(importTargets.id, id));
-    return t;
-  }
-  async upsertImportTarget(sourceId: number, sourceDomain: string, companyName: string, employerWebsiteDomain?: string | null): Promise<ImportTarget> {
-    const existing = await db.select().from(importTargets).where(
-      and(eq(importTargets.sourceId, sourceId), eq(importTargets.sourceDomain, sourceDomain))
-    );
-    if (existing.length > 0) {
-      const updates: any = { companyName, lastSeenAt: new Date() };
-      if (employerWebsiteDomain) updates.employerWebsiteDomain = employerWebsiteDomain;
-      const [t] = await db.update(importTargets).set(updates).where(eq(importTargets.id, existing[0].id)).returning();
-      return t;
-    }
-    const [t] = await db.insert(importTargets).values({
-      sourceId, sourceDomain, companyName,
-      employerWebsiteDomain: employerWebsiteDomain || null,
-      status: "pending_review",
-      firstSeenAt: new Date(),
-      lastSeenAt: new Date(),
-    } as any).returning();
-    return t;
-  }
-  async updateImportTarget(id: number, updates: Partial<InsertImportTarget>): Promise<ImportTarget> {
-    const [t] = await db.update(importTargets).set(updates).where(eq(importTargets.id, id)).returning();
-    return t;
-  }
-  async getJobCountByImportTarget(importTargetId: number): Promise<number> {
-    const [result] = await db.select({ cnt: count() }).from(jobs).where(
-      and(eq(jobs.importTargetId, importTargetId), ne(jobs.status, "expired"))
-    );
-    return Number(result?.cnt || 0);
-  }
-
-  // Job Import Runs
-  async createJobImportRun(run: InsertJobImportRun): Promise<JobImportRun> {
-    const [r] = await db.insert(jobImportRuns).values(run as any).returning();
-    return r;
-  }
-  async updateJobImportRun(id: number, updates: Partial<InsertJobImportRun>): Promise<JobImportRun> {
-    const [r] = await db.update(jobImportRuns).set(updates).where(eq(jobImportRuns.id, id)).returning();
-    return r;
-  }
-  async getJobImportRuns(sourceId?: number, limit: number = 50): Promise<JobImportRun[]> {
-    if (sourceId !== undefined) {
-      return await db.select().from(jobImportRuns).where(eq(jobImportRuns.sourceId, sourceId)).orderBy(desc(jobImportRuns.createdAt)).limit(limit);
-    }
-    return await db.select().from(jobImportRuns).orderBy(desc(jobImportRuns.createdAt)).limit(limit);
-  }
-  async getJobImportRun(id: number): Promise<JobImportRun | undefined> {
-    const [r] = await db.select().from(jobImportRuns).where(eq(jobImportRuns.id, id));
-    return r;
-  }
-
-  // Apify job upsert (idempotent)
-  async upsertImportedJob(sourceId: number, importTargetId: number, externalJobId: string, _jobData: Partial<InsertJob>): Promise<{ job: Job; action: "created" | "updated" | "skipped" }> {
-    const jobData = _jobData as any;
-    const [existing] = await db.select().from(jobs).where(
-      and(
-        eq(jobs.sourceId, sourceId),
-        eq(jobs.importTargetId, importTargetId),
-        eq(jobs.externalJobId, externalJobId)
-      )
-    );
-    const now = new Date();
-    if (!existing) {
-      const [job] = await db.insert(jobs).values({
-        employerId: 0,
-        title: jobData.title || "Untitled",
-        description: jobData.description || "",
-        requirements: jobData.requirements || "",
-        companyName: jobData.companyName,
-        jobType: jobData.jobType,
-        locationCity: jobData.locationCity,
-        locationState: jobData.locationState,
-        locationCountry: jobData.locationCountry,
-        applyUrl: jobData.applyUrl,
-        isExternalApply: true,
-        isPublished: false,
-        sourceId,
-        importTargetId,
-        externalJobId,
-        sourceUrl: jobData.sourceUrl,
-        externalPostedAt: jobData.externalPostedAt,
-        externalCreatedAt: jobData.externalCreatedAt,
-        externalValidThrough: jobData.externalValidThrough,
-        employmentType: jobData.employmentType,
-        isRemote: jobData.isRemote,
-        workLocationType: jobData.workLocationType,
-        status: "draft",
-        importedAt: now,
-        lastImportedAt: now,
-        rawSourceSnippet: jobData.rawSourceSnippet,
-      } as any).returning();
-      return { job, action: "created" };
-    }
-
-    const safeUpdates: any = {
-      sourceUrl: jobData.sourceUrl,
-      externalPostedAt: jobData.externalPostedAt,
-      externalCreatedAt: jobData.externalCreatedAt,
-      externalValidThrough: jobData.externalValidThrough,
-      locationCity: jobData.locationCity,
-      locationState: jobData.locationState,
-      locationCountry: jobData.locationCountry,
-      employmentType: jobData.employmentType,
-      isRemote: jobData.isRemote,
-      workLocationType: jobData.workLocationType,
-      lastImportedAt: now,
-      rawSourceSnippet: jobData.rawSourceSnippet,
-    };
-    if (existing.status === "expired") {
-      safeUpdates.status = "draft";
-    }
-    if (!existing.lastAdminEditedAt) {
-      if (jobData.title) safeUpdates.title = jobData.title;
-      if (jobData.description) safeUpdates.description = jobData.description;
-    }
-
-    const [job] = await db.update(jobs).set(safeUpdates).where(eq(jobs.id, existing.id)).returning();
-    return { job, action: "updated" };
-  }
-
-  async expireJobsNotInSet(importTargetId: number, seenExternalJobIds: string[]): Promise<number> {
-    const conditions = [
-      eq(jobs.importTargetId, importTargetId),
-      ne(jobs.status, "expired"),
-    ];
-    if (seenExternalJobIds.length > 0) {
-      conditions.push(sql`${jobs.externalJobId} IS NOT NULL`);
-      conditions.push(notInArray(jobs.externalJobId, seenExternalJobIds));
-    }
-    const rows = await db.update(jobs)
-      .set({ status: "expired", isPublished: false } as any)
-      .where(and(...conditions))
-      .returning();
-    return rows.length;
-  }
-
-  async expireJobsByImportTarget(importTargetId: number): Promise<number> {
-    const rows = await db.update(jobs)
-      .set({ status: "expired", isPublished: false } as any)
-      .where(and(eq(jobs.importTargetId, importTargetId), ne(jobs.status, "expired")))
-      .returning();
-    return rows.length;
-  }
-
-  async deleteJobSource(id: number): Promise<void> {
-    await db.delete(jobSources).where(eq(jobSources.id, id));
-  }
-
-  async getActiveRunCountForSource(sourceId: number): Promise<number> {
-    const [result] = await db.select({ cnt: count() }).from(jobImportRuns).where(
-      and(eq(jobImportRuns.sourceId, sourceId), inArray(jobImportRuns.status, ["queued", "running"]))
-    );
-    return Number(result?.cnt || 0);
-  }
-
-  async getPendingImportTargetsCount(): Promise<number> {
-    const [result] = await db.select({ cnt: count() }).from(importTargets).where(eq(importTargets.status, "pending_review"));
-    return Number(result?.cnt || 0);
-  }
-
-  async bulkUpdateImportTargets(ids: number[], status: string): Promise<number> {
-    if (ids.length === 0) return 0;
-    const rows = await db.update(importTargets).set({ status } as any).where(inArray(importTargets.id, ids)).returning();
-    return rows.length;
-  }
-
-  async getImportTargetsWithSource(sourceId?: number): Promise<(ImportTarget & { sourceName: string; jobCount: number })[]> {
-    const rows = await db
-      .select({
-        id: importTargets.id,
-        sourceId: importTargets.sourceId,
-        sourceDomain: importTargets.sourceDomain,
-        companyName: importTargets.companyName,
-        employerWebsiteDomain: importTargets.employerWebsiteDomain,
-        status: importTargets.status,
-        firstSeenAt: importTargets.firstSeenAt,
-        lastSeenAt: importTargets.lastSeenAt,
-        sourceName: jobSources.name,
-      })
-      .from(importTargets)
-      .leftJoin(jobSources, eq(importTargets.sourceId, jobSources.id))
-      .where(sourceId !== undefined ? eq(importTargets.sourceId, sourceId) : undefined)
-      .orderBy(desc(importTargets.lastSeenAt));
-
-    const withCounts = await Promise.all(rows.map(async (row) => {
-      const jobCount = await this.getJobCountByImportTarget(row.id);
-      return { ...row, sourceName: row.sourceName ?? "Unknown", jobCount };
-    }));
-    return withCounts;
-  }
-
-  async getJobImportRunsFiltered(opts: { sourceId?: number; status?: string; dateFrom?: Date; dateTo?: Date; page: number; limit: number }): Promise<{ runs: (JobImportRun & { sourceName: string })[], total: number }> {
-    const conditions: any[] = [];
-    if (opts.sourceId !== undefined) conditions.push(eq(jobImportRuns.sourceId, opts.sourceId));
-    if (opts.status) conditions.push(eq(jobImportRuns.status, opts.status));
-    if (opts.dateFrom) conditions.push(sql`${jobImportRuns.createdAt} >= ${opts.dateFrom}`);
-    if (opts.dateTo) conditions.push(sql`${jobImportRuns.createdAt} <= ${opts.dateTo}`);
-
-    const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
-    const offset = (opts.page - 1) * opts.limit;
-
-    const [totalResult] = await db.select({ cnt: count() }).from(jobImportRuns).where(whereClause);
-    const total = Number(totalResult?.cnt || 0);
-
-    const rows = await db
-      .select({
-        id: jobImportRuns.id,
-        sourceId: jobImportRuns.sourceId,
-        status: jobImportRuns.status,
-        startedAt: jobImportRuns.startedAt,
-        finishedAt: jobImportRuns.finishedAt,
-        apifyRunId: jobImportRuns.apifyRunId,
-        apifyDatasetId: jobImportRuns.apifyDatasetId,
-        actorInputJson: jobImportRuns.actorInputJson,
-        statsCreated: jobImportRuns.statsCreated,
-        statsUpdated: jobImportRuns.statsUpdated,
-        statsSkipped: jobImportRuns.statsSkipped,
-        statsExpired: jobImportRuns.statsExpired,
-        warnings: jobImportRuns.warnings,
-        lastError: jobImportRuns.lastError,
-        createdAt: jobImportRuns.createdAt,
-        sourceName: jobSources.name,
-      })
-      .from(jobImportRuns)
-      .leftJoin(jobSources, eq(jobImportRuns.sourceId, jobSources.id))
-      .where(whereClause)
-      .orderBy(desc(jobImportRuns.createdAt))
-      .limit(opts.limit)
-      .offset(offset);
-
-    return {
-      runs: rows.map(r => ({ ...r, sourceName: r.sourceName ?? "Unknown" })),
-      total,
-    };
-  }
-
-  async getJobsForImportRun(runId: number): Promise<{ id: number; title: string; companyName: string | null; status: string | null; createdAt: Date | null; lastImportedAt: Date | null }[]> {
-    const run = await this.getJobImportRun(runId);
-    if (!run || !run.startedAt) return [];
-    const windowEnd = run.finishedAt ?? new Date();
-    const rows = await db
-      .select({ id: jobs.id, title: jobs.title, companyName: jobs.companyName, status: jobs.status, createdAt: jobs.createdAt, lastImportedAt: jobs.lastImportedAt })
-      .from(jobs)
-      .where(and(
-        eq(jobs.sourceId, run.sourceId),
-        sql`${jobs.lastImportedAt} >= ${run.startedAt}`,
-        sql`${jobs.lastImportedAt} <= ${windowEnd}`
-      ))
-      .orderBy(desc(jobs.createdAt))
-      .limit(20);
-    return rows;
-  }
-
-  async getActiveVerificationRequest(employerId: number): Promise<EmployerVerificationRequest | undefined> {
-    const [req] = await db.select().from(employerVerificationRequests)
-      .where(and(
-        eq(employerVerificationRequests.employerId, employerId),
-        inArray(employerVerificationRequests.status, ["draft", "submitted", "needs_more"])
-      ))
-      .limit(1);
-    return req;
-  }
-
-  async getLatestVerificationRequest(employerId: number): Promise<EmployerVerificationRequest | undefined> {
-    const [req] = await db.select().from(employerVerificationRequests)
-      .where(eq(employerVerificationRequests.employerId, employerId))
-      .orderBy(desc(employerVerificationRequests.createdAt))
-      .limit(1);
-    return req;
-  }
-
-  async getOrCreateVerificationRequest(employerId: number): Promise<EmployerVerificationRequest> {
-    const existing = await this.getActiveVerificationRequest(employerId);
-    if (existing) return existing;
-    try {
-      const [req] = await db.insert(employerVerificationRequests)
-        .values({ employerId, status: "draft" } as any)
-        .returning();
-      return req;
-    } catch (err: any) {
-      if (err?.code === "23505") {
-        const fallback = await this.getActiveVerificationRequest(employerId);
-        if (fallback) return fallback;
-      }
-      throw err;
-    }
-  }
-
-  async getVerificationRequestsByStatus(statuses: string[]): Promise<(EmployerVerificationRequest & { employerName: string | null; employerEmail: string })[]> {
-    const rows = await db
-      .select({
-        id: employerVerificationRequests.id,
-        employerId: employerVerificationRequests.employerId,
-        status: employerVerificationRequests.status,
-        adminNotes: employerVerificationRequests.adminNotes,
-        decidedBy: employerVerificationRequests.decidedBy,
-        decidedAt: employerVerificationRequests.decidedAt,
-        submittedAt: employerVerificationRequests.submittedAt,
-        createdAt: employerVerificationRequests.createdAt,
-        updatedAt: employerVerificationRequests.updatedAt,
-        employerName: users.companyName,
-        employerEmail: users.email,
-      })
-      .from(employerVerificationRequests)
-      .innerJoin(users, eq(employerVerificationRequests.employerId, users.id))
-      .where(inArray(employerVerificationRequests.status, statuses))
-      .orderBy(desc(employerVerificationRequests.submittedAt));
-    return rows;
-  }
-
-  async updateVerificationRequestStatus(requestId: number, status: string, adminNotes?: string, decidedBy?: number): Promise<EmployerVerificationRequest> {
-    const updates: Record<string, any> = { status, updatedAt: new Date() };
-    if (adminNotes !== undefined) updates.adminNotes = adminNotes;
-    if (decidedBy !== undefined) updates.decidedBy = decidedBy;
-    if (status === "submitted") updates.submittedAt = new Date();
-    if (["verified", "rejected"].includes(status)) updates.decidedAt = new Date();
-    const [req] = await db.update(employerVerificationRequests)
-      .set(updates)
-      .where(eq(employerVerificationRequests.id, requestId))
-      .returning();
-    return req;
-  }
-
-  async createEvidenceItem(item: InsertEmployerEvidenceItem): Promise<EmployerEvidenceItem> {
-    const [evidence] = await db.insert(employerEvidenceItems).values(item as any).returning();
-    return evidence;
-  }
-
-  async getEvidenceItemsByRequest(requestId: number): Promise<EmployerEvidenceItem[]> {
-    return await db.select().from(employerEvidenceItems)
-      .where(eq(employerEvidenceItems.requestId, requestId))
-      .orderBy(desc(employerEvidenceItems.createdAt));
-  }
-
-  async updateEmployerVerificationStatus(employerId: number, status: string): Promise<User> {
-    const [user] = await db.update(users)
-      .set({ verificationStatus: status } as any)
-      .where(eq(users.id, employerId))
-      .returning();
-    return user;
-  }
-
-  // Seeker Credential Verification
-  async getSeekerCredentialRequirements(): Promise<SeekerCredentialRequirement[]> {
-    return await db.select().from(seekerCredentialRequirements).orderBy(asc(seekerCredentialRequirements.key));
-  }
-
-  async upsertSeekerCredentialRequirement(req: InsertSeekerCredentialRequirement): Promise<SeekerCredentialRequirement> {
-    const [result] = await db.insert(seekerCredentialRequirements)
-      .values(req as any)
-      .onConflictDoUpdate({ target: seekerCredentialRequirements.key, set: { label: (req as any).label, description: (req as any).description ?? null, category: (req as any).category ?? "license" } as any })
-      .returning();
-    return result;
-  }
-
-  async getSeekerRequirementRules(): Promise<SeekerRequirementRule[]> {
-    return await db.select().from(seekerRequirementRules);
-  }
-
-  async upsertSeekerRequirementRule(rule: InsertSeekerRequirementRule): Promise<SeekerRequirementRule> {
-    const existing = await db.select().from(seekerRequirementRules)
-      .where(and(
-        eq(seekerRequirementRules.requirementKey, (rule as any).requirementKey),
-        eq(seekerRequirementRules.conditionType, (rule as any).conditionType),
-        eq(seekerRequirementRules.conditionValue, (rule as any).conditionValue)
-      ))
-      .limit(1);
-    if (existing.length > 0) return existing[0];
-    const [result] = await db.insert(seekerRequirementRules).values(rule as any).returning();
-    return result;
-  }
-
-  async getActiveSeekerVerificationRequest(seekerId: number): Promise<SeekerVerificationRequest | undefined> {
-    const [req] = await db.select().from(seekerVerificationRequests)
-      .where(and(
-        eq(seekerVerificationRequests.seekerId, seekerId),
-        inArray(seekerVerificationRequests.status, ["draft", "submitted", "needs_more"])
-      ))
-      .limit(1);
-    return req;
-  }
-
-  async getLatestSeekerVerificationRequest(seekerId: number): Promise<SeekerVerificationRequest | undefined> {
-    const [req] = await db.select().from(seekerVerificationRequests)
-      .where(eq(seekerVerificationRequests.seekerId, seekerId))
-      .orderBy(desc(seekerVerificationRequests.createdAt))
-      .limit(1);
-    return req;
-  }
-
-  async getOrCreateSeekerVerificationRequest(seekerId: number): Promise<SeekerVerificationRequest> {
-    const existing = await this.getActiveSeekerVerificationRequest(seekerId);
-    if (existing) return existing;
-    try {
-      const [req] = await db.insert(seekerVerificationRequests)
-        .values({ seekerId, status: "draft" } as any)
-        .returning();
-      return req;
-    } catch (err: any) {
-      if (err?.code === "23505") {
-        const fallback = await this.getActiveSeekerVerificationRequest(seekerId);
-        if (fallback) return fallback;
-      }
-      throw err;
-    }
-  }
-
-  async appendRequirementsSnapshot(requestId: number, keys: string[]): Promise<SeekerVerificationRequest> {
-    const [req] = await db.select().from(seekerVerificationRequests).where(eq(seekerVerificationRequests.id, requestId)).limit(1);
-    if (!req) throw new Error("Request not found");
-    const existing = req.requirementsSnapshot || [];
-    const merged = Array.from(new Set([...existing, ...keys]));
-    const hasNewKeys = merged.length > existing.length;
-    const updates: Record<string, any> = { requirementsSnapshot: merged, updatedAt: new Date() };
-    if (hasNewKeys && req.status === "submitted") {
-      updates.status = "needs_more";
-      updates.adminNotes = (req.adminNotes ? req.adminNotes + "\n" : "") +
-        "[System] New credential requirements added from job application. Status reverted to needs_more.";
-    }
-    const [updated] = await db.update(seekerVerificationRequests)
-      .set(updates)
-      .where(eq(seekerVerificationRequests.id, requestId))
-      .returning();
-    return updated;
-  }
-
-  async getSeekerVerificationRequestsByStatus(statuses: string[]): Promise<(SeekerVerificationRequest & { seekerName: string | null; seekerEmail: string; seekerTrack: string | null; cdlIsNonDomiciled: boolean; cdlMarkedNonDomiciledIssuingState: boolean })[]> {
-    const rows = await db
-      .select({
-        id: seekerVerificationRequests.id,
-        seekerId: seekerVerificationRequests.seekerId,
-        status: seekerVerificationRequests.status,
-        requirementsSnapshot: seekerVerificationRequests.requirementsSnapshot,
-        adminNotes: seekerVerificationRequests.adminNotes,
-        decidedBy: seekerVerificationRequests.decidedBy,
-        decidedAt: seekerVerificationRequests.decidedAt,
-        submittedAt: seekerVerificationRequests.submittedAt,
-        createdAt: seekerVerificationRequests.createdAt,
-        updatedAt: seekerVerificationRequests.updatedAt,
-        seekerName: sql<string | null>`COALESCE(${users.firstName} || ' ' || ${users.lastName}, ${users.email})`.as("seeker_name"),
-        seekerEmail: users.email,
-        seekerTrack: users.seekerTrack,
-        cdlIsNonDomiciled: users.cdlIsNonDomiciled,
-        cdlMarkedNonDomiciledIssuingState: users.cdlMarkedNonDomiciledIssuingState,
-      })
-      .from(seekerVerificationRequests)
-      .innerJoin(users, eq(seekerVerificationRequests.seekerId, users.id))
-      .where(inArray(seekerVerificationRequests.status, statuses))
-      .orderBy(desc(seekerVerificationRequests.submittedAt));
-    return rows;
-  }
-
-  async updateSeekerVerificationRequestStatus(requestId: number, status: string, adminNotes?: string, decidedBy?: number): Promise<SeekerVerificationRequest> {
-    const updates: Record<string, any> = { status, updatedAt: new Date() };
-    if (adminNotes !== undefined) updates.adminNotes = adminNotes;
-    if (decidedBy !== undefined) updates.decidedBy = decidedBy;
-    if (status === "submitted") updates.submittedAt = new Date();
-    if (["verified", "rejected"].includes(status)) updates.decidedAt = new Date();
-    const [req] = await db.update(seekerVerificationRequests)
-      .set(updates)
-      .where(eq(seekerVerificationRequests.id, requestId))
-      .returning();
-    return req;
-  }
-
-  async createSeekerEvidenceItem(item: InsertSeekerCredentialEvidenceItem): Promise<SeekerCredentialEvidenceItem> {
-    const [evidence] = await db.insert(seekerCredentialEvidenceItems).values(item as any).returning();
-    return evidence;
-  }
-
-  async getSeekerEvidenceItemsByRequest(requestId: number): Promise<SeekerCredentialEvidenceItem[]> {
-    return await db.select().from(seekerCredentialEvidenceItems)
-      .where(eq(seekerCredentialEvidenceItems.requestId, requestId))
-      .orderBy(desc(seekerCredentialEvidenceItems.createdAt));
-  }
-
-  async updateSeekerVerificationStatus(seekerId: number, status: string): Promise<User> {
-    const [user] = await db.update(users)
-      .set({ seekerVerificationStatus: status } as any)
-      .where(eq(users.id, seekerId))
-      .returning();
-    return user;
-  }
-
-  async getOrCreateConversation(seekerId: number, employerId: number, jobId?: number | null): Promise<Conversation> {
-    const existing = await db.select().from(conversations)
-      .where(
-        jobId
-          ? and(eq(conversations.seekerId, seekerId), eq(conversations.employerId, employerId), eq(conversations.jobId, jobId))
-          : and(eq(conversations.seekerId, seekerId), eq(conversations.employerId, employerId), sql`${conversations.jobId} IS NULL`)
-      )
-      .limit(1);
-    if (existing.length > 0) return existing[0];
-    const [conv] = await db.insert(conversations)
-      .values({ seekerId, employerId, jobId: jobId ?? null } as any)
-      .returning();
-    return conv;
-  }
-
-  async getConversations(userId: number): Promise<(Conversation & { otherPartyName: string; lastMessage: string | null; unreadCount: number })[]> {
-    const convs = await db.select().from(conversations)
-      .where(sql`${conversations.seekerId} = ${userId} OR ${conversations.employerId} = ${userId}`)
-      .orderBy(desc(conversations.lastMessageAt));
-
-    const results = await Promise.all(convs.map(async (conv) => {
-      const otherUserId = conv.seekerId === userId ? conv.employerId : conv.seekerId;
-      const [otherUser] = await db.select({
-        firstName: users.firstName,
-        lastName: users.lastName,
-        email: users.email,
-        companyName: users.companyName,
-      }).from(users).where(eq(users.id, otherUserId)).limit(1);
-
-      const otherPartyName = otherUser
-        ? (otherUser.firstName && otherUser.lastName
-          ? `${otherUser.firstName} ${otherUser.lastName}`
-          : otherUser.companyName || otherUser.email)
-        : "Unknown";
-
-      const lastMsgs = await db.select().from(messages)
-        .where(eq(messages.conversationId, conv.id))
-        .orderBy(desc(messages.createdAt))
-        .limit(1);
-
-      const [unreadResult] = await db.select({ cnt: count() }).from(messages)
-        .where(and(
-          eq(messages.conversationId, conv.id),
-          eq(messages.isRead, false),
-          sql`${messages.senderId} != ${userId}`
-        ));
-
-      return {
-        ...conv,
-        otherPartyName: otherPartyName as string,
-        lastMessage: lastMsgs[0]?.content ?? null,
-        unreadCount: Number(unreadResult?.cnt ?? 0),
-      };
-    }));
-    return results;
-  }
-
-  async getMessages(conversationId: number): Promise<Message[]> {
-    return db.select().from(messages)
-      .where(eq(messages.conversationId, conversationId))
-      .orderBy(asc(messages.createdAt));
-  }
-
-  async createMessage(conversationId: number, senderId: number, content: string): Promise<Message> {
-    const [msg] = await db.insert(messages)
-      .values({ conversationId, senderId, content, isRead: false } as any)
-      .returning();
-    await db.update(conversations)
-      .set({ lastMessageAt: new Date() } as any)
-      .where(eq(conversations.id, conversationId));
-    return msg;
-  }
-
-  async markConversationRead(conversationId: number, userId: number): Promise<void> {
-    await db.update(messages)
-      .set({ isRead: true } as any)
-      .where(and(
-        eq(messages.conversationId, conversationId),
-        eq(messages.isRead, false),
-        sql`${messages.senderId} != ${userId}`
-      ));
-  }
-
-  async getUnreadMessageCount(userId: number): Promise<number> {
-    const userConvs = await db.select({ id: conversations.id }).from(conversations)
-      .where(sql`${conversations.seekerId} = ${userId} OR ${conversations.employerId} = ${userId}`);
-    if (userConvs.length === 0) return 0;
-    const convIds = userConvs.map((c) => c.id);
-    const [result] = await db.select({ cnt: count() }).from(messages)
-      .where(and(
-        inArray(messages.conversationId, convIds),
-        eq(messages.isRead, false),
-        sql`${messages.senderId} != ${userId}`
-      ));
-    return Number(result?.cnt ?? 0);
-  }
-
-  async getConversationUnreadCount(conversationId: number, recipientId: number): Promise<number> {
-    const [result] = await db.select({ cnt: count() }).from(messages)
-      .where(and(
-        eq(messages.conversationId, conversationId),
-        eq(messages.isRead, false),
-        sql`${messages.senderId} != ${recipientId}`
-      ));
-    return Number(result?.cnt ?? 0);
-  }
-
-  async getConversation(conversationId: number): Promise<Conversation | undefined> {
-    const [conv] = await db.select().from(conversations).where(eq(conversations.id, conversationId)).limit(1);
-    return conv;
-  }
-
-  async getEmployerApplicationsEnriched(employerId: number): Promise<(Application & { seekerName: string; seekerEmail: string; seekerVerificationStatus: string | null; employerNotes?: string | null })[]> {
-    const myJobs = await db.select({ id: jobs.id }).from(jobs).where(eq(jobs.employerId, employerId));
-    const jobIds = myJobs.map((j) => j.id);
-    if (jobIds.length === 0) return [];
-
-    const apps = await db.select().from(applications).where(inArray(applications.jobId, jobIds));
-    const seekerIds = [...new Set(apps.map((a) => a.jobSeekerId))];
-    const seekers =
-      seekerIds.length > 0
-        ? await db
-            .select({ id: users.id, email: users.email, firstName: users.firstName, lastName: users.lastName, seekerVerificationStatus: users.seekerVerificationStatus })
-            .from(users)
-            .where(inArray(users.id, seekerIds))
-        : [];
-
-    const seekerMap = new Map(seekers.map((s) => [s.id, s]));
-    return apps.map((a) => {
-      const seeker = seekerMap.get(a.jobSeekerId);
-      const seekerName =
-        seeker
-          ? seeker.firstName && seeker.lastName
-            ? `${seeker.firstName} ${seeker.lastName}`
-            : seeker.email
-          : `Applicant #${a.jobSeekerId}`;
-      return { ...a, seekerName, seekerEmail: seeker?.email ?? "", seekerVerificationStatus: seeker?.seekerVerificationStatus ?? null };
-    });
-  }
-
-  // ── Job Alert Subscriptions ────────────────────────────────────────────────
-  async getJobAlerts(userId: number): Promise<JobAlertSubscription[]> {
-    return await db.select().from(jobAlertSubscriptions).where(eq(jobAlertSubscriptions.userId, userId)).orderBy(desc(jobAlertSubscriptions.createdAt));
-  }
-
-  async createJobAlert(data: InsertJobAlertSubscription): Promise<JobAlertSubscription> {
-    const [alert] = await db.insert(jobAlertSubscriptions).values(data as any).returning();
-    return alert;
-  }
-
-  async deleteJobAlert(id: number, userId: number): Promise<void> {
-    await db.delete(jobAlertSubscriptions).where(and(eq(jobAlertSubscriptions.id, id), eq(jobAlertSubscriptions.userId, userId)));
-  }
-
-  async getAllJobAlerts(): Promise<JobAlertSubscription[]> {
-    return await db.select().from(jobAlertSubscriptions);
-  }
-
-  async updateJobAlertNotifiedAt(id: number, notifiedAt: Date): Promise<void> {
-    await db.update(jobAlertSubscriptions).set({ lastNotifiedAt: notifiedAt } as any).where(eq(jobAlertSubscriptions.id, id));
-  }
-
-  async updateJobAlert(id: number, userId: number, updates: { isActive?: boolean; name?: string }): Promise<JobAlertSubscription> {
-    const [alert] = await db.update(jobAlertSubscriptions)
-      .set(updates as any)
-      .where(and(eq(jobAlertSubscriptions.id, id), eq(jobAlertSubscriptions.userId, userId)))
-      .returning();
-    return alert;
-  }
-
-  // ── Email Templates ────────────────────────────────────────────────────────
-  async getEmailTemplates(): Promise<EmailTemplate[]> {
-    return await db.select().from(emailTemplates).orderBy(asc(emailTemplates.slug));
-  }
-
-  async getEmailTemplateBySlug(slug: string): Promise<EmailTemplate | undefined> {
-    const [t] = await db.select().from(emailTemplates).where(eq(emailTemplates.slug, slug));
-    return t;
-  }
-
-  async upsertEmailTemplate(slug: string, data: Partial<InsertEmailTemplate>): Promise<EmailTemplate> {
-    const now = new Date();
-    const existing = await this.getEmailTemplateBySlug(slug);
-    if (existing) {
-      const [updated] = await db
-        .update(emailTemplates)
-        .set({ ...data, updatedAt: now } as any)
-        .where(eq(emailTemplates.slug, slug))
-        .returning();
-      return updated;
-    }
-    const [created] = await db
-      .insert(emailTemplates)
-      .values({ slug, name: (data as any).name ?? slug, subject: (data as any).subject ?? "", body: (data as any).body ?? "", variables: (data as any).variables ?? [], isActive: (data as any).isActive ?? true, ...data } as any)
-      .returning();
-    return created;
-  }
-
-  // ── Email Cron Configs ─────────────────────────────────────────────────────
-  async getEmailCronConfigs(): Promise<EmailCronConfig[]> {
-    return await db.select().from(emailCronConfigs).orderBy(asc(emailCronConfigs.name));
-  }
-
-  async getEmailCronConfig(id: number): Promise<EmailCronConfig | undefined> {
-    const [c] = await db.select().from(emailCronConfigs).where(eq(emailCronConfigs.id, id));
-    return c;
-  }
-
-  async getEmailCronConfigByName(name: string): Promise<EmailCronConfig | undefined> {
-    const [c] = await db.select().from(emailCronConfigs).where(eq(emailCronConfigs.name, name));
-    return c;
-  }
-
-  async createEmailCronConfig(config: InsertEmailCronConfig): Promise<EmailCronConfig> {
-    const [c] = await db.insert(emailCronConfigs).values({ ...config, updatedAt: new Date() } as any).returning();
-    return c;
-  }
-
-  async updateEmailCronConfig(id: number, updates: Partial<InsertEmailCronConfig>): Promise<EmailCronConfig> {
-    const [c] = await db
-      .update(emailCronConfigs)
-      .set({ ...updates, updatedAt: new Date() } as any)
-      .where(eq(emailCronConfigs.id, id))
-      .returning();
-    return c;
-  }
-
-  async deleteEmailCronConfig(id: number): Promise<void> {
-    await db.delete(emailCronConfigs).where(eq(emailCronConfigs.id, id));
-  }
-
-  async touchEmailCronConfigLastRun(id: number): Promise<void> {
-    await db
-      .update(emailCronConfigs)
-      .set({ lastRunAt: new Date(), updatedAt: new Date() } as any)
-      .where(eq(emailCronConfigs.id, id));
-  }
-
-  // ── Admin Profile ──────────────────────────────────────────────────────────
-  async getAdminUsers(): Promise<User[]> {
-    return await db.select().from(users).where(eq(users.role, "admin"));
-  }
-
-  async updateLastLoginAt(id: number): Promise<void> {
-    await db.update(users).set({ lastLoginAt: new Date() } as any).where(eq(users.id, id));
-  }
-
-  async getNotificationPreferences(id: number): Promise<Record<string, boolean>> {
-    const [user] = await db.select({ notificationPreferences: users.notificationPreferences }).from(users).where(eq(users.id, id));
-    return (user?.notificationPreferences as Record<string, boolean>) ?? {};
-  }
-
-  async updateNotificationPreferences(id: number, prefs: Record<string, boolean>): Promise<void> {
-    await db.update(users).set({ notificationPreferences: prefs } as any).where(eq(users.id, id));
-  }
-
-  async inviteAdminUser(email: string, firstName: string, lastName: string, tempPassword: string, permissions: string[] | null): Promise<User> {
-    const [user] = await db
-      .insert(users)
-      .values({ email, password: tempPassword, role: "admin", membershipTier: "free", firstName, lastName, permissions: permissions as any } as any)
-      .returning();
-    return user;
-  }
-
-  async updateAdminUserRole(id: number, role: string): Promise<User> {
-    const [user] = await db.update(users).set({ role } as any).where(eq(users.id, id)).returning();
-    return user;
-  }
-
-  // ── Menus ─────────────────────────────────────────────────────────────────
-  async getMenus(): Promise<Menu[]> {
-    return await db.select().from(menus).orderBy(asc(menus.name));
-  }
-
-  async getMenuById(id: number): Promise<Menu | undefined> {
-    const [menu] = await db.select().from(menus).where(eq(menus.id, id));
-    return menu;
-  }
-
-  async getMenuBySlug(slug: string): Promise<Menu | undefined> {
-    const [menu] = await db.select().from(menus).where(eq(menus.slug, slug));
-    return menu;
-  }
-
-  async createMenu(data: InsertMenu): Promise<Menu> {
-    const [menu] = await db.insert(menus).values(data as any).returning();
-    return menu;
-  }
-
-  async updateMenu(id: number, data: Partial<InsertMenu>): Promise<Menu> {
-    const [menu] = await db
-      .update(menus)
-      .set({ ...data, updatedAt: new Date() } as any)
-      .where(eq(menus.id, id))
-      .returning();
-    return menu;
-  }
-
-  async deleteMenu(id: number): Promise<void> {
-    await db.delete(menus).where(eq(menus.id, id));
-  }
-
-  async getMenuItems(menuId: number): Promise<MenuItem[]> {
-    return await db
-      .select()
-      .from(menuItems)
-      .where(eq(menuItems.menuId, menuId))
-      .orderBy(asc(menuItems.sortOrder), asc(menuItems.id));
-  }
-
-  async createMenuItem(data: InsertMenuItem): Promise<MenuItem> {
-    const [item] = await db.insert(menuItems).values(data as any).returning();
-    return item;
-  }
-
-  async updateMenuItem(id: number, data: Partial<InsertMenuItem>): Promise<MenuItem> {
-    const [item] = await db.update(menuItems).set(data).where(eq(menuItems.id, id)).returning();
-    return item;
-  }
-
-  async deleteMenuItem(id: number): Promise<void> {
-    await db.delete(menuItems).where(eq(menuItems.id, id));
-  }
-
-  async reorderMenuItems(items: { id: number; sortOrder: number; parentId: number | null }[]): Promise<void> {
-    await Promise.all(
-      items.map(({ id, sortOrder, parentId }) =>
-        db.update(menuItems).set({ sortOrder, parentId } as any).where(eq(menuItems.id, id))
-      )
-    );
-  }
-
-  async menuSlugExists(slug: string, excludeId?: number): Promise<boolean> {
-    const rows = await db.select({ id: menus.id }).from(menus).where(eq(menus.slug, slug));
-    if (rows.length === 0) return false;
-    if (excludeId !== undefined) return rows[0].id !== excludeId;
-    return true;
   }
 }
 
