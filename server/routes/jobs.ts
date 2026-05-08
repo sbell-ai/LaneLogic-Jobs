@@ -8,12 +8,18 @@ import { requireAdminSession } from "../middleware/requireAdminSession.ts";
 import { daysFromNow } from "./helpers";
 import { jobCertRequirementsSchema } from "@shared/certEnums";
 import { jobCertStorage } from "../storage/jobCertRequirements";
+import { seekerCertStorage } from "../storage/seekerCertProfiles";
+import { matchCerts } from "@shared/certMatching";
 
 const router = Router();
 
 // Jobs
 router.get(api.jobs.list.path, async (req, res) => {
-  const isAdmin = req.isAuthenticated() && (req.user as any).role === "admin";
+  const isAuthenticated = req.isAuthenticated();
+  const user = isAuthenticated ? (req.user as any) : null;
+  const isAdmin = isAuthenticated && user?.role === "admin";
+  const isSeeker = isAuthenticated && user?.role === "job_seeker";
+
   const allJobs = await storage.getJobs();
   const now = new Date();
   const visibleJobs = isAdmin ? allJobs : allJobs.filter(j => {
@@ -24,13 +30,23 @@ router.get(api.jobs.list.path, async (req, res) => {
     }
     return true;
   });
+
   const allUsers = await storage.getUsers();
   const employerMap = new Map(allUsers.filter(u => u.role === "employer").map(u => [u.id, u]));
+
+  let seekerProfile: Awaited<ReturnType<typeof seekerCertStorage.getCertProfile>> = null;
+  let reqsByJobId: Awaited<ReturnType<typeof jobCertStorage.getCertRequirementsForJobs>> = new Map();
+  if (isSeeker && visibleJobs.length > 0) {
+    seekerProfile = await seekerCertStorage.getCertProfile(user.id);
+    reqsByJobId = await jobCertStorage.getCertRequirementsForJobs(visibleJobs.map(j => j.id));
+  }
+
   const enriched = visibleJobs.map(job => ({
     ...job,
     employerLogo: employerMap.get(job.employerId)?.companyLogo || null,
     employerHasProfile: employerMap.has(job.employerId),
     employerVerificationStatus: employerMap.get(job.employerId)?.verificationStatus || null,
+    ...(isSeeker ? { certMatch: matchCerts(seekerProfile, reqsByJobId.get(job.id) ?? null) } : {}),
   }));
   res.json(enriched);
 });
@@ -38,18 +54,35 @@ router.get(api.jobs.list.path, async (req, res) => {
 router.get(api.jobs.get.path, async (req, res) => {
   const job = await storage.getJob(Number(req.params.id));
   if (!job) return res.status(404).json({ message: "Not found" });
-  const isAdmin = req.isAuthenticated() && (req.user as any).role === "admin";
+
+  const isAuthenticated = req.isAuthenticated();
+  const user = isAuthenticated ? (req.user as any) : null;
+  const isAdmin = isAuthenticated && user?.role === "admin";
+  const isSeeker = isAuthenticated && user?.role === "job_seeker";
+
   if (!isAdmin && !job.isPublished) return res.status(404).json({ message: "Not found" });
   if (!isAdmin && job.expiresAt) {
     const expires = typeof job.expiresAt === "string" ? new Date(job.expiresAt) : job.expiresAt;
     if (expires < new Date()) return res.status(404).json({ message: "Not found" });
   }
+
   const employer = await storage.getUser(job.employerId);
+
+  let certMatchPayload: { certMatch: ReturnType<typeof matchCerts> } | {} = {};
+  if (isSeeker) {
+    const [seekerProfile, jobCertReqs] = await Promise.all([
+      seekerCertStorage.getCertProfile(user.id),
+      jobCertStorage.getCertRequirements(job.id),
+    ]);
+    certMatchPayload = { certMatch: matchCerts(seekerProfile, jobCertReqs) };
+  }
+
   res.json({
     ...job,
     employerLogo: employer?.companyLogo || null,
     employerVerificationStatus: employer?.verificationStatus || null,
     employerIsRegistered: !!employer,
+    ...certMatchPayload,
   });
 });
 

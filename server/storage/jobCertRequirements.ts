@@ -1,7 +1,7 @@
 import { db } from "../db";
 import { jobCertRequirements, type JobCertRequirements } from "@shared/schema";
 import { jobCertRequirementsSchema } from "@shared/certEnums";
-import { eq } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import { z } from "zod";
 
 type JobCertReqInput = z.infer<typeof jobCertRequirementsSchema>;
@@ -15,6 +15,15 @@ export const jobCertStorage = {
   async getCertRequirements(jobId: number): Promise<JobCertRequirements | null> {
     const rows = await db.select().from(jobCertRequirements).where(eq(jobCertRequirements.jobId, jobId));
     return rows[0] ?? null;
+  },
+
+  async getCertRequirementsForJobs(jobIds: number[]): Promise<Map<number, JobCertRequirements>> {
+    if (jobIds.length === 0) return new Map();
+    const rows = await db
+      .select()
+      .from(jobCertRequirements)
+      .where(inArray(jobCertRequirements.jobId, jobIds));
+    return new Map(rows.map((r) => [r.jobId, r]));
   },
 
   async upsertCertRequirements(jobId: number, data: JobCertReqInput): Promise<JobCertRequirements> {
