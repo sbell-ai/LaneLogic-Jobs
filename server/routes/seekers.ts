@@ -2,6 +2,8 @@ import { Router } from "express";
 import { storage } from "../storage";
 import { api } from "@shared/routes";
 import { resolveUserEntitlements } from "../registry/entitlementResolver";
+import { seekerCertSchema } from "@shared/certEnums";
+import { seekerCertStorage } from "../storage/seekerCertProfiles";
 
 const router = Router();
 
@@ -85,6 +87,40 @@ router.post(api.resumes.create.path, async (req, res) => {
     res.status(201).json(resume);
   } catch (err) {
     res.status(400).json({ message: "Validation error" });
+  }
+});
+
+// GET /api/seeker/cert-profile
+router.get("/api/seeker/cert-profile", async (req, res) => {
+  if (!req.isAuthenticated()) return res.status(401).json({ error: "Unauthorized" });
+  const userId = (req.user as any).id;
+
+  try {
+    const profile = await seekerCertStorage.getCertProfile(userId);
+    if (!profile) return res.status(404).json({ error: "No cert profile found" });
+    return res.json(profile);
+  } catch (err) {
+    console.error("GET /api/seeker/cert-profile error:", err);
+    return res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// PUT /api/seeker/cert-profile
+router.put("/api/seeker/cert-profile", async (req, res) => {
+  if (!req.isAuthenticated()) return res.status(401).json({ error: "Unauthorized" });
+  const userId = (req.user as any).id;
+
+  const parsed = seekerCertSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ error: "Invalid cert data", details: parsed.error.flatten() });
+  }
+
+  try {
+    const profile = await seekerCertStorage.upsertCertProfile(userId, parsed.data);
+    return res.json(profile);
+  } catch (err) {
+    console.error("PUT /api/seeker/cert-profile error:", err);
+    return res.status(500).json({ error: "Internal server error" });
   }
 });
 

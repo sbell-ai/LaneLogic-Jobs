@@ -6,6 +6,8 @@ import { checkEntitlement } from "../registry/entitlementResolver";
 import { validateCategoryPair } from "@shared/jobTaxonomy";
 import { requireAdminSession } from "../middleware/requireAdminSession.ts";
 import { daysFromNow } from "./helpers";
+import { jobCertRequirementsSchema } from "@shared/certEnums";
+import { jobCertStorage } from "../storage/jobCertRequirements";
 
 const router = Router();
 
@@ -251,6 +253,53 @@ router.put("/api/jobs-bulk-update", async (req, res) => {
     res.json({ updated: results.length });
   } catch (err) {
     res.status(500).json({ message: "Internal server error" });
+  }
+});
+
+// GET /api/jobs/:id/cert-requirements
+router.get("/api/jobs/:id/cert-requirements", async (req, res) => {
+  const jobId = parseInt(req.params.id);
+  if (isNaN(jobId)) return res.status(400).json({ error: "Invalid job ID" });
+
+  try {
+    const reqs = await jobCertStorage.getCertRequirements(jobId);
+    if (!reqs) return res.status(404).json({ error: "No cert requirements found" });
+    return res.json(reqs);
+  } catch (err) {
+    console.error("GET /api/jobs/:id/cert-requirements error:", err);
+    return res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// PATCH /api/jobs/:id/cert-requirements  (employer or admin)
+router.patch("/api/jobs/:id/cert-requirements", async (req, res) => {
+  if (!req.isAuthenticated()) return res.status(401).json({ error: "Unauthorized" });
+
+  const user = req.user as any;
+  if (user.role !== "employer" && user.role !== "admin") {
+    return res.status(403).json({ error: "Employer or admin access required" });
+  }
+
+  const jobId = parseInt(req.params.id);
+  if (isNaN(jobId)) return res.status(400).json({ error: "Invalid job ID" });
+
+  const existingJob = await storage.getJob(jobId);
+  if (!existingJob) return res.status(404).json({ error: "Job not found" });
+  if (user.role !== "admin" && existingJob.employerId !== user.id) {
+    return res.status(403).json({ error: "Forbidden" });
+  }
+
+  const parsed = jobCertRequirementsSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ error: "Invalid cert requirements", details: parsed.error.flatten() });
+  }
+
+  try {
+    const reqs = await jobCertStorage.upsertCertRequirements(jobId, parsed.data);
+    return res.json(reqs);
+  } catch (err) {
+    console.error("PATCH /api/jobs/:id/cert-requirements error:", err);
+    return res.status(500).json({ error: "Internal server error" });
   }
 });
 

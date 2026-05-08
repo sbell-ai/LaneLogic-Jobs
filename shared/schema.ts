@@ -2,6 +2,7 @@ import { pgTable, text, serial, integer, boolean, timestamp, jsonb, uniqueIndex,
 import { relations, sql } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
+import type { CdlClass, CdlEndorsement, CdlRestriction } from "./certEnums";
 
 export const users = pgTable("users", {
   id: serial("id").primaryKey(),
@@ -93,6 +94,34 @@ export const jobs = pgTable("jobs", {
     .on(table.sourceId, table.importTargetId, table.externalJobId)
     .where(sql`${table.sourceId} IS NOT NULL AND ${table.externalJobId} IS NOT NULL`),
 }));
+
+export const seekerCertProfiles = pgTable("seeker_cert_profiles", {
+  userId: integer("user_id").primaryKey().references(() => users.id, { onDelete: "cascade" }),
+  cdlClass: text("cdl_class").$type<CdlClass>(),
+  cdlState: text("cdl_state"),
+  cdlEndorsements: text("cdl_endorsements").array().$type<CdlEndorsement[]>().notNull().default([]),
+  cdlRestrictions: text("cdl_restrictions").array().$type<CdlRestriction[]>().notNull().default([]),
+  cdlExpiresAt: timestamp("cdl_expires_at"),
+  yearsExperience: integer("years_experience"),
+  hasHazmat: boolean("has_hazmat").notNull().default(false),
+  hasTanker: boolean("has_tanker").notNull().default(false),
+  hasDoubleTriple: boolean("has_double_triple").notNull().default(false),
+  hasPassenger: boolean("has_passenger").notNull().default(false),
+  hasSchoolBus: boolean("has_school_bus").notNull().default(false),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const jobCertRequirements = pgTable("job_cert_requirements", {
+  jobId: integer("job_id").primaryKey().references(() => jobs.id, { onDelete: "cascade" }),
+  cdlRequired: boolean("cdl_required").notNull().default(false),
+  cdlClassRequired: text("cdl_class_required").$type<CdlClass>(),
+  cdlEndorsementsRequired: text("cdl_endorsements_required").array().$type<CdlEndorsement[]>().notNull().default([]),
+  cdlRestrictionsAllowed: text("cdl_restrictions_allowed").array().$type<CdlRestriction[]>().notNull().default([]),
+  minYearsExperience: integer("min_years_experience"),
+});
+
+export type SeekerCertProfile   = typeof seekerCertProfiles.$inferSelect;
+export type JobCertRequirements = typeof jobCertRequirements.$inferSelect;
 
 export const applications = pgTable("applications", {
   id: serial("id").primaryKey(),

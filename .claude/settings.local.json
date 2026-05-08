@@ -31,7 +31,9 @@
       "Bash(awk 'NR==59' /home/runner/workspace/server/routes/helpers.ts)",
       "Bash(xxd)",
       "Bash(lsof -ti:5000)",
-      "Bash(xargs -r kill -9)"
+      "Bash(xargs -r kill -9)",
+      "Bash(npm view *)",
+      "Bash(echo \"exit=$?\")"
     ]
   }
 }
