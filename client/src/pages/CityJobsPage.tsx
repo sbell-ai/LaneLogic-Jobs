@@ -2,10 +2,10 @@ import { useParams, Link } from "wouter";
 import { Navbar } from "@/components/layout/Navbar";
 import { Footer } from "@/components/layout/Footer";
 import { useQuery } from "@tanstack/react-query";
-import { MapPin, Briefcase, Clock } from "lucide-react";
+import { MapPin, Briefcase, Clock, CheckCircle2, AlertCircle, XCircle, BadgeCheck } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { formatDistanceToNow } from "date-fns";
-import type { Job } from "@shared/schema";
+import type { EnrichedJob } from "@shared/schema";
 
 function toTitleCase(s: string) {
   return s.replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
@@ -18,7 +18,7 @@ export default function CityJobsPage() {
   const locationLabel = `${cityLabel}, ${stateLabel}`;
   const siteUrl = "https://lanelogicjobs.com";
 
-  const { data: allJobs = [], isLoading } = useQuery<Job[]>({ queryKey: ["/api/jobs"] });
+  const { data: allJobs = [], isLoading } = useQuery<EnrichedJob[]>({ queryKey: ["/api/jobs"] });
 
   const cityJobs = allJobs.filter((j) => {
     const jCity = (j.locationCity || "").toLowerCase().replace(/\s+/g, "-");
@@ -99,6 +99,44 @@ export default function CityJobsPage() {
                     <div className="flex-1 min-w-0">
                       <h2 className="font-semibold text-lg truncate">{job.title}</h2>
                       {job.companyName && <p className="text-sm text-muted-foreground truncate">{job.companyName}</p>}
+                      {/* Verified employer badge */}
+                      {job.employerVerificationStatus === "verified" && (
+                        <span className="inline-flex items-center gap-1 text-[10px] font-medium text-green-700 dark:text-green-400 mt-1">
+                          <BadgeCheck size={11} /> Verified Carrier
+                          {job.employerDotNumber && (
+                            <span className="text-muted-foreground font-normal">· DOT {job.employerDotNumber}</span>
+                          )}
+                          {job.employerMcNumber && (
+                            <span className="text-muted-foreground font-normal">· MC {job.employerMcNumber}</span>
+                          )}
+                        </span>
+                      )}
+                      {/* Job expiry warning — last 7 days */}
+                      {job.expiresAt && (() => {
+                        const daysLeft = Math.ceil(
+                          (new Date(job.expiresAt).getTime() - Date.now()) / (1000 * 60 * 60 * 24)
+                        );
+                        return daysLeft <= 7 && daysLeft > 0 ? (
+                          <span className="inline-flex items-center gap-1 text-[10px] font-medium text-amber-600 dark:text-amber-400 mt-1">
+                            <Clock size={11} /> Expires in {daysLeft} day{daysLeft !== 1 ? "s" : ""}
+                          </span>
+                        ) : null;
+                      })()}
+                      {job.certMatch && (
+                        job.certMatch.isMatch ? (
+                          <Badge className="mt-1 bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300 border-green-200 dark:border-green-800 text-[10px] font-semibold hover:bg-green-100" data-testid={`badge-cert-match-${job.id}`}>
+                            <CheckCircle2 size={10} className="mr-1" /> Cert Match
+                          </Badge>
+                        ) : job.certMatch.score > 0 ? (
+                          <Badge className="mt-1 bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800 text-[10px] font-semibold hover:bg-amber-100" data-testid={`badge-cert-partial-${job.id}`}>
+                            <AlertCircle size={10} className="mr-1" /> Partial Match · {job.certMatch.score}%
+                          </Badge>
+                        ) : (
+                          <Badge className="mt-1 bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300 border-red-200 dark:border-red-800 text-[10px] font-semibold hover:bg-red-100" data-testid={`badge-cert-nomatch-${job.id}`}>
+                            <XCircle size={10} className="mr-1" /> Cert Mismatch
+                          </Badge>
+                        )
+                      )}
                       <div className="flex flex-wrap gap-2 mt-2">
                         {job.locationCity && (
                           <span className="flex items-center gap-1 text-xs text-muted-foreground">

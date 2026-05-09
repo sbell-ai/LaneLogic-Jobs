@@ -41,13 +41,19 @@ router.get(api.jobs.list.path, async (req, res) => {
     reqsByJobId = await jobCertStorage.getCertRequirementsForJobs(visibleJobs.map(j => j.id));
   }
 
-  const enriched = visibleJobs.map(job => ({
-    ...job,
-    employerLogo: employerMap.get(job.employerId)?.companyLogo || null,
-    employerHasProfile: employerMap.has(job.employerId),
-    employerVerificationStatus: employerMap.get(job.employerId)?.verificationStatus || null,
-    ...(isSeeker ? { certMatch: matchCerts(seekerProfile, reqsByJobId.get(job.id) ?? null) } : {}),
-  }));
+  const enriched = visibleJobs.map(job => {
+    const employer = employerMap.get(job.employerId);
+    const isVerifiedEmployer = employer?.verificationStatus === "verified";
+    return {
+      ...job,
+      employerLogo: employer?.companyLogo || null,
+      employerHasProfile: employerMap.has(job.employerId),
+      employerVerificationStatus: employer?.verificationStatus || null,
+      employerDotNumber: isSeeker && isVerifiedEmployer ? employer?.dotNumber || null : null,
+      employerMcNumber: isSeeker && isVerifiedEmployer ? employer?.mcNumber || null : null,
+      ...(isSeeker ? { certMatch: matchCerts(seekerProfile, reqsByJobId.get(job.id) ?? null) } : {}),
+    };
+  });
   res.json(enriched);
 });
 
@@ -67,6 +73,7 @@ router.get(api.jobs.get.path, async (req, res) => {
   }
 
   const employer = await storage.getUser(job.employerId);
+  const isVerifiedEmployer = employer?.verificationStatus === "verified";
 
   let certMatchPayload: { certMatch: ReturnType<typeof matchCerts> } | {} = {};
   if (isSeeker) {
@@ -82,6 +89,8 @@ router.get(api.jobs.get.path, async (req, res) => {
     employerLogo: employer?.companyLogo || null,
     employerVerificationStatus: employer?.verificationStatus || null,
     employerIsRegistered: !!employer,
+    employerDotNumber: isSeeker && isVerifiedEmployer ? employer?.dotNumber || null : null,
+    employerMcNumber: isSeeker && isVerifiedEmployer ? employer?.mcNumber || null : null,
     ...certMatchPayload,
   });
 });

@@ -33,7 +33,8 @@
       "Bash(lsof -ti:5000)",
       "Bash(xargs -r kill -9)",
       "Bash(npm view *)",
-      "Bash(echo \"exit=$?\")"
+      "Bash(echo \"exit=$?\")",
+      "Bash(grep -rn '\"/api/jobs\\\\|`/api/jobs' client/src/ --include=\"*.tsx\" --include=\"*.ts\")"
     ]
   }
 }

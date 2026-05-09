@@ -118,7 +118,7 @@ export default function Employers() {
                             <div className="flex items-center gap-2">
                               <h3 className="font-semibold text-lg line-clamp-2 flex items-center gap-1.5 flex-wrap" data-testid={`text-employer-name-${emp.companyName.replace(/\s+/g, '-').toLowerCase()}`}>
                                 {emp.companyName}
-                                {emp.verificationStatus === "approved" && (
+                                {emp.verificationStatus === "verified" && (
                                   <VerifiedBadge type="employer" size="sm" />
                                 )}
                               </h3>

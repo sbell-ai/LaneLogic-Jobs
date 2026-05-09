@@ -28,6 +28,8 @@ export const users = pgTable("users", {
   resumeAccessExpiresAt: timestamp("resume_access_expires_at"),
   featuredEmployerExpiresAt: timestamp("featured_employer_expires_at"),
   notionEmployerUrl: text("notion_employer_url"),
+  dotNumber: text("dot_number"),
+  mcNumber: text("mc_number"),
   employerCategory: text("employer_category"),
   verificationStatus: text("verification_status").notNull().default("unverified"),
   seekerTrack: text("seeker_track").default("Unknown"),
@@ -650,6 +652,9 @@ export type EnrichedJob = Job & {
   employerVerificationStatus: string | null;
   employerIsRegistered: boolean;
   employerLogo: string | null;
+  employerDotNumber?: string | null;
+  employerMcNumber?: string | null;
+  certMatch?: import("./certMatching").CertMatchResult;
 };
 export type InsertJob = z.infer<typeof insertJobSchema>;
 export type Application = typeof applications.$inferSelect;

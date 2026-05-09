@@ -214,7 +214,7 @@ export default function Home() {
                             {job.companyName && (
                               <p className="text-sm text-muted-foreground mb-2 flex items-center gap-1.5">
                                 {job.companyName}
-                                {job.employerVerificationStatus === "approved" && (
+                                {job.employerVerificationStatus === "verified" && (
                                   <VerifiedBadge type="employer" size="sm" />
                                 )}
                               </p>

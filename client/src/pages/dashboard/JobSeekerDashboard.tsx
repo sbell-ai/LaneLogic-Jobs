@@ -16,7 +16,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Progress } from "@/components/ui/progress";
 import { FileText, Briefcase, CreditCard, Plus, CheckCircle2, Clock, XCircle, AlertCircle, Eye, EyeOff, User, Gauge, ShoppingCart, CalendarClock, Zap, ChevronDown, ChevronRight, MessageSquare, PauseCircle, StickyNote, Save, Check, Bell, Trash2, Search, Bookmark, BookmarkCheck } from "lucide-react";
-import type { Application, Resume, Job, JobAlertSubscription, SavedJob } from "@shared/schema";
+import type { Application, Resume, Job, EnrichedJob, JobAlertSubscription, SavedJob } from "@shared/schema";
 import { Link, useLocation } from "wouter";
 import { formatDistanceToNow, format } from "date-fns";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -47,7 +47,7 @@ function SeekerApplicationCard({
   app: Application;
   meta: { label: string; color: string };
   Icon: typeof Clock;
-  job: Job | undefined;
+  job: EnrichedJob | undefined;
   isMessaging: boolean;
   canMessage: boolean;
   onMessage: () => void;
@@ -77,6 +77,21 @@ function SeekerApplicationCard({
           </p>
           {job?.companyName && (
             <p className="text-sm text-muted-foreground truncate">{job.companyName}</p>
+          )}
+          {job?.certMatch && (
+            job.certMatch.isMatch ? (
+              <Badge className="mt-1 bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300 border-green-200 dark:border-green-800 text-[10px] font-semibold hover:bg-green-100" data-testid={`badge-cert-match-app-${app.id}`}>
+                <CheckCircle2 size={10} className="mr-1" /> Cert Match
+              </Badge>
+            ) : job.certMatch.score > 0 ? (
+              <Badge className="mt-1 bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800 text-[10px] font-semibold hover:bg-amber-100" data-testid={`badge-cert-partial-app-${app.id}`}>
+                <AlertCircle size={10} className="mr-1" /> Partial · {job.certMatch.score}%
+              </Badge>
+            ) : (
+              <Badge className="mt-1 bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300 border-red-200 dark:border-red-800 text-[10px] font-semibold hover:bg-red-100" data-testid={`badge-cert-nomatch-app-${app.id}`}>
+                <XCircle size={10} className="mr-1" /> Cert Mismatch
+              </Badge>
+            )
           )}
           <p className="text-xs text-muted-foreground mt-1">
             Applied {app.createdAt ? formatDistanceToNow(new Date(app.createdAt), { addSuffix: true }) : "recently"}
@@ -157,7 +172,7 @@ function ApplicationsTab({ userId }: { userId: number }) {
   const { data: applications, isLoading: appsLoading } = useQuery<Application[]>({
     queryKey: ["/api/seeker/applications"],
   });
-  const { data: allJobs } = useQuery<Job[]>({ queryKey: ["/api/jobs"] });
+  const { data: allJobs } = useQuery<EnrichedJob[]>({ queryKey: ["/api/jobs"] });
 
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>(() =>
     Object.fromEntries(SEEKER_GROUPS.map((g) => [g.key, g.defaultOpen]))
@@ -807,7 +822,7 @@ function SavedJobsTab() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const { data: savedJobs = [], isLoading } = useQuery<SavedJob[]>({ queryKey: ["/api/saved-jobs"] });
-  const { data: allJobs = [] } = useQuery<Job[]>({ queryKey: ["/api/jobs"] });
+  const { data: allJobs = [] } = useQuery<EnrichedJob[]>({ queryKey: ["/api/jobs"] });
 
   const unsaveMutation = useMutation({
     mutationFn: (jobId: number) => apiRequest("DELETE", `/api/saved-jobs/${jobId}`),
@@ -845,6 +860,21 @@ function SavedJobsTab() {
                       </Link>
                       {job.companyName && <p className="text-sm text-muted-foreground truncate">{job.companyName}</p>}
                       {job.locationCity && <p className="text-xs text-muted-foreground">{job.locationCity}{job.locationState ? `, ${job.locationState}` : ""}</p>}
+                      {job.certMatch && (
+                        job.certMatch.isMatch ? (
+                          <Badge className="mt-1 bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300 border-green-200 dark:border-green-800 text-[10px] font-semibold hover:bg-green-100" data-testid={`badge-cert-match-saved-${job.id}`}>
+                            <CheckCircle2 size={10} className="mr-1" /> Cert Match
+                          </Badge>
+                        ) : job.certMatch.score > 0 ? (
+                          <Badge className="mt-1 bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800 text-[10px] font-semibold hover:bg-amber-100" data-testid={`badge-cert-partial-saved-${job.id}`}>
+                            <AlertCircle size={10} className="mr-1" /> Partial · {job.certMatch.score}%
+                          </Badge>
+                        ) : (
+                          <Badge className="mt-1 bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300 border-red-200 dark:border-red-800 text-[10px] font-semibold hover:bg-red-100" data-testid={`badge-cert-nomatch-saved-${job.id}`}>
+                            <XCircle size={10} className="mr-1" /> Cert Mismatch
+                          </Badge>
+                        )
+                      )}
                     </>
                   ) : (
                     <p className="font-semibold">Job #{saved.jobId}</p>

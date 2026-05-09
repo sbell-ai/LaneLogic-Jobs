@@ -3,7 +3,7 @@ import { Navbar } from "@/components/layout/Navbar";
 import { Footer } from "@/components/layout/Footer";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { MapPin, DollarSign, Clock, ExternalLink, CheckCircle2, Briefcase, Building2, Star, MessageSquare, Bookmark, BookmarkCheck } from "lucide-react";
+import { MapPin, DollarSign, Clock, ExternalLink, CheckCircle2, Briefcase, Building2, Star, MessageSquare, Bookmark, BookmarkCheck, AlertCircle, XCircle, BadgeCheck } from "lucide-react";
 import type { SavedJob } from "@shared/schema";
 import { BackButton } from "@/components/nav/BackButton";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -101,7 +101,7 @@ export default function JobDetail() {
     user &&
     user.role === "job_seeker" &&
     job?.employerIsRegistered &&
-    job?.employerVerificationStatus === "approved";
+    job?.employerVerificationStatus === "verified";
 
   if (isLoading) {
     return (
@@ -242,10 +242,48 @@ export default function JobDetail() {
                     {job.companyName && (
                       <p className="text-base font-medium text-foreground/70 flex items-center gap-1.5 mb-2">
                         <Building2 size={15} /> {job.companyName}
-                        {job.employerVerificationStatus === "approved" && (
-                          <VerifiedBadge type="employer" size="sm" />
-                        )}
                       </p>
+                    )}
+                    {job.employerVerificationStatus === "verified" && (
+                      <div className="flex items-center gap-2 flex-wrap mb-2">
+                        <Badge className="gap-1 bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
+                          <BadgeCheck size={12} /> Verified Carrier
+                        </Badge>
+                        {job.employerDotNumber && (
+                          <span className="text-xs text-muted-foreground">DOT# {job.employerDotNumber}</span>
+                        )}
+                        {job.employerMcNumber && (
+                          <span className="text-xs text-muted-foreground">MC# {job.employerMcNumber}</span>
+                        )}
+                      </div>
+                    )}
+                    {/* Expiry warning */}
+                    {job.expiresAt && (() => {
+                      const daysLeft = Math.ceil(
+                        (new Date(job.expiresAt).getTime() - Date.now()) / (1000 * 60 * 60 * 24)
+                      );
+                      return daysLeft <= 7 && daysLeft > 0 ? (
+                        <Badge className="gap-1 bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200 mb-2 w-fit">
+                          <Clock size={12} /> Expires in {daysLeft} day{daysLeft !== 1 ? "s" : ""}
+                        </Badge>
+                      ) : null;
+                    })()}
+                    {job.certMatch && (
+                      <div className="mb-2">
+                        {job.certMatch.isMatch ? (
+                          <Badge className="bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300 border-green-200 dark:border-green-800 text-xs font-semibold hover:bg-green-100" data-testid="badge-cert-match">
+                            <CheckCircle2 size={12} className="mr-1" /> You match all requirements
+                          </Badge>
+                        ) : job.certMatch.score > 0 ? (
+                          <Badge className="bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800 text-xs font-semibold hover:bg-amber-100" data-testid="badge-cert-partial">
+                            <AlertCircle size={12} className="mr-1" /> Partial Match · {job.certMatch.score}%
+                          </Badge>
+                        ) : (
+                          <Badge className="bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300 border-red-200 dark:border-red-800 text-xs font-semibold hover:bg-red-100" data-testid="badge-cert-nomatch">
+                            <XCircle size={12} className="mr-1" /> You don't currently meet requirements
+                          </Badge>
+                        )}
+                      </div>
                     )}
                     <div className="flex flex-wrap gap-3 text-sm text-muted-foreground">
                       {locationStr && (

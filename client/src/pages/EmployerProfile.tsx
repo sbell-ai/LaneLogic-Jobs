@@ -131,7 +131,7 @@ export default function EmployerProfile() {
                   <h1 className="text-2xl md:text-3xl font-bold font-display" data-testid="text-employer-name">
                     {displayName}
                   </h1>
-                  {employer.verificationStatus === "approved" && (
+                  {employer.verificationStatus === "verified" && (
                     <VerifiedBadge type="employer" size="md" />
                   )}
                   {employer.claimed && (

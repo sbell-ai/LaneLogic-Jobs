@@ -771,7 +771,7 @@ function ApplicantsTab({ userId }: { userId: number }) {
             <p className="font-semibold flex items-center gap-1.5 flex-wrap" data-testid={`text-seeker-name-${app.id}`}>
               {isUnread && <span className="inline-block w-2 h-2 rounded-full bg-primary shrink-0" title="New application" data-testid={`dot-unread-${app.id}`} />}
               <span className="truncate">{app.seekerName}</span>
-              {app.seekerVerificationStatus === "approved" && (
+              {app.seekerVerificationStatus === "verified" && (
                 <VerifiedBadge type="seeker" size="sm" />
               )}
             </p>
@@ -1127,6 +1127,8 @@ function CompanyProfileTab() {
   const [contactEmail, setContactEmail] = useState(user?.contactEmail || "");
   const [contactPhone, setContactPhone] = useState(user?.contactPhone || "");
   const [aboutCompany, setAboutCompany] = useState(user?.aboutCompany || "");
+  const [dotNumber, setDotNumber] = useState(user?.dotNumber || "");
+  const [mcNumber, setMcNumber] = useState(user?.mcNumber || "");
   const [logo, setLogo] = useState(user?.companyLogo || "");
 
   const { data: jobs } = useQuery<Job[]>({ queryKey: ["/api/jobs"] });
@@ -1153,6 +1155,24 @@ function CompanyProfileTab() {
             onChange={e => setCompanyName(e.target.value)}
             placeholder="Your company name"
             data-testid="input-company-name"
+          />
+        </div>
+        <div>
+          <Label className="text-sm font-semibold mb-1 block">DOT Number</Label>
+          <Input
+            placeholder="e.g. 1234567"
+            value={dotNumber}
+            onChange={(e) => setDotNumber(e.target.value)}
+            data-testid="input-dot-number"
+          />
+        </div>
+        <div>
+          <Label className="text-sm font-semibold mb-1 block">MC Number</Label>
+          <Input
+            placeholder="e.g. 987654"
+            value={mcNumber}
+            onChange={(e) => setMcNumber(e.target.value)}
+            data-testid="input-mc-number"
           />
         </div>
         <div>
@@ -1315,7 +1335,7 @@ function CompanyProfileTab() {
             </DialogContent>
           </Dialog>
           <Button
-            onClick={() => saveMutation.mutate({ companyName, companyAddress, contactName, contactEmail, contactPhone, aboutCompany, companyLogo: logo })}
+            onClick={() => saveMutation.mutate({ companyName, companyAddress, contactName, contactEmail, contactPhone, aboutCompany, companyLogo: logo, dotNumber, mcNumber })}
             disabled={saveMutation.isPending}
             data-testid="button-save-company-profile"
           >
@@ -1397,7 +1417,7 @@ function ResumeSearchTab() {
                 {s.email && <p className="text-xs text-muted-foreground truncate">{s.email}</p>}
                 <div className="flex items-center gap-2 mt-1">
                   {s.seekerTrack && <Badge variant="outline" className="text-xs">{s.seekerTrack}</Badge>}
-                  {s.seekerVerificationStatus === "approved" && <VerifiedBadge type="seeker" size="sm" />}
+                  {s.seekerVerificationStatus === "verified" && <VerifiedBadge type="seeker" size="sm" />}
                 </div>
               </div>
               <span className="text-xs text-muted-foreground shrink-0">

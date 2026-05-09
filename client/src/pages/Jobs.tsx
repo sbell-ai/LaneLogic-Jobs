@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import {
   MapPin, Briefcase, DollarSign, ExternalLink, Clock, Building2, Truck, RotateCcw, Bell,
+  CheckCircle2, AlertCircle, XCircle, BadgeCheck,
 } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
@@ -227,10 +228,60 @@ export default function Jobs() {
                             {job.companyName && (
                               <p className="text-sm font-medium text-foreground/70 flex items-center gap-1 mt-1">
                                 <Building2 size={13} className="shrink-0" /> <span className="line-clamp-1">{job.companyName}</span>
-                                {job.employerVerificationStatus === "approved" && (
+                                {job.employerVerificationStatus === "verified" && (
                                   <VerifiedBadge type="employer" size="sm" />
                                 )}
                               </p>
+                            )}
+
+                            {/* Verified employer badge */}
+                            {job.employerVerificationStatus === "verified" && (
+                              <span className="inline-flex items-center gap-1 text-[10px] font-medium text-green-700 dark:text-green-400 mt-1">
+                                <BadgeCheck size={11} /> Verified Carrier
+                                {job.employerDotNumber && (
+                                  <span className="text-muted-foreground font-normal">· DOT {job.employerDotNumber}</span>
+                                )}
+                                {job.employerMcNumber && (
+                                  <span className="text-muted-foreground font-normal">· MC {job.employerMcNumber}</span>
+                                )}
+                              </span>
+                            )}
+
+                            {/* Job expiry warning — last 7 days */}
+                            {job.expiresAt && (() => {
+                              const daysLeft = Math.ceil(
+                                (new Date(job.expiresAt).getTime() - Date.now()) / (1000 * 60 * 60 * 24)
+                              );
+                              return daysLeft <= 7 && daysLeft > 0 ? (
+                                <span className="inline-flex items-center gap-1 text-[10px] font-medium text-amber-600 dark:text-amber-400 mt-1">
+                                  <Clock size={11} /> Expires in {daysLeft} day{daysLeft !== 1 ? "s" : ""}
+                                </span>
+                              ) : null;
+                            })()}
+
+                            {job.certMatch && (
+                              job.certMatch.isMatch ? (
+                                <Badge
+                                  className="mt-2 bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300 border-green-200 dark:border-green-800 text-[10px] font-semibold hover:bg-green-100 self-start"
+                                  data-testid={`badge-cert-match-${job.id}`}
+                                >
+                                  <CheckCircle2 size={10} className="mr-1" /> Cert Match
+                                </Badge>
+                              ) : job.certMatch.score > 0 ? (
+                                <Badge
+                                  className="mt-2 bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800 text-[10px] font-semibold hover:bg-amber-100 self-start"
+                                  data-testid={`badge-cert-partial-${job.id}`}
+                                >
+                                  <AlertCircle size={10} className="mr-1" /> Partial Match · {job.certMatch.score}%
+                                </Badge>
+                              ) : (
+                                <Badge
+                                  className="mt-2 bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300 border-red-200 dark:border-red-800 text-[10px] font-semibold hover:bg-red-100 self-start"
+                                  data-testid={`badge-cert-nomatch-${job.id}`}
+                                >
+                                  <XCircle size={10} className="mr-1" /> Cert Mismatch
+                                </Badge>
+                              )
                             )}
 
                             <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-2 text-xs text-muted-foreground">

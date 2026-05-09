@@ -1,7 +1,7 @@
 import { SidebarProvider, SidebarTrigger, Sidebar, SidebarContent, SidebarGroup, SidebarGroupLabel, SidebarGroupContent, SidebarMenu, SidebarMenuItem, SidebarMenuButton } from "@/components/ui/sidebar";
 import { useAuth } from "@/hooks/use-auth";
 import { Link, useLocation } from "wouter";
-import { Briefcase, LayoutDashboard, FileText, LogOut, Users, BookOpen, Upload, CreditCard, UserPlus, PlusCircle, Palette, FileEdit, Tag, Ticket, UserCircle, FilePlus2, Share2, Database, Package, Gauge, ArrowDownToLine, ShieldCheck, MessageSquare, Mail, Clock, Bell, BarChart2, Bookmark, Search, Navigation } from "lucide-react";
+import { Briefcase, LayoutDashboard, FileText, LogOut, Users, BookOpen, Upload, CreditCard, UserPlus, PlusCircle, Palette, FileEdit, Tag, Ticket, UserCircle, FilePlus2, Share2, Database, Package, Gauge, ArrowDownToLine, ShieldCheck, MessageSquare, Mail, Clock, Bell, BarChart2, Bookmark, Search, Navigation, BadgeCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -31,6 +31,8 @@ function AppSidebar({ role }: { role: string }) {
     { title: "Saved Jobs", path: "/dashboard/saved", icon: Bookmark },
     { title: "Job Alerts", path: "/dashboard/alerts", icon: Bell },
     { title: "Verification", path: "/seeker/settings/verification", icon: ShieldCheck },
+    { title: "CDL Cert Profile", path: "/seeker/settings/cert-profile", icon: BadgeCheck },
+    { title: "Resources", path: "/resources", icon: BookOpen },
     { title: "Usage & Quota", path: "/dashboard/quota", icon: Gauge },
     { title: "Membership", path: "/dashboard/membership", icon: CreditCard },
     { title: "Messages", path: "/dashboard/messages", icon: MessageSquare, badge: unreadCount },
@@ -45,6 +47,7 @@ function AppSidebar({ role }: { role: string }) {
     { title: "Bulk Upload (CSV)", path: "/dashboard/upload", icon: Upload },
     { title: "Company Profile", path: "/dashboard/profile", icon: UserCircle },
     { title: "Verification", path: "/employer/settings/verification", icon: ShieldCheck },
+    { title: "Resources", path: "/resources", icon: BookOpen },
     { title: "Membership", path: "/dashboard/membership", icon: CreditCard },
     { title: "Messages", path: "/dashboard/messages", icon: MessageSquare, badge: unreadCount },
   ];

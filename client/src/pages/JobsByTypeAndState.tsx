@@ -6,9 +6,10 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
   MapPin, Briefcase, DollarSign, ExternalLink, Clock, Building2, Truck, Search,
+  CheckCircle2, AlertCircle, XCircle, BadgeCheck,
 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
-import type { Job } from "@shared/schema";
+import type { EnrichedJob } from "@shared/schema";
 import { formatDistanceToNow } from "date-fns";
 import { motion } from "framer-motion";
 import { fmtLoc } from "@/components/JobFilterSidebar";
@@ -52,7 +53,7 @@ const MAJOR_CITIES: Record<string, string[]> = {
   oregon: ["Portland", "Salem", "Eugene", "Gresham", "Hillsboro", "Bend"],
 };
 
-function matchesState(job: Job, stateSlug: string): boolean {
+function matchesState(job: EnrichedJob, stateSlug: string): boolean {
   const locState = job.locationState || "";
   const parts = locState.split(/[,\s]+/).map((p) => p.replace(/[^a-zA-Z]/g, "").toLowerCase()).filter(Boolean);
 
@@ -78,10 +79,10 @@ function matchesKeywords(keywords: string[], text: string): boolean {
 }
 
 function tieredFilter(
-  allJobs: Job[],
+  allJobs: EnrichedJob[],
   category: JobCategory,
   stateSlug: string
-): { jobs: Job[]; isFallback: boolean } {
+): { jobs: EnrichedJob[]; isFallback: boolean } {
   const stateJobs = allJobs.filter((job) => matchesState(job, stateSlug));
 
   const primaryMatches = stateJobs.filter((job) => {
@@ -166,12 +167,12 @@ export default function JobsByTypeAndState({ seoSlug }: JobsByTypeAndStateProps)
   const stateAbbrev = STATE_ABBREV[stateSlug] || stateSlug.toUpperCase();
   const categoryLabel = category?.label || "Jobs";
 
-  const { data: jobs, isLoading } = useQuery<Job[]>({
+  const { data: jobs, isLoading } = useQuery<EnrichedJob[]>({
     queryKey: ["/api/jobs"],
   });
 
   const { filtered, isFallback } = useMemo(() => {
-    if (!jobs || !category) return { filtered: [] as Job[], isFallback: false };
+    if (!jobs || !category) return { filtered: [] as EnrichedJob[], isFallback: false };
     const result = tieredFilter(jobs, category, stateSlug);
     return { filtered: result.jobs, isFallback: result.isFallback };
   }, [jobs, category, stateSlug]);
@@ -283,6 +284,44 @@ export default function JobsByTypeAndState({ seoSlug }: JobsByTypeAndStateProps)
                                 <p className="text-sm font-medium text-foreground/70 flex items-center gap-1 mt-0.5">
                                   <Building2 size={13} /> {job.companyName}
                                 </p>
+                              )}
+                              {/* Verified employer badge */}
+                              {job.employerVerificationStatus === "verified" && (
+                                <span className="inline-flex items-center gap-1 text-[10px] font-medium text-green-700 dark:text-green-400 mt-1">
+                                  <BadgeCheck size={11} /> Verified Carrier
+                                  {job.employerDotNumber && (
+                                    <span className="text-muted-foreground font-normal">· DOT {job.employerDotNumber}</span>
+                                  )}
+                                  {job.employerMcNumber && (
+                                    <span className="text-muted-foreground font-normal">· MC {job.employerMcNumber}</span>
+                                  )}
+                                </span>
+                              )}
+                              {/* Job expiry warning — last 7 days */}
+                              {job.expiresAt && (() => {
+                                const daysLeft = Math.ceil(
+                                  (new Date(job.expiresAt).getTime() - Date.now()) / (1000 * 60 * 60 * 24)
+                                );
+                                return daysLeft <= 7 && daysLeft > 0 ? (
+                                  <span className="inline-flex items-center gap-1 text-[10px] font-medium text-amber-600 dark:text-amber-400 mt-1">
+                                    <Clock size={11} /> Expires in {daysLeft} day{daysLeft !== 1 ? "s" : ""}
+                                  </span>
+                                ) : null;
+                              })()}
+                              {job.certMatch && (
+                                job.certMatch.isMatch ? (
+                                  <Badge className="mt-1.5 bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300 border-green-200 dark:border-green-800 text-[10px] font-semibold hover:bg-green-100 self-start" data-testid={`badge-cert-match-${job.id}`}>
+                                    <CheckCircle2 size={10} className="mr-1" /> Cert Match
+                                  </Badge>
+                                ) : job.certMatch.score > 0 ? (
+                                  <Badge className="mt-1.5 bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800 text-[10px] font-semibold hover:bg-amber-100 self-start" data-testid={`badge-cert-partial-${job.id}`}>
+                                    <AlertCircle size={10} className="mr-1" /> Partial Match · {job.certMatch.score}%
+                                  </Badge>
+                                ) : (
+                                  <Badge className="mt-1.5 bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300 border-red-200 dark:border-red-800 text-[10px] font-semibold hover:bg-red-100 self-start" data-testid={`badge-cert-nomatch-${job.id}`}>
+                                    <XCircle size={10} className="mr-1" /> Cert Mismatch
+                                  </Badge>
+                                )
                               )}
                               <div className="flex flex-wrap items-center gap-3 mt-1.5 text-sm text-muted-foreground">
                                 {fmtLoc(job) && (

@@ -38,6 +38,7 @@ import DesignSettings from "@/pages/dashboard/DesignSettings";
 import InboxPage from "@/pages/dashboard/Inbox";
 import VerificationPage from "@/pages/employer/VerificationPage";
 import SeekerVerificationPage from "@/pages/seeker/SeekerVerificationPage";
+import SeekerCertProfilePage from "@/pages/seeker/SeekerCertProfilePage";
 import ResetPassword from "@/pages/ResetPassword";
 import VerifyEmail from "@/pages/VerifyEmail";
 import AdminProfile from "@/pages/dashboard/admin-profile/AdminProfile";
@@ -269,6 +270,7 @@ function Router() {
 
       <Route path="/employer/settings/verification" component={VerificationPage} />
       <Route path="/seeker/settings/verification" component={SeekerVerificationPage} />
+      <Route path="/seeker/settings/cert-profile" component={SeekerCertProfilePage} />
       <Route path="/reset-password" component={ResetPassword} />
       <Route path="/verify-email" component={VerifyEmail} />
 

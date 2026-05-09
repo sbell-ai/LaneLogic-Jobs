@@ -14,6 +14,8 @@ router.get("/api/employers", async (_req, res) => {
       companyLogo: string | null;
       claimed: boolean;
       verificationStatus: string | null;
+      dotNumber: string | null;
+      mcNumber: string | null;
       jobCount: number;
       industries: Set<string>;
       locations: Set<string>;
@@ -31,6 +33,8 @@ router.get("/api/employers", async (_req, res) => {
         companyLogo: u.companyLogo,
         claimed: true,
         verificationStatus: u.verificationStatus || null,
+        dotNumber: u.dotNumber || null,
+        mcNumber: u.mcNumber || null,
         jobCount: 0,
         industries: new Set(),
         locations: new Set(),
@@ -50,6 +54,8 @@ router.get("/api/employers", async (_req, res) => {
           companyLogo: null,
           claimed: false,
           verificationStatus: null,
+          dotNumber: null,
+          mcNumber: null,
           jobCount: 0,
           industries: new Set(),
           locations: new Set(),
