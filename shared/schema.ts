@@ -545,6 +545,47 @@ export const insertSeekerRequirementRuleSchema = createInsertSchema(seekerRequir
 export const insertSeekerVerificationRequestSchema = createInsertSchema(seekerVerificationRequests).omit({ id: true, createdAt: true, updatedAt: true });
 export const insertSeekerCredentialEvidenceItemSchema = createInsertSchema(seekerCredentialEvidenceItems).omit({ id: true, createdAt: true });
 
+export const MODAL_NAMESPACES = ["trucking", "maritime", "aviation", "logistics"] as const;
+export type ModalNamespace = (typeof MODAL_NAMESPACES)[number];
+
+export const REQUIREMENT_LEVELS = ["required", "preferred"] as const;
+export type RequirementLevel = (typeof REQUIREMENT_LEVELS)[number];
+
+export const credentialTypes = pgTable("credential_types", {
+  id: serial("id").primaryKey(),
+  modalNamespace: text("modal_namespace").$type<ModalNamespace>().notNull(),
+  code: text("code").notNull().unique(),
+  name: text("name").notNull(),
+  description: text("description"),
+  issuingAuthority: text("issuing_authority"),
+  hasExpiry: boolean("has_expiry").notNull().default(true),
+  verificationMethod: text("verification_method"),
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+}, (table) => ({
+  credTypeNamespaceIdx: index("idx_credential_types_namespace").on(table.modalNamespace),
+}));
+
+export const jobCredentialRequirements = pgTable("job_credential_requirements", {
+  id: serial("id").primaryKey(),
+  jobId: integer("job_id").notNull().references(() => jobs.id, { onDelete: "cascade" }),
+  credentialTypeId: integer("credential_type_id").notNull().references(() => credentialTypes.id),
+  requirementLevel: text("requirement_level").$type<RequirementLevel>().notNull(),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+}, (table) => ({
+  jobCredJobIdx: index("idx_job_cred_req_job").on(table.jobId),
+  jobCredUnique: uniqueIndex("job_cred_unique").on(table.jobId, table.credentialTypeId),
+}));
+
+export const insertCredentialTypeSchema = createInsertSchema(credentialTypes).omit({ id: true, createdAt: true });
+export const insertJobCredentialRequirementSchema = createInsertSchema(jobCredentialRequirements).omit({ id: true, createdAt: true });
+
+export type CredentialType = typeof credentialTypes.$inferSelect;
+export type InsertCredentialType = z.infer<typeof insertCredentialTypeSchema>;
+export type JobCredentialRequirement = typeof jobCredentialRequirements.$inferSelect;
+export type InsertJobCredentialRequirement = z.infer<typeof insertJobCredentialRequirementSchema>;
+
 export const conversations = pgTable("conversations", {
   id: serial("id").primaryKey(),
   seekerId: integer("seeker_id").notNull(),

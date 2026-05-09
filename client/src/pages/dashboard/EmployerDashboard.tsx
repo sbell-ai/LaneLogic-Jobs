@@ -29,6 +29,7 @@ import { validateCategoryPair } from "@shared/jobTaxonomy";
 import { useTaxonomy } from "@/hooks/use-taxonomy";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid } from "recharts";
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
+import { CredentialRequirementsBuilder } from "@/components/credentials/CredentialRequirementsBuilder";
 
 const JOB_TYPES = ["Full-time", "Part-time", "Contract", "Seasonal", "Owner-Operator", "Lease Purchase", "OTR", "Temporary", "Other"];
 
@@ -188,6 +189,10 @@ function PostJobTab({ userId }: { userId: number }) {
                   </FormItem>
                 );
               }} />
+            </div>
+
+            <div className="rounded-lg border border-dashed border-border p-4 bg-muted/20 text-sm text-muted-foreground" data-testid="credential-requirements-placeholder">
+              <span className="font-medium text-foreground">Credential Requirements</span> — save the job first, then add credentials (CDL classes, endorsements, TWIC, etc.) from the Edit dialog.
             </div>
 
             <FormField control={form.control} name="description" render={({ field }) => (
@@ -424,6 +429,9 @@ function EditJobDialog({ job }: { job: Job }) {
                 </FormItem>
               );
             }} />
+            <div className="rounded-lg border border-border p-4 bg-muted/20">
+              <CredentialRequirementsBuilder jobId={job.id} />
+            </div>
             <FormField control={form.control} name="description" render={({ field }) => (
               <FormItem>
                 <FormLabel>Job Description *</FormLabel>

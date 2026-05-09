@@ -13,6 +13,8 @@ import adminRegistryRouter from "./routes/adminRegistry";
 import usersRouter from "./routes/users";
 import employersRouter from "./routes/employers";
 import jobsRouter from "./routes/jobs";
+import credentialTypesRouter from "./routes/credential-types";
+import jobRequirementsRouter from "./routes/job-requirements";
 import applicationsRouter from "./routes/applications";
 import jobAlertsRouter from "./routes/jobAlerts";
 import resourcesRouter from "./routes/resources";
@@ -145,6 +147,8 @@ export async function registerRoutes(
   app.use(usersRouter);
   app.use(employersRouter);
   app.use(jobsRouter);
+  app.use(credentialTypesRouter);
+  app.use(jobRequirementsRouter);
   app.use(applicationsRouter);
   app.use(jobAlertsRouter);
   app.use(resourcesRouter);
