@@ -14,7 +14,7 @@ import {
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import type { EnrichedJob } from "@shared/schema";
-import { formatDistanceToNow } from "date-fns";
+import { format, formatDistanceToNow } from "date-fns";
 import { motion } from "framer-motion";
 import {
   JobFilterSidebar, MobileFilterButton, useJobFilters, filterJobs, getActiveFilterCount, clearAllFilters, formatJobLocation,
@@ -300,7 +300,12 @@ export default function Jobs() {
                               )}
                               <span className="flex items-center gap-1">
                                 <Clock size={12} />
-                                {job.createdAt ? formatDistanceToNow(new Date(job.createdAt), { addSuffix: true }) : "Recently"}
+                                {(() => {
+                                  const d = job.externalPostedAt ?? job.publishedAt ?? job.createdAt;
+                                  if (!d) return "Recently posted";
+                                  const dt = new Date(d);
+                                  return `Posted ${format(dt, "MMM d")} · ${formatDistanceToNow(dt, { addSuffix: true })}`;
+                                })()}
                               </span>
                               {job.expiresAt && (
                                 <Badge className="bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800 text-[10px] font-semibold hover:bg-amber-100" data-testid={`badge-actively-interviewing-${job.id}`}>

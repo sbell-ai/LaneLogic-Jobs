@@ -83,6 +83,7 @@ export async function runIndeedScraper(): Promise<ScrapedJobRaw[]> {
           raw_company: j.company ?? "",
           raw_location: j.formattedLocation ?? "",
           raw_description: j.snippet ?? "",
+          raw_posted_at: j.date,
           scraped_at: new Date().toISOString(),
         });
       }

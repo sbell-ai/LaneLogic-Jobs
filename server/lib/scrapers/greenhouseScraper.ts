@@ -38,6 +38,7 @@ type GreenhouseJob = {
   content?: string;
   location?: { name?: string };
   updated_at?: string;
+  first_published?: string;
 };
 
 type GreenhouseResponse = {
@@ -145,6 +146,7 @@ async function scrapeBoard(board: GreenhouseBoard): Promise<ScrapedJobRaw[]> {
         raw_company: (j.company_name?.trim() || fallbackName).trim(),
         raw_location: locName,
         raw_description: htmlToText(j.content ?? ""),
+        raw_posted_at: j.first_published ?? j.updated_at,
         scraped_at: new Date().toISOString(),
       });
     }

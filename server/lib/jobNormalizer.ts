@@ -268,6 +268,15 @@ export async function normalizeJob(raw: ScrapedJobRaw): Promise<NormalizedJob | 
 
   const { lat, lng } = await geocodeLocation(shape.location_text);
 
+  // Pass the source's original posted-at through unchanged. Don't ask Claude
+  // to extract it — every Greenhouse and Indeed posting already gives us a
+  // structured timestamp; bouncing it through an LLM only risks errors.
+  let postedAt: Date | null = null;
+  if (raw.raw_posted_at) {
+    const parsed = new Date(raw.raw_posted_at);
+    if (!Number.isNaN(parsed.getTime())) postedAt = parsed;
+  }
+
   return {
     title: shape.title,
     company_name: shape.company_name,
@@ -284,5 +293,6 @@ export async function normalizeJob(raw: ScrapedJobRaw): Promise<NormalizedJob | 
     source_url: raw.source_url,
     source_hash: computeSourceHash(shape.title, shape.company_name, shape.location_text),
     is_remote: shape.is_remote,
+    posted_at: postedAt,
   };
 }

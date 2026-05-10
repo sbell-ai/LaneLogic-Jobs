@@ -21,6 +21,12 @@ export type ScrapedJobRaw = {
   raw_location: string;
   raw_description: string;
   raw_compensation?: string;
+  // ISO 8601 (or anything Date can parse). When the source exposes the
+  // original posting date — Greenhouse `first_published`, Indeed `date`, etc.
+  // — scrapers pass it through here so it lands on jobs.external_posted_at
+  // and the UI can show how fresh the listing actually is, not when we
+  // scraped it.
+  raw_posted_at?: string;
   scraped_at: string;
 };
 
@@ -41,6 +47,9 @@ export type NormalizedJob = {
   source_url: string;
   source_hash: string;
   is_remote: boolean;
+  // Original posting date from the source (when available). Persisted to
+  // jobs.external_posted_at and used by the UI for "Posted X ago" display.
+  posted_at: Date | null;
 };
 
 export type SourceStats = {

@@ -217,8 +217,20 @@ export async function seedJob(
         sourceUrl: job.source_url,
         sourceName: job.source,
         sourceHash: job.source_hash,
+        // Original posting date from the source. UI prefers this over
+        // publishedAt/createdAt for "Posted X ago" so freshly-seeded jobs
+        // don't all read as "just posted" when they were actually weeks old.
+        externalPostedAt: job.posted_at,
         lat: job.lat !== null ? job.lat.toString() : null,
         lng: job.lng !== null ? job.lng.toString() : null,
+        // Seeded jobs route applications back to the original ATS — the
+        // employer isn't on LaneLogics yet, so an internal application would
+        // land in a black hole at the system seed-agent user. Setting
+        // applyUrl + isExternalApply makes the Apply button open the source
+        // posting in a new tab. When/if the employer claims the listing,
+        // they can flip these back to internal-apply.
+        applyUrl: job.source_url,
+        isExternalApply: true,
       } as any)
       .returning({ id: jobs.id });
 

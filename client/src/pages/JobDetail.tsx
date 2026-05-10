@@ -11,7 +11,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import type { EnrichedJob } from "@shared/schema";
-import { formatDistanceToNow } from "date-fns";
+import { format, formatDistanceToNow } from "date-fns";
 import MarkdownDescription from "@/components/MarkdownDescription";
 import { formatJobLocation } from "@/components/JobFilterSidebar";
 import { VerifiedBadge } from "@/components/VerifiedBadge";
@@ -169,7 +169,8 @@ export default function JobDetail() {
     "title": job.title,
     "description": job.description || "",
     "identifier": { "@type": "PropertyValue", "name": job.companyName || "LaneLogic Jobs", "value": String(job.id) },
-    "datePosted": job.publishedAt ? new Date(job.publishedAt).toISOString().split("T")[0]
+    "datePosted": job.externalPostedAt ? new Date(job.externalPostedAt).toISOString().split("T")[0]
+      : job.publishedAt ? new Date(job.publishedAt).toISOString().split("T")[0]
       : job.createdAt ? new Date(job.createdAt).toISOString().split("T")[0] : undefined,
     "validThrough": job.expiresAt ? new Date(job.expiresAt).toISOString().split("T")[0] : undefined,
     "employmentType": job.jobType ? (typeMap[job.jobType] || "OTHER") : undefined,
@@ -301,7 +302,12 @@ export default function JobDetail() {
                       )}
                       <span className="flex items-center gap-1.5">
                         <Clock size={15} />
-                        {job.createdAt ? formatDistanceToNow(new Date(job.createdAt), { addSuffix: true }) : "Recently posted"}
+                        {(() => {
+                          const d = job.externalPostedAt ?? job.publishedAt ?? job.createdAt;
+                          if (!d) return "Recently posted";
+                          const dt = new Date(d);
+                          return `Posted ${format(dt, "MMM d, yyyy")} · ${formatDistanceToNow(dt, { addSuffix: true })}`;
+                        })()}
                       </span>
                       {job.expiresAt && (
                         <Badge className="bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800 text-xs font-semibold hover:bg-amber-100" data-testid="badge-actively-interviewing">
