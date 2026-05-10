@@ -62,8 +62,12 @@ export type SeedRunResult = {
   duration_ms: number;
 };
 
+// Errors can originate from a scraper (one of SeedSource) or from the agent
+// itself ("admin" — manual cancellation, "system" — orchestrator-level fault).
+export type SeedErrorSource = SeedSource | "admin" | "system";
+
 export type SeedErrorEntry = {
-  source: SeedSource;
+  source: SeedErrorSource;
   url: string;
   error: string;
 };

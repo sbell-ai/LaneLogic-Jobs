@@ -66,6 +66,30 @@ export function useTriggerSeedRun() {
   });
 }
 
+export type CancelRunResponse = {
+  log_id: number;
+  cancelled: true;
+};
+
+// Cancels an active run. Optional log_id targets a specific run; without it,
+// the server picks the most recent uncompleted row.
+export function useCancelSeedRun() {
+  const qc = useQueryClient();
+  return useMutation<CancelRunResponse, Error, { logId?: number } | void>({
+    mutationFn: async (args) => {
+      const body = args && "logId" in args && args.logId ? { log_id: args.logId } : {};
+      const res = await apiRequest("POST", "/api/admin/seed/cancel", body);
+      return res.json();
+    },
+    onSuccess: (data) => {
+      // Refresh the list and the targeted detail so the UI snaps to the
+      // finalized state without waiting for the next poll tick.
+      qc.invalidateQueries({ queryKey: ["/api/admin/seed/logs"] });
+      qc.invalidateQueries({ queryKey: ["/api/admin/seed/logs", data.log_id] });
+    },
+  });
+}
+
 // Convenience: track a "currently running" log id across re-renders.
 export function useActiveSeedRun() {
   const [activeLogId, setActiveLogId] = useState<number | null>(null);

@@ -37,6 +37,20 @@ const SCRAPERS: Record<SeedSource, ScraperFn> = {
   company: runCompanyPageScraper,
 };
 
+// In-memory cancellation registry. The cancel endpoint adds a logId here;
+// the orchestrator checks it between sources/postings and bails into Phase 3
+// when set. State is per-process — if the server restarts, in-flight runs are
+// already dead anyway, and the endpoint's eager DB write covers that case.
+const cancelledRuns = new Set<number>();
+
+export function requestCancel(logId: number): void {
+  cancelledRuns.add(logId);
+}
+
+export function isCancelled(logId: number): boolean {
+  return cancelledRuns.has(logId);
+}
+
 export async function startSeedRun(
   triggeredBy: "cron" | "admin",
   adminUserId?: number,
@@ -123,7 +137,11 @@ export async function runSeedAgentForExistingLog(
   // Phase 2 — normalize + write sequentially per posting. Nominatim is
   // 1 req/s; the normalizer enforces the throttle internally so we just
   // serialize here.
-  for (const { source, jobs: rawJobs } of scraped) {
+  sourceLoop: for (const { source, jobs: rawJobs } of scraped) {
+    if (isCancelled(logId)) {
+      console.log(`[seedAgent] run #${logId} cancellation detected — bailing out`);
+      break sourceLoop;
+    }
     const queue =
       perSourceCap > 0 && rawJobs.length > perSourceCap
         ? rawJobs.slice(0, perSourceCap)
@@ -134,6 +152,10 @@ export async function runSeedAgentForExistingLog(
       );
     }
     for (const raw of queue) {
+      if (isCancelled(logId)) {
+        console.log(`[seedAgent] run #${logId} cancellation detected — bailing out`);
+        break sourceLoop;
+      }
       const stats: SourceStats = perSource[source];
       try {
         const normalized = await normalizeJob(raw);
@@ -167,6 +189,11 @@ export async function runSeedAgentForExistingLog(
   }
 
   // Phase 3 — finalize the seed_log row with rollups.
+  const wasCancelled = isCancelled(logId);
+  if (wasCancelled) {
+    errorLog.push({ source: "admin", url: "", error: "cancelled by admin" });
+  }
+
   let totalScraped = 0;
   let totalNormalized = 0;
   let totalInserted = 0;
@@ -197,8 +224,14 @@ export async function runSeedAgentForExistingLog(
 
   const duration_ms = Date.now() - startedAt;
   console.log(
-    `[seedAgent] run #${logId} complete — scraped=${totalScraped} inserted=${totalInserted} skipped=${totalSkipped} errors=${totalErrors} in ${duration_ms}ms`,
+    `[seedAgent] run #${logId} ${wasCancelled ? "cancelled" : "complete"} — ` +
+      `scraped=${totalScraped} inserted=${totalInserted} skipped=${totalSkipped} errors=${totalErrors} in ${duration_ms}ms`,
   );
+
+  // Drop the registry entry so a future run reusing the same id (unlikely
+  // since the id is a serial, but cheap insurance) doesn't pick up stale
+  // state. Always do this — the run is over either way.
+  cancelledRuns.delete(logId);
 
   return {
     log_id: logId,

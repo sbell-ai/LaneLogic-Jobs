@@ -7,12 +7,17 @@
 // All endpoints are session-gated to role=admin via requireAdminSession.
 
 import { Router } from "express";
-import { desc, eq, sql } from "drizzle-orm";
+import { desc, eq, isNull, sql } from "drizzle-orm";
 
 import { db } from "../db";
 import { seedLog } from "@shared/schema";
 import { requireAdminSession } from "../middleware/requireAdminSession";
-import { runSeedAgentForExistingLog, startSeedRun } from "../lib/seedAgent";
+import {
+  requestCancel,
+  runSeedAgentForExistingLog,
+  startSeedRun,
+} from "../lib/seedAgent";
+import type { SeedErrorEntry } from "../../shared/seedTypes";
 
 const router = Router();
 
@@ -45,6 +50,84 @@ router.post("/api/admin/seed/run", async (req, res) => {
     console.error("[seedAdmin] failed to kick off run:", err);
     res.status(500).json({ error: "failed to start seed run" });
   }
+});
+
+// ─── POST /api/admin/seed/cancel ────────────────────────────────────────────
+//
+// Cancels an in-flight run. With `{log_id}` in the body, cancels that
+// specific row; without one, cancels the most recent row whose `completed_at`
+// is still NULL.
+//
+// Two writes happen:
+//   1. In-memory cancellation flag — the orchestrator checks this between
+//      sources and between postings, then bails into a normal finalize that
+//      records the cancel marker in `error_log`.
+//   2. Eager DB write — sets `completed_at` and appends a cancel marker to
+//      `error_log`. This is the safety net for the dead-agent case (server
+//      restart killed the process; the row would otherwise stay uncompleted
+//      forever). If the agent is alive, its Phase 3 UPDATE will overwrite
+//      this — same final shape, no duplicates.
+
+router.post("/api/admin/seed/cancel", async (req, res) => {
+  if (!requireAdminSession(req, res)) return;
+
+  const explicitId = Number(req.body?.log_id);
+  let targetId: number;
+
+  if (Number.isFinite(explicitId) && explicitId > 0) {
+    targetId = explicitId;
+  } else {
+    const [active] = await db
+      .select({ id: seedLog.id })
+      .from(seedLog)
+      .where(isNull(seedLog.completedAt))
+      .orderBy(desc(seedLog.startedAt))
+      .limit(1);
+    if (!active) {
+      return res.status(404).json({ error: "no active run to cancel" });
+    }
+    targetId = active.id;
+  }
+
+  const [row] = await db
+    .select()
+    .from(seedLog)
+    .where(eq(seedLog.id, targetId))
+    .limit(1);
+  if (!row) {
+    return res.status(404).json({ error: "log row not found", log_id: targetId });
+  }
+  if (row.completedAt) {
+    return res
+      .status(409)
+      .json({ error: "run already completed", log_id: targetId });
+  }
+
+  requestCancel(targetId);
+
+  const existing: SeedErrorEntry[] = Array.isArray(row.errorLog)
+    ? (row.errorLog as SeedErrorEntry[])
+    : [];
+  const cancelMarker: SeedErrorEntry = {
+    source: "admin",
+    url: "",
+    error: "cancelled by admin",
+  };
+
+  try {
+    await db
+      .update(seedLog)
+      .set({
+        completedAt: new Date(),
+        errorLog: [...existing, cancelMarker],
+      } as any)
+      .where(eq(seedLog.id, targetId));
+  } catch (err) {
+    console.error("[seedAdmin] cancel UPDATE failed:", err);
+    return res.status(500).json({ error: "failed to mark cancelled" });
+  }
+
+  res.json({ log_id: targetId, cancelled: true });
 });
 
 // ─── GET /api/admin/seed/logs ───────────────────────────────────────────────
