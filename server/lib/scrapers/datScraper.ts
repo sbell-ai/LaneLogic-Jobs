@@ -11,6 +11,7 @@
 import * as cheerio from "cheerio";
 
 import type { ScrapedJobRaw } from "../../../shared/seedTypes";
+import { isUSLocation } from "../seedFilters";
 
 const GREENHOUSE_BOARD = "datsolutions";
 const ENDPOINT = `https://boards-api.greenhouse.io/v1/boards/${GREENHOUSE_BOARD}/jobs?content=true`;
@@ -72,19 +73,28 @@ export async function runDatScraper(): Promise<ScrapedJobRaw[]> {
     const jobs = Array.isArray(body.jobs) ? body.jobs : [];
     console.log(`[scraper:dat] API returned ${jobs.length} job(s)`);
 
+    let droppedNonUS = 0;
     for (const j of jobs) {
       const sourceUrl = j.absolute_url ?? "";
       if (!sourceUrl || seen.has(sourceUrl)) continue;
       seen.add(sourceUrl);
+      const locName = j.location?.name ?? "";
+      if (!isUSLocation(locName)) {
+        droppedNonUS++;
+        continue;
+      }
       out.push({
         source: "dat",
         source_url: sourceUrl,
         raw_title: j.title ?? "",
         raw_company: j.company_name?.trim() || COMPANY_FALLBACK,
-        raw_location: j.location?.name ?? "",
+        raw_location: locName,
         raw_description: htmlToText(j.content ?? ""),
         scraped_at: new Date().toISOString(),
       });
+    }
+    if (droppedNonUS > 0) {
+      console.log(`[scraper:dat] dropped ${droppedNonUS} non-US posting(s)`);
     }
   } catch (err) {
     console.warn("[scraper:dat] fetch failed:", err);

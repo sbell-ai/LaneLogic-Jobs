@@ -51,6 +51,63 @@ export function isCancelled(logId: number): boolean {
   return cancelledRuns.has(logId);
 }
 
+const CANCEL_MARKER_TEXT = "cancelled by admin";
+
+function hasCancelMarker(errorLog: SeedErrorEntry[]): boolean {
+  return errorLog.some((e) => e.source === "admin" && e.error === CANCEL_MARKER_TEXT);
+}
+
+// Mid-run progress flush. Writes counter rollups, perSource, and errorLog —
+// never completed_at, so the cancel endpoint's eager finalize survives.
+//
+// If a cancel has been requested, the marker is appended to the in-memory
+// errorLog before the UPDATE so this flush doesn't temporarily overwrite
+// the marker the cancel endpoint already wrote. Phase 3 then short-circuits
+// the marker push to avoid duplicates.
+//
+// DB errors are swallowed: a transient connection blip during a live run
+// must not kill the agent. Phase 3's final UPDATE still produces the
+// correct end-state regardless of whether progress flushes succeeded.
+async function flushProgress(
+  logId: number,
+  perSource: Record<SeedSource, SourceStats>,
+  errorLog: SeedErrorEntry[],
+): Promise<void> {
+  if (isCancelled(logId) && !hasCancelMarker(errorLog)) {
+    errorLog.push({ source: "admin", url: "", error: CANCEL_MARKER_TEXT });
+  }
+
+  let totalScraped = 0;
+  let totalNormalized = 0;
+  let totalInserted = 0;
+  let totalSkipped = 0;
+  let totalErrors = 0;
+  for (const s of Object.values(perSource)) {
+    totalScraped += s.scraped;
+    totalNormalized += s.normalized;
+    totalInserted += s.inserted;
+    totalSkipped += s.skipped;
+    totalErrors += s.errors;
+  }
+
+  try {
+    await db
+      .update(seedLog)
+      .set({
+        totalScraped,
+        totalNormalized,
+        totalInserted,
+        totalSkipped,
+        totalErrors,
+        perSource,
+        errorLog,
+      } as any)
+      .where(eq(seedLog.id, logId));
+  } catch (err) {
+    console.warn(`[seedAgent] progress flush failed for run #${logId}:`, err);
+  }
+}
+
 export async function startSeedRun(
   triggeredBy: "cron" | "admin",
   adminUserId?: number,
@@ -134,6 +191,11 @@ export async function runSeedAgentForExistingLog(
     }
   }
 
+  // Initial flush — make scraped counts and any scraper-rejection errors
+  // visible in the UI immediately, without waiting for the first Phase 2
+  // posting to complete.
+  await flushProgress(logId, perSource, errorLog);
+
   // Phase 2 — normalize + write sequentially per posting. Nominatim is
   // 1 req/s; the normalizer enforces the throttle internally so we just
   // serialize here.
@@ -185,13 +247,18 @@ export async function runSeedAgentForExistingLog(
         errorLog.push({ source, url: raw.source_url, error: message });
         console.error(`[seedAgent] uncaught error processing ${raw.source_url}:`, err);
       }
+
+      // Per-posting progress flush — keeps the View Details panel updating
+      // in near-real-time (the UI polls every 3s, this flush fires every
+      // ~5s on average given Nominatim + Claude latency).
+      await flushProgress(logId, perSource, errorLog);
     }
   }
 
   // Phase 3 — finalize the seed_log row with rollups.
   const wasCancelled = isCancelled(logId);
-  if (wasCancelled) {
-    errorLog.push({ source: "admin", url: "", error: "cancelled by admin" });
+  if (wasCancelled && !hasCancelMarker(errorLog)) {
+    errorLog.push({ source: "admin", url: "", error: CANCEL_MARKER_TEXT });
   }
 
   let totalScraped = 0;

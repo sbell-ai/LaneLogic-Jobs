@@ -18,6 +18,7 @@
 import * as cheerio from "cheerio";
 
 import type { ScrapedJobRaw } from "../../../shared/seedTypes";
+import { isUSLocation } from "../seedFilters";
 
 const DEFAULT_BOARDS: GreenhouseBoard[] = [
   { token: "uberfreight", name: "Uber Freight" },
@@ -128,18 +129,29 @@ async function scrapeBoard(board: GreenhouseBoard): Promise<ScrapedJobRaw[]> {
       `[scraper:greenhouse] board=${board.token} returned ${jobs.length} job(s)`,
     );
     const fallbackName = board.name ?? board.token;
+    let droppedNonUS = 0;
     for (const j of jobs) {
       const sourceUrl = j.absolute_url ?? "";
       if (!sourceUrl) continue;
+      const locName = j.location?.name ?? "";
+      if (!isUSLocation(locName)) {
+        droppedNonUS++;
+        continue;
+      }
       out.push({
         source: "greenhouse",
         source_url: sourceUrl,
         raw_title: j.title ?? "",
         raw_company: (j.company_name?.trim() || fallbackName).trim(),
-        raw_location: j.location?.name ?? "",
+        raw_location: locName,
         raw_description: htmlToText(j.content ?? ""),
         scraped_at: new Date().toISOString(),
       });
+    }
+    if (droppedNonUS > 0) {
+      console.log(
+        `[scraper:greenhouse] board=${board.token} dropped ${droppedNonUS} non-US posting(s)`,
+      );
     }
   } catch (err) {
     console.warn(`[scraper:greenhouse] board "${board.token}" failed:`, err);
