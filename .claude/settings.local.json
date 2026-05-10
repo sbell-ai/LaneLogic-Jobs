@@ -35,7 +35,11 @@
       "Bash(npm view *)",
       "Bash(echo \"exit=$?\")",
       "Bash(grep -rn '\"/api/jobs\\\\|`/api/jobs' client/src/ --include=\"*.tsx\" --include=\"*.ts\")",
-      "Bash(grep -E \"\\\\.\\(ts|tsx\\)$\")"
+      "Bash(grep -E \"\\\\.\\(ts|tsx\\)$\")",
+      "Bash(tee /tmp/tsc.log)",
+      "Bash(echo \"---EXIT: $?\")",
+      "Read(//tmp/**)",
+      "Bash(echo \"EXIT: $?\")"
     ]
   }
 }

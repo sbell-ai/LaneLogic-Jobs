@@ -1,8 +1,15 @@
-import { pgTable, text, serial, integer, boolean, timestamp, jsonb, uniqueIndex, real, index } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, boolean, timestamp, jsonb, uniqueIndex, real, index, numeric } from "drizzle-orm/pg-core";
 import { relations, sql } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 import type { CdlClass, CdlEndorsement, CdlRestriction } from "./certEnums";
+
+// Sprint 6 — preference shape stored as users.seeker_preferences JSONB.
+export type SeekerJobType = "full_time" | "part_time" | "contract" | "owner_operator";
+export type SeekerPreferencesData = {
+  job_types: SeekerJobType[];
+  modal_preferences: ("trucking" | "maritime" | "aviation" | "logistics")[];
+};
 
 export const users = pgTable("users", {
   id: serial("id").primaryKey(),
@@ -45,6 +52,12 @@ export const users = pgTable("users", {
   notificationPreferences: jsonb("notification_preferences"),
   lastLoginAt: timestamp("last_login_at"),
   permissions: jsonb("permissions"),
+  // Sprint 6 — onboarding + geolocation + preferences
+  onboardingCompletedAt: timestamp("onboarding_completed_at", { withTimezone: true }),
+  lat: numeric("lat", { precision: 9, scale: 6 }),
+  lng: numeric("lng", { precision: 9, scale: 6 }),
+  seekerPreferences: jsonb("seeker_preferences").$type<SeekerPreferencesData>(),
+  primaryModal: text("primary_modal").$type<ModalNamespace>(),
 });
 
 export const jobs = pgTable("jobs", {
@@ -88,6 +101,12 @@ export const jobs = pgTable("jobs", {
   lastImportedAt: timestamp("last_imported_at"),
   lastAdminEditedAt: timestamp("last_admin_edited_at"),
   rawSourceSnippet: text("raw_source_snippet"),
+  // Sprint 7 — AI job seeding agent
+  isSeeded: boolean("is_seeded").notNull().default(false),
+  sourceName: text("source_name"),
+  sourceHash: text("source_hash"),
+  lat: numeric("lat", { precision: 9, scale: 6 }),
+  lng: numeric("lng", { precision: 9, scale: 6 }),
 }, (table) => ({
   jobsEmployerExternalKeyIdx: uniqueIndex("jobs_employer_external_key_idx")
     .on(table.employerId, table.externalJobKey)
@@ -95,7 +114,33 @@ export const jobs = pgTable("jobs", {
   jobsSourceTargetExternalIdx: uniqueIndex("jobs_source_target_external_idx")
     .on(table.sourceId, table.importTargetId, table.externalJobId)
     .where(sql`${table.sourceId} IS NOT NULL AND ${table.externalJobId} IS NOT NULL`),
+  jobsSourceHashIdx: uniqueIndex("idx_jobs_source_hash")
+    .on(table.sourceHash)
+    .where(sql`${table.sourceHash} IS NOT NULL`),
 }));
+
+// Sprint 7 — one row per seed-agent run. Updated in place: an admin or cron
+// invocation inserts the row at start, then patches counts + completed_at
+// when the run finishes.
+export const seedLog = pgTable("seed_log", {
+  id: serial("id").primaryKey(),
+  startedAt: timestamp("started_at", { withTimezone: true }).notNull().defaultNow(),
+  completedAt: timestamp("completed_at", { withTimezone: true }),
+  triggeredBy: text("triggered_by").$type<"cron" | "admin">().notNull(),
+  adminUserId: integer("admin_user_id").references(() => users.id),
+  totalScraped: integer("total_scraped").notNull().default(0),
+  totalNormalized: integer("total_normalized").notNull().default(0),
+  totalInserted: integer("total_inserted").notNull().default(0),
+  totalSkipped: integer("total_skipped").notNull().default(0),
+  totalErrors: integer("total_errors").notNull().default(0),
+  perSource: jsonb("per_source"),
+  errorLog: jsonb("error_log"),
+}, (table) => ({
+  seedLogStartedIdx: index("idx_seed_log_started").on(table.startedAt),
+}));
+
+export type SeedLog = typeof seedLog.$inferSelect;
+export type InsertSeedLog = typeof seedLog.$inferInsert;
 
 export const seekerCertProfiles = pgTable("seeker_cert_profiles", {
   userId: integer("user_id").primaryKey().references(() => users.id, { onDelete: "cascade" }),
@@ -585,6 +630,52 @@ export type CredentialType = typeof credentialTypes.$inferSelect;
 export type InsertCredentialType = z.infer<typeof insertCredentialTypeSchema>;
 export type JobCredentialRequirement = typeof jobCredentialRequirements.$inferSelect;
 export type InsertJobCredentialRequirement = z.infer<typeof insertJobCredentialRequirementSchema>;
+
+// ---- Sprint 5: Match Scores ------------------------------------------------
+// Cached seeker<->job match scores. Recomputed on demand by
+// POST /api/matches/compute and on employer requirement changes via the
+// Sprint 4 matchRecalc hook.
+export const matchScores = pgTable("match_scores", {
+  id: serial("id").primaryKey(),
+  seekerId: integer("seeker_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  jobId: integer("job_id").notNull().references(() => jobs.id, { onDelete: "cascade" }),
+  score: integer("score").notNull(),
+  projectedScore: integer("projected_score").notNull(),
+  scoreBreakdown: jsonb("score_breakdown").notNull(),
+  hasDisqualifier: boolean("has_disqualifier").notNull().default(false),
+  computedAt: timestamp("computed_at").notNull().defaultNow(),
+}, (table) => ({
+  matchScoresUnique: uniqueIndex("match_scores_seeker_job_idx").on(table.seekerId, table.jobId),
+  matchScoresSeekerIdx: index("idx_match_scores_seeker").on(table.seekerId),
+  matchScoresScoreIdx: index("idx_match_scores_score").on(table.seekerId, table.score),
+}));
+
+export type MatchScoreRow = typeof matchScores.$inferSelect;
+export type InsertMatchScoreRow = typeof matchScores.$inferInsert;
+
+// ---- Sprint 6: Email dedup log -------------------------------------------
+// One row per (user, template, reference). UNIQUE prevents the same email
+// going to the same user for the same subject more than once.
+export const EMAIL_TEMPLATES = ["new_match", "expiry_warning", "new_applicant"] as const;
+export type EmailTemplateName = (typeof EMAIL_TEMPLATES)[number];
+
+export const emailLog = pgTable("email_log", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  template: text("template").$type<EmailTemplateName>().notNull(),
+  referenceId: text("reference_id"),
+  sentAt: timestamp("sent_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  emailLogUnique: uniqueIndex("email_log_user_template_ref_idx").on(
+    table.userId,
+    table.template,
+    table.referenceId,
+  ),
+  emailLogUserIdx: index("idx_email_log_user").on(table.userId),
+  emailLogTemplateIdx: index("idx_email_log_template").on(table.template, table.sentAt),
+}));
+
+export type EmailLogRow = typeof emailLog.$inferSelect;
 
 export const conversations = pgTable("conversations", {
   id: serial("id").primaryKey(),

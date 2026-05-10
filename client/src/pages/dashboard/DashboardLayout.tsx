@@ -1,7 +1,7 @@
 import { SidebarProvider, SidebarTrigger, Sidebar, SidebarContent, SidebarGroup, SidebarGroupLabel, SidebarGroupContent, SidebarMenu, SidebarMenuItem, SidebarMenuButton } from "@/components/ui/sidebar";
 import { useAuth } from "@/hooks/use-auth";
 import { Link, useLocation } from "wouter";
-import { Briefcase, LayoutDashboard, FileText, LogOut, Users, BookOpen, Upload, CreditCard, UserPlus, PlusCircle, Palette, FileEdit, Tag, Ticket, UserCircle, FilePlus2, Share2, Database, Package, Gauge, ArrowDownToLine, ShieldCheck, MessageSquare, Mail, Clock, Bell, BarChart2, Bookmark, Search, Navigation, BadgeCheck } from "lucide-react";
+import { Briefcase, LayoutDashboard, FileText, LogOut, Users, BookOpen, Upload, CreditCard, UserPlus, PlusCircle, Palette, FileEdit, Tag, Ticket, UserCircle, FilePlus2, Share2, Database, Package, Gauge, ArrowDownToLine, ShieldCheck, MessageSquare, Mail, Clock, Bell, BarChart2, Bookmark, Search, Navigation, BadgeCheck, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -25,6 +25,7 @@ function AppSidebar({ role }: { role: string }) {
 
   const seekerLinks = [
     { title: "Overview", path: "/dashboard", icon: LayoutDashboard },
+    { title: "Matches", path: "/matches", icon: Sparkles },
     { title: "Applied Jobs", path: "/dashboard/applications", icon: Briefcase },
     { title: "My Resume", path: "/dashboard/resume", icon: FileText },
     { title: "My Profile", path: "/dashboard/profile", icon: UserCircle },
@@ -63,6 +64,7 @@ function AppSidebar({ role }: { role: string }) {
     { title: "Social Publishing", path: "/dashboard/admin/social", icon: Share2 },
     { title: "Products", path: "/dashboard/admin/products", icon: Package },
     { title: "Imports", path: "/dashboard/admin/imports", icon: ArrowDownToLine },
+    { title: "Job Seeding", path: "/dashboard/admin/seeding", icon: Sparkles },
     { title: "Employer Registry", path: "/dashboard/admin/employer-registry", icon: ShieldCheck },
     { title: "Employer Verification", path: "/dashboard/admin/verification", icon: ShieldCheck },
     { title: "Seeker Verification", path: "/dashboard/admin/seeker-verification", icon: ShieldCheck },
@@ -180,11 +182,27 @@ function AppSidebar({ role }: { role: string }) {
 
 export function DashboardLayout({ children }: { children: React.ReactNode }) {
   const { user, logout, isLoading } = useAuth();
+  const [pathname] = useLocation();
 
   if (isLoading) return <div className="h-screen flex items-center justify-center">Loading...</div>;
   if (!user) {
     window.location.href = "/login";
     return null;
+  }
+
+  // Sprint 6 — onboarding gate. Seekers and employers without a completed
+  // onboarding get bounced to their wizard. Admins are exempt. The wizard
+  // pages themselves are NOT wrapped in DashboardLayout, so this can't loop.
+  const onboardingDone = !!(user as any).onboardingCompletedAt;
+  if (!onboardingDone && !pathname.startsWith("/onboarding/")) {
+    if (user.role === "job_seeker") {
+      window.location.href = "/onboarding/seeker";
+      return null;
+    }
+    if (user.role === "employer") {
+      window.location.href = "/onboarding/employer";
+      return null;
+    }
   }
 
   return (

@@ -39,6 +39,7 @@ import { ShareToSocialModal } from "@/components/ShareToSocialModal";
 import SocialPublishing from "./SocialPublishing";
 import ProductManagement from "./ProductManagement";
 import ImportManagement from "./ImportManagement";
+import { SeedingPanel } from "@/components/admin/SeedingPanel";
 import EmployerRegistry from "./EmployerRegistry";
 import VerificationInbox from "./VerificationInbox";
 import SeekerVerificationInbox from "./SeekerVerificationInbox";
@@ -4202,6 +4203,7 @@ export default function AdminDashboard({ section, subsection }: { section?: stri
       case "social": return <SocialPublishing />;
       case "products": return <ProductManagement />;
       case "imports": return <ImportManagement />;
+      case "seeding": return <SeedingPanel />;
       case "employer-registry": return <EmployerRegistry />;
       case "verification": return <VerificationInbox />;
       case "seeker-verification": return <SeekerVerificationInbox />;

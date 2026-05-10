@@ -142,6 +142,14 @@ async function startServer() {
     console.error("Failed to register routes:", err);
   }
 
+  // Sprint 6 — register scheduled jobs (daily expiry warning emails).
+  try {
+    const { registerCronJobs } = await import("./lib/cron");
+    registerCronJobs();
+  } catch (err) {
+    console.error("Failed to register cron jobs:", err);
+  }
+
   app.use((err: any, _req: Request, res: Response, next: NextFunction) => {
     const status = err.status || err.statusCode || 500;
     const message = err.message || "Internal Server Error";
