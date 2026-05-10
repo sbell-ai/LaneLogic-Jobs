@@ -23,7 +23,7 @@ import { normalizeJob } from "./jobNormalizer";
 import { seedJob } from "./jobSeeder";
 import { runIndeedScraper } from "./scrapers/indeedScraper";
 import { runDatScraper } from "./scrapers/datScraper";
-import { runTruckingtruthScraper } from "./scrapers/truckingtruthScraper";
+import { runGreenhouseScraper } from "./scrapers/greenhouseScraper";
 import { runWorkdayScraper } from "./scrapers/workdayScraper";
 import { runCompanyPageScraper } from "./scrapers/companyPageScraper";
 
@@ -32,7 +32,7 @@ type ScraperFn = () => Promise<ScrapedJobRaw[]>;
 const SCRAPERS: Record<SeedSource, ScraperFn> = {
   indeed: runIndeedScraper,
   dat: runDatScraper,
-  truckingtruth: runTruckingtruthScraper,
+  greenhouse: runGreenhouseScraper,
   workday: runWorkdayScraper,
   company: runCompanyPageScraper,
 };
@@ -51,21 +51,48 @@ export async function startSeedRun(
   return row.id;
 }
 
+export type RunSeedAgentOptions = {
+  // Truncate each source's queue to this many postings before feeding the
+  // normalizer. Useful for the first real run so we don't push hundreds of
+  // jobs through Claude in one shot. <=0 disables the cap.
+  perSourceCap?: number;
+};
+
+// Resolves the effective cap for a given run. Explicit option wins; falls
+// back to SEED_PER_SOURCE_CAP env var; 0/unset = no cap.
+function resolvePerSourceCap(opts?: RunSeedAgentOptions): number {
+  if (opts && typeof opts.perSourceCap === "number") {
+    return opts.perSourceCap > 0 ? Math.floor(opts.perSourceCap) : 0;
+  }
+  const envRaw = process.env.SEED_PER_SOURCE_CAP;
+  if (!envRaw) return 0;
+  const n = Number(envRaw);
+  return Number.isFinite(n) && n > 0 ? Math.floor(n) : 0;
+}
+
 export async function runSeedAgent(
   triggeredBy: "cron" | "admin",
   adminUserId?: number,
+  options?: RunSeedAgentOptions,
 ): Promise<SeedRunResult> {
   const logId = await startSeedRun(triggeredBy, adminUserId);
-  return runSeedAgentForExistingLog(logId);
+  return runSeedAgentForExistingLog(logId, options);
 }
 
 // The admin endpoint creates the log row eagerly so it can return a log_id in
 // the HTTP response, then hands the id off here. Cron uses runSeedAgent above
 // (which just adopts the same path).
-export async function runSeedAgentForExistingLog(logId: number): Promise<SeedRunResult> {
+export async function runSeedAgentForExistingLog(
+  logId: number,
+  options?: RunSeedAgentOptions,
+): Promise<SeedRunResult> {
   const startedAt = Date.now();
   const perSource = emptyPerSourceStats();
   const errorLog: SeedErrorEntry[] = [];
+  const perSourceCap = resolvePerSourceCap(options);
+  if (perSourceCap > 0) {
+    console.log(`[seedAgent] per-source cap = ${perSourceCap}`);
+  }
 
   // Phase 1 — scrape everything in parallel. allSettled means a single
   // scraper exception doesn't stop the others.
@@ -79,10 +106,16 @@ export async function runSeedAgentForExistingLog(logId: number): Promise<SeedRun
     if (r.status === "fulfilled") {
       perSource[source].scraped = r.value.length;
       scraped.push({ source, jobs: r.value });
+      console.log(
+        `[seed:${source}] status: fulfilled, raw count: ${r.value.length}`,
+      );
     } else {
       perSource[source].errors += 1;
       const message = r.reason instanceof Error ? r.reason.message : String(r.reason);
       errorLog.push({ source, url: "", error: `scraper threw: ${message}` });
+      console.log(
+        `[seed:${source}] status: rejected, raw count: 0, error: ${message}`,
+      );
       console.error(`[seedAgent] scraper "${source}" failed:`, r.reason);
     }
   }
@@ -91,7 +124,16 @@ export async function runSeedAgentForExistingLog(logId: number): Promise<SeedRun
   // 1 req/s; the normalizer enforces the throttle internally so we just
   // serialize here.
   for (const { source, jobs: rawJobs } of scraped) {
-    for (const raw of rawJobs) {
+    const queue =
+      perSourceCap > 0 && rawJobs.length > perSourceCap
+        ? rawJobs.slice(0, perSourceCap)
+        : rawJobs;
+    if (queue.length < rawJobs.length) {
+      console.log(
+        `[seed:${source}] cap applied: processing ${queue.length} of ${rawJobs.length}`,
+      );
+    }
+    for (const raw of queue) {
       const stats: SourceStats = perSource[source];
       try {
         const normalized = await normalizeJob(raw);

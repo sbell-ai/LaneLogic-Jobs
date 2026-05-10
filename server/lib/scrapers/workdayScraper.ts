@@ -16,14 +16,30 @@ type WorkdayTarget = { url: string; name: string };
 
 function parseTargets(): WorkdayTarget[] {
   const raw = process.env.WORKDAY_TARGETS;
+  console.log(
+    `[scraper:workday] env WORKDAY_TARGETS present: ${raw ? "yes" : "no"}` +
+      (raw ? `, length=${raw.length}B` : ""),
+  );
   if (!raw) return [];
   try {
     const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return [];
-    return parsed.filter(
+    if (!Array.isArray(parsed)) {
+      console.warn(
+        `[scraper:workday] WORKDAY_TARGETS parsed but is not an array: ${typeof parsed}`,
+      );
+      return [];
+    }
+    const valid = parsed.filter(
       (t): t is WorkdayTarget =>
         t && typeof t.url === "string" && typeof t.name === "string",
     );
+    console.log(
+      `[scraper:workday] WORKDAY_TARGETS parsed: ${parsed.length} entries, ${valid.length} valid`,
+    );
+    console.log(
+      `[scraper:workday] parsed targets: ${JSON.stringify(valid)}`,
+    );
+    return valid;
   } catch (err) {
     console.warn("[scraper:workday] WORKDAY_TARGETS is not valid JSON:", err);
     return [];
@@ -36,7 +52,15 @@ async function scrapeOne(
 ): Promise<ScrapedJobRaw[]> {
   const out: ScrapedJobRaw[] = [];
   try {
-    await page.goto(target.url, { waitUntil: "domcontentloaded", timeout: PAGE_TIMEOUT_MS });
+    const response = await page.goto(target.url, {
+      waitUntil: "domcontentloaded",
+      timeout: PAGE_TIMEOUT_MS,
+    });
+    const status = response?.status() ?? 0;
+    const html = await page.content();
+    console.log(
+      `[scraper:workday] target=${target.name} url=${target.url} status=${status} body=${html.length}B`,
+    );
     // Workday uses data-automation-id attributes; the job-list container is
     // the most stable anchor we have across tenants.
     await page.waitForSelector('[data-automation-id="jobResults"], li.css-1q2dra3, [data-automation-id="jobTitle"]', {
@@ -44,6 +68,9 @@ async function scrapeOne(
     });
 
     const cards = await page.$$('[data-automation-id="jobResults"] li, li.css-1q2dra3');
+    console.log(
+      `[scraper:workday] target=${target.name} found ${cards.length} card(s)`,
+    );
     for (const card of cards) {
       try {
         const titleEl = await card.$('[data-automation-id="jobTitle"], a');

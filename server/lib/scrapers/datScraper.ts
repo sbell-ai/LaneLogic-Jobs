@@ -1,85 +1,95 @@
-// Sprint 7 — DAT job board HTML scraper. Cheerio (no JS rendering needed).
+// Sprint 7 — DAT scraper using the Greenhouse public Job Board API.
 //
-// DAT's listing markup will drift; every selector is wrapped in try/catch and
-// an empty result is logged rather than thrown so one selector break doesn't
-// abort a run.
+// DAT's old /jobs HTML page is now a Vue SPA backed by Greenhouse's public
+// boards API (board token "datsolutions"). Hitting the API directly gives us
+// structured records (no selector drift, no JS rendering) and full job
+// descriptions in one call.
+//
+// API: https://boards-api.greenhouse.io/v1/boards/datsolutions/jobs?content=true
+// Docs: https://developers.greenhouse.io/job-board.html
 
 import * as cheerio from "cheerio";
 
 import type { ScrapedJobRaw } from "../../../shared/seedTypes";
 
-const BASE = "https://www.dat.com/jobs";
-const MAX_PAGES = 5;
-const USER_AGENT = "LaneLogics-SeedAgent/1.0 (+https://lanelogics.com)";
+const GREENHOUSE_BOARD = "datsolutions";
+const ENDPOINT = `https://boards-api.greenhouse.io/v1/boards/${GREENHOUSE_BOARD}/jobs?content=true`;
+const COMPANY_FALLBACK = "DAT Freight & Analytics";
 
-async function fetchPage(pageNum: number): Promise<string | null> {
-  const url = pageNum === 1 ? BASE : `${BASE}?page=${pageNum}`;
-  try {
-    const res = await fetch(url, { headers: { "User-Agent": USER_AGENT } });
-    if (!res.ok) {
-      console.warn(`[scraper:dat] HTTP ${res.status} on page ${pageNum}`);
-      return null;
-    }
-    return await res.text();
-  } catch (err) {
-    console.warn(`[scraper:dat] page ${pageNum} fetch failed:`, err);
-    return null;
-  }
-}
+type GreenhouseJob = {
+  id: number;
+  title: string;
+  absolute_url: string;
+  company_name?: string | null;
+  content?: string;
+  location?: { name?: string };
+  updated_at?: string;
+};
 
-function parsePage(html: string): ScrapedJobRaw[] {
-  const out: ScrapedJobRaw[] = [];
+type GreenhouseResponse = {
+  jobs?: GreenhouseJob[];
+};
+
+// Greenhouse returns description as HTML-encoded markup. The normalizer
+// expects plain text — cheerio strips tags and decodes entities cleanly.
+function htmlToText(html: string): string {
+  if (!html) return "";
   try {
-    const $ = cheerio.load(html);
-    // Defensive selector hierarchy — try several common card classes.
-    const cards = $(".job-listing, .job-card, [data-job-id], article.job");
-    cards.each((_, el) => {
-      try {
-        const $el = $(el);
-        const title = $el.find(".job-title, h2, h3").first().text().trim();
-        const company = $el.find(".company, .employer-name").first().text().trim();
-        const location = $el.find(".location, .job-location").first().text().trim();
-        const description = $el.find(".description, .snippet, .job-summary").first().text().trim();
-        const link = $el.find("a").first().attr("href") ?? "";
-        const sourceUrl = link.startsWith("http") ? link : link ? `https://www.dat.com${link}` : "";
-        if (!title || !sourceUrl) return;
-        out.push({
-          source: "dat",
-          source_url: sourceUrl,
-          raw_title: title,
-          raw_company: company,
-          raw_location: location,
-          raw_description: description,
-          scraped_at: new Date().toISOString(),
-        });
-      } catch (cardErr) {
-        console.warn("[scraper:dat] card parse error:", cardErr);
-      }
-    });
-  } catch (err) {
-    console.warn("[scraper:dat] cheerio load failed:", err);
+    return cheerio.load(html).text().replace(/\s+\n/g, "\n").replace(/\n{3,}/g, "\n\n").trim();
+  } catch {
+    return html.replace(/<[^>]+>/g, " ").trim();
   }
-  return out;
 }
 
 export async function runDatScraper(): Promise<ScrapedJobRaw[]> {
-  const all: ScrapedJobRaw[] = [];
+  console.log(`[scraper:dat] starting (Greenhouse API, board=${GREENHOUSE_BOARD})`);
+  const out: ScrapedJobRaw[] = [];
   const seen = new Set<string>();
-  for (let page = 1; page <= MAX_PAGES; page++) {
-    const html = await fetchPage(page);
-    if (!html) break;
-    const parsed = parsePage(html);
-    if (parsed.length === 0) {
-      // Either we ran past the last page or the selector is broken — either
-      // way, no point fetching more.
-      break;
+
+  try {
+    const res = await fetch(ENDPOINT);
+    const rawText = res.ok ? await res.text() : "";
+    console.log(
+      `[scraper:dat] url=${ENDPOINT} status=${res.status} body=${rawText.length}B`,
+    );
+    if (!res.ok) {
+      console.warn(`[scraper:dat] HTTP ${res.status} from Greenhouse API`);
+      return [];
     }
-    for (const job of parsed) {
-      if (seen.has(job.source_url)) continue;
-      seen.add(job.source_url);
-      all.push(job);
+
+    let body: GreenhouseResponse;
+    try {
+      body = JSON.parse(rawText) as GreenhouseResponse;
+    } catch (parseErr) {
+      console.warn(
+        `[scraper:dat] non-JSON response:`,
+        rawText.slice(0, 200),
+        parseErr,
+      );
+      return [];
     }
+
+    const jobs = Array.isArray(body.jobs) ? body.jobs : [];
+    console.log(`[scraper:dat] API returned ${jobs.length} job(s)`);
+
+    for (const j of jobs) {
+      const sourceUrl = j.absolute_url ?? "";
+      if (!sourceUrl || seen.has(sourceUrl)) continue;
+      seen.add(sourceUrl);
+      out.push({
+        source: "dat",
+        source_url: sourceUrl,
+        raw_title: j.title ?? "",
+        raw_company: j.company_name?.trim() || COMPANY_FALLBACK,
+        raw_location: j.location?.name ?? "",
+        raw_description: htmlToText(j.content ?? ""),
+        scraped_at: new Date().toISOString(),
+      });
+    }
+  } catch (err) {
+    console.warn("[scraper:dat] fetch failed:", err);
   }
-  console.log(`[scraper:dat] returned ${all.length} postings`);
-  return all;
+
+  console.log(`[scraper:dat] returned ${out.length} postings`);
+  return out;
 }

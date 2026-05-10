@@ -31,6 +31,9 @@ type IndeedResponse = {
 
 export async function runIndeedScraper(): Promise<ScrapedJobRaw[]> {
   const publisherId = process.env.INDEED_PUBLISHER_ID;
+  console.log(
+    `[scraper:indeed] env INDEED_PUBLISHER_ID present: ${publisherId ? "yes" : "no"}`,
+  );
   if (!publisherId) {
     console.warn("[scraper:indeed] INDEED_PUBLISHER_ID not set — skipping");
     return [];
@@ -50,11 +53,24 @@ export async function runIndeedScraper(): Promise<ScrapedJobRaw[]> {
 
     try {
       const res = await fetch(url.toString());
+      const rawText = await res.text();
+      console.log(
+        `[scraper:indeed] query="${q}" status=${res.status} body=${rawText.length}B`,
+      );
       if (!res.ok) {
         console.warn(`[scraper:indeed] HTTP ${res.status} for query "${q}"`);
         continue;
       }
-      const body = (await res.json()) as IndeedResponse;
+      let body: IndeedResponse;
+      try {
+        body = JSON.parse(rawText) as IndeedResponse;
+      } catch (parseErr) {
+        console.warn(
+          `[scraper:indeed] non-JSON response for query "${q}":`,
+          rawText.slice(0, 200),
+        );
+        continue;
+      }
       const results = Array.isArray(body.results) ? body.results : [];
       for (const j of results) {
         const sourceUrl = j.url ?? "";

@@ -8,7 +8,7 @@ import { useQuery } from "@tanstack/react-query";
 
 import { apiRequest } from "@/lib/queryClient";
 
-export type SeedSource = "indeed" | "dat" | "truckingtruth" | "workday" | "company";
+export type SeedSource = "indeed" | "dat" | "greenhouse" | "workday" | "company";
 
 export type SeedLogListRow = {
   id: number;

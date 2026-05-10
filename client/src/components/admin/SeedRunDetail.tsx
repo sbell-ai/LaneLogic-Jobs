@@ -10,12 +10,12 @@ import type { SeedSource } from "@/hooks/useSeedLogs";
 const SOURCE_LABELS: Record<SeedSource, string> = {
   indeed: "Indeed",
   dat: "DAT",
-  truckingtruth: "Truckingtruth",
+  greenhouse: "Greenhouse",
   workday: "Workday",
   company: "Company",
 };
 
-const SOURCE_ORDER: SeedSource[] = ["indeed", "dat", "truckingtruth", "workday", "company"];
+const SOURCE_ORDER: SeedSource[] = ["indeed", "dat", "greenhouse", "workday", "company"];
 
 function emptyStats(): SeedSourceStats {
   return { scraped: 0, normalized: 0, inserted: 0, skipped: 0, errors: 0 };

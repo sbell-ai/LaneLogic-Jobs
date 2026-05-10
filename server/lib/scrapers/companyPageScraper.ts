@@ -16,17 +16,33 @@ type CompanyTarget = { name: string; url: string; selector: string };
 
 function parseTargets(): CompanyTarget[] {
   const raw = process.env.COMPANY_TARGETS;
+  console.log(
+    `[scraper:company] env COMPANY_TARGETS present: ${raw ? "yes" : "no"}` +
+      (raw ? `, length=${raw.length}B` : ""),
+  );
   if (!raw) return [];
   try {
     const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return [];
-    return parsed.filter(
+    if (!Array.isArray(parsed)) {
+      console.warn(
+        `[scraper:company] COMPANY_TARGETS parsed but is not an array: ${typeof parsed}`,
+      );
+      return [];
+    }
+    const valid = parsed.filter(
       (t): t is CompanyTarget =>
         t &&
         typeof t.name === "string" &&
         typeof t.url === "string" &&
         typeof t.selector === "string",
     );
+    console.log(
+      `[scraper:company] COMPANY_TARGETS parsed: ${parsed.length} entries, ${valid.length} valid`,
+    );
+    console.log(
+      `[scraper:company] parsed targets: ${JSON.stringify(valid)}`,
+    );
+    return valid;
   } catch (err) {
     console.warn("[scraper:company] COMPANY_TARGETS is not valid JSON:", err);
     return [];
@@ -36,9 +52,20 @@ function parseTargets(): CompanyTarget[] {
 async function scrapeOne(page: Page, target: CompanyTarget): Promise<ScrapedJobRaw[]> {
   const out: ScrapedJobRaw[] = [];
   try {
-    await page.goto(target.url, { waitUntil: "domcontentloaded", timeout: PAGE_TIMEOUT_MS });
+    const response = await page.goto(target.url, {
+      waitUntil: "domcontentloaded",
+      timeout: PAGE_TIMEOUT_MS,
+    });
+    const status = response?.status() ?? 0;
+    const html = await page.content();
+    console.log(
+      `[scraper:company] target=${target.name} url=${target.url} status=${status} body=${html.length}B`,
+    );
     await page.waitForSelector(target.selector, { timeout: PAGE_TIMEOUT_MS });
     const cards = await page.$$(target.selector);
+    console.log(
+      `[scraper:company] target=${target.name} selector="${target.selector}" found ${cards.length} card(s)`,
+    );
     for (const card of cards) {
       try {
         const title =

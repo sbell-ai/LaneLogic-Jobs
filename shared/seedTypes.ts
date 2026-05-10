@@ -5,7 +5,7 @@
 //   NormalizedJob   — what the Claude normalizer produces (DB-ready)
 //   SeedRunResult   — orchestrator return value (per-source rollup)
 
-export const SEED_SOURCES = ["indeed", "dat", "truckingtruth", "workday", "company"] as const;
+export const SEED_SOURCES = ["indeed", "dat", "greenhouse", "workday", "company"] as const;
 export type SeedSource = (typeof SEED_SOURCES)[number];
 
 export type SeedJobType = "full_time" | "part_time" | "contract" | "owner_operator";
@@ -94,7 +94,7 @@ export function emptyPerSourceStats(): Record<SeedSource, SourceStats> {
   return {
     indeed: emptySourceStats(),
     dat: emptySourceStats(),
-    truckingtruth: emptySourceStats(),
+    greenhouse: emptySourceStats(),
     workday: emptySourceStats(),
     company: emptySourceStats(),
   };

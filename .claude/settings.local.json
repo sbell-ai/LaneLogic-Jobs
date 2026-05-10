@@ -39,7 +39,14 @@
       "Bash(tee /tmp/tsc.log)",
       "Bash(echo \"---EXIT: $?\")",
       "Read(//tmp/**)",
-      "Bash(echo \"EXIT: $?\")"
+      "Bash(echo \"EXIT: $?\")",
+      "Bash(timeout 240 npx tsx *)",
+      "Bash(mkdir -p /tmp/scraper-samples)",
+      "Bash(curl -sS -A \"LaneLogics-SeedAgent/1.0 \\(+https://lanelogics.com\\)\" \"https://www.dat.com/jobs\" -o /tmp/scraper-samples/dat.html)",
+      "Bash(curl -sS -A \"LaneLogics-SeedAgent/1.0 \\(+https://lanelogics.com\\)\" \"https://www.truckingtruth.com/trucking-jobs/\" -o /tmp/scraper-samples/truckingtruth.html)",
+      "Bash(curl -sSI -A \"LaneLogics-SeedAgent/1.0\" \"https://www.truckingtruth.com/\")",
+      "Bash(curl -sSI -A \"LaneLogics-SeedAgent/1.0\" \"https://truckingtruth.com/trucking-jobs/\")",
+      "Bash(curl -sSI -A \"LaneLogics-SeedAgent/1.0\" \"http://truckingtruth.com/trucking-jobs/\")"
     ]
   }
 }

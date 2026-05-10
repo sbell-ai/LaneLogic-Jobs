@@ -232,6 +232,9 @@ export async function geocodeLocation(
 // ── Public entry point ──────────────────────────────────────────────────────
 
 export async function normalizeJob(raw: ScrapedJobRaw): Promise<NormalizedJob | null> {
+  console.log(
+    `[normalizer] ANTHROPIC_API_KEY present: ${process.env.ANTHROPIC_API_KEY ? "yes" : "no"}, source=${raw.source}, url=${raw.source_url}`,
+  );
   if (!client) {
     console.log("[normalizer] ANTHROPIC_API_KEY not set — skipping normalization");
     return null;
